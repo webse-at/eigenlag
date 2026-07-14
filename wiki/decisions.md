@@ -89,3 +89,16 @@ Zyklusmittel = Summe der Kantengewichte / Summe der periods
 **Entscheidung:** Beide Funktionen geben `... | None` zurück. `None` heißt: der kondensierte Graph enthält keinen Kreis, λ ist nicht definiert.
 
 **Begründung:** Der Fall tritt nicht nur bei `cross == []` auf, sondern auch bei Cross-Kanten ohne Rückweg (`a(k-1) → b(k)`, ohne dass b jemals wieder auf a wirkt). Das ist ein Graph mit Knoten, aber ohne Kreis, und keine Rekurrenz. Wäre die Sonderbehandlung nur ein `if pipeline.cross: ...` in der aufrufenden Schicht, würde dieser Fall stillschweigend eine falsche Zahl produzieren. Der Optional-Rückgabetyp erzwingt die Behandlung im Aufrufer und wird von mypy geprüft.
+
+---
+
+## ADR-008 — Der Harvest ist zweistufig, `hits.jsonl` ist die Resume-Grenze
+
+**Status:** entschieden, 2026-07-14 (Session 001)
+**Kontext:** Die Suche läuft gegen das `search`-Kontingent (30 Requests pro Minute), die Repo-Metadaten laufen gegen `core` (5000 pro Stunde). Beide Kontingente sind getrennt, und die Zuordnung Repo zu Query entsteht erst, wenn alle Queries durch sind: dasselbe Repo wird von mehreren Queries getroffen, und `matched_queries` soll vollständig sein, nicht abhängig davon, wann der Lauf abgebrochen ist.
+
+**Entscheidung:** Der Harvest schreibt in zwei Stufen. Stufe 1 schreibt jeden Rohtreffer der Code-Search sofort nach `data/hits.jsonl` (Query, Repo, Pfad), Fortschritt je Query und Seite nach `data/harvest_state.json`. Stufe 2 liest `hits.jsonl`, verdichtet zu einem Eintrag je Repo, holt die Metadaten und schreibt nach `candidates.jsonl` oder `rejected.jsonl`. Die Filterung passiert ausschließlich in Stufe 2.
+
+**Begründung:** `hits.jsonl` ist die Stelle, an der ein Abbruch keinen Schaden anrichtet. Ein Repo, dessen Metadaten schon geholt sind, steht in `candidates` oder `rejected` und wird beim Neustart übersprungen; ein Repo, das nur als Rohtreffer vorliegt, kostet beim Neustart einen `core`-Request und keinen `search`-Request. Damit ist das knappe Kontingent das, was der Resume schützt. Der Preis ist eine zusätzliche Datei, deren Zeilenzahl (5520) größer ist als die Zahl der Repos (2095), weil ein Repo mehrfach getroffen wird. Das ist gewollt: `merge_hits` dedupliziert beim Lesen, und die Rohdaten bleiben nachprüfbar.
+
+**Konsequenz:** Ein Fehler bei einem einzelnen Repo (etwa der 502 im Lauf vom 2026-07-14) führt dazu, dass das Repo weder in `candidates` noch in `rejected` landet. Der nächste Lauf sieht es deshalb wieder als offen und holt es nach. Genau das ist im Lauf passiert, ohne Zutun.

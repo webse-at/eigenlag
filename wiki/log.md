@@ -149,3 +149,75 @@ Die 529 kreislosen Fälle sind wichtig: sie belegen, dass der `None`-Pfad aus AD
 Der Kreuzvergleich liegt jetzt als `eigenlag/crosscheck_test.py` im Repo (1000 Graphen, 0.07 s), damit er bei jeder künftigen Änderung an Karp oder Howard mitläuft. **36 passed.** Die Restunsicherheit ist ehrlich zu benennen: getestet wurde bis 5 Knoten. Größere Graphen sind nicht abgedeckt, und der Vergleich auf echten geparsten DAGs bleibt wie in STATUS gefordert auf der Liste.
 
 **ADR-007 (Abweichung von der Spec-Signatur) wird bestätigt.** Die Spec schrieb `-> float`, die Session liefert `-> float | None`. Die Begründung ist stichhaltig: der kreislose Fall tritt nicht nur bei `cross == []` auf, sondern auch bei einer Cross-Kante ohne Rückweg, und der Optional-Typ erzwingt die Behandlung beim Aufrufer statt sie zu vergessen. Die Spec war an dieser Stelle zu eng, nicht die Implementierung falsch.
+
+---
+
+## 001 — Scanner: Harvest-Schicht (2026-07-14)
+
+**Gemacht:** `scanner/harvest.py` und `scanner/harvest_test.py`. Sechs Code-Search-Queries (fünf Airflow, eine dbt) gegen `/search/code`, Rohtreffer nach `data/hits.jsonl`, Metadaten aus dem `core`-Kontingent, Filterung, Ausgabe nach `data/candidates.jsonl` und `data/rejected.jsonl`. Kein Clone, kein AST, kein Report, das ist 002 und 003. Zweistufigkeit und Resume-Grenze stehen als ADR-008 im Wiki.
+
+**Gemessen — der Lauf:**
+
+```
+=== Harvest-Ergebnis ===
+Repos bewertet:   2095
+Kandidaten:       1692
+  davon Airflow:  1328
+  davon dbt:      364
+Verworfen:        403
+  blocklist    251  (12.0 % der bewerteten Repos)
+  size         152  (7.3 % der bewerteten Repos)
+```
+
+Die Akzeptanzschwelle der Spec (250 Airflow, 120 dbt) ist deutlich übertroffen, die Filter mussten nicht aufgeweicht werden. Vier der sechs Queries laufen in den 1000er-Deckel der Code-Search (`depends_on_past` allein meldet `total_count` 2284), die Stichprobe ist also nach oben abgeschnitten. Das gehört als Einschränkungssatz in `report.md`.
+
+**Gemessen — Resume.** Der erste Lauf wurde nach der ersten Query absichtlich mit einem Kill abgebrochen. Stand danach: 1000 Zeilen in `hits.jsonl`, `harvest_state.json` mit `depends_on_past` auf `done: true`. Der Neustart begann mit
+
+```
+[fertig] depends_on_past language:python (aus vorigem Lauf)
+[suche] wait_for_downstream language:python | Seite 1: 100 Treffer (total_count 1168)
+```
+
+und hat die 1000 bereits geholten Treffer nicht erneut gezogen.
+
+**Gemessen — Drosselung.** Das `search`-Kontingent wurde im Lauf dreimal erschöpft. Der Scanner hat den 403 mit `x-ratelimit-remaining: 0` erkannt und bis zum Reset gewartet (`403 Rate-Limit, warte 41s`), ohne den Lauf abzubrechen. Ein einzelner 502 auf `/repos/uvasds-systems/run-airflow` landete strukturiert in `scan_errors.jsonl`.
+
+**Gemessen — Tests, Lint, Typen:**
+
+```
+$ .venv/bin/python -m pytest -q
+..............................................................           [100%]
+62 passed in 0.09s
+
+$ .venv/bin/ruff check . && .venv/bin/ruff format --check .
+All checks passed!
+9 files already formatted
+
+$ .venv/bin/mypy
+Success: no issues found in 9 source files
+```
+
+**Gemessen — Stichprobe, zehn Kandidaten zufällig gezogen und je Datei und Zeile aufgelöst.** Alle zehn sind belegbar, die Datei existiert und enthält den Suchbegriff an der genannten Zeile. Inhaltlich ist die Hälfte davon **kein** Cross-Run-Signal:
+
+```
+speaud/scripts-and-scraps      dags/tutorial.py:35        'depends_on_past': False,
+Steve-YJ/pseudocon-8th-...     dags/sample.py:25          # 'wait_for_downstream': False,
+navikt/team_familie_...        operators/kafka_operators.py:33   wait_for_downstream: bool = True,
+mlmicozzi/AprendizajeMaquinaII dags/music_process.py:15   'depends_on_past': False,
+antweiss/airflow-test          bashtest5.py:10            'depends_on_past': False,
+cyrillettlin/DataEngineering   dags/us_accidents_bq_dag.py:81    execution_delta=timedelta(hours=3),
+jyablonski/nba_elt_dbt         models/silver/fact/fact_reddit_posts.sql:22   {% if is_incremental() %}
+SriGanesh78/dbt-core-cloud     models/bronze/bronze_orders.sql:8             {% if is_incremental() %}
+dbtsurya123/dbt_cloud_st       models/staging/stg_orders.sql:12              {% if is_incremental() %}
+oulrich-ops/dbt_certif_prepare models/base/stg_transactions.sql:17           {% if is_incremental() %}
+```
+
+**Was überrascht hat:**
+
+1. **Die Stichprobe belegt ADR-004 empirisch, und zwar drastisch.** Drei der zehn Treffer sind `depends_on_past: False`, also die explizite Verneinung des Signals. Einer ist auskommentiert. Einer ist die Signatur einer selbstgeschriebenen Operator-Klasse (`wait_for_downstream: bool = True`), also nicht einmal ein DAG-Argument. Hätte der Scanner die Code-Search-Zahlen direkt als Marktzahl behauptet, wäre die Statistik beim ersten kritischen Leser gekippt. Die Trennung Kandidat/Signal ist damit keine Vorsichtsmaßnahme mehr, sondern gemessen notwendig. Für `report.md` heißt das: die Quote wird auf die AST-Ergebnisse aus 002 bezogen, nie auf die Kandidatenzahl.
+
+2. **Die Filter `fork` und `archived` haben null Mal gegriffen.** Das sah zuerst nach totem Code aus. Nachgeprüft an zwanzig zufälligen Kandidaten über `/repos/...`: alle zwanzig sind `fork=false archived=false`. Die klassische Code-Search indiziert Forks nicht und liefert offenbar auch keine archivierten Repos aus. Der Filter bleibt trotzdem drin, weil er die Zusage der Spec einlöst und nichts kostet; die Aussage gehört aber in den Report, sonst liest sich "0 Forks verworfen" wie ein Filter-Fehler. Die Blocklist dagegen frisst 12 Prozent, das ist die Zahl, die David anfechten können muss (`rejected.jsonl`, Feld `reason`).
+
+3. **Ein Paging-Bug wurde erst im echten Lauf sichtbar.** Bei `ExternalTaskSensor` lieferte Seite 7 nur 52 Treffer, die Query war erschöpft. Der Scanner hat trotzdem die Seiten 8, 9 und 10 abgefragt (je 0 Treffer), weil die Schleife nur gegen den Seiten-Deckel prüfte und nicht gegen das `done`-Flag. Drei verschwendete Requests gegen ein Kontingent von 30 pro Minute, keine falschen Daten. Behoben, indem die Fortschaltung als reine Funktion `advance(entry, n_items)` herausgezogen und mit einer Tabelle getestet wurde. Beleg am echten Endpunkt nach dem Fix: die Query bei Seite 7 wieder aufgesetzt, es kam genau eine Antwort mit 52 Treffern und dann Schluss. Der Fund ist ein Argument für die Regel, dass eine grüne Test-Suite Code-Korrektheit prüft und nicht Feature-Korrektheit: die HTTP-Schleife war zu keinem Zeitpunkt getestet, und genau dort saß der Fehler.
+
+4. **Der 502 hat sich selbst repariert.** Das Repo fehlte nach dem Fehler in beiden Ausgabedateien und galt dem nächsten Lauf deshalb als offen. Er hat es nachgeholt, 1691 wurden 1692. Das war nicht geplant, sondern fällt aus der Zweistufigkeit heraus (ADR-008).
