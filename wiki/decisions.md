@@ -308,3 +308,24 @@ dauer_s.p95    = 3778.8   →   lambda_s.p95    = 3778.8
 **Die richtige Überschrift des Falls steht bereits in der Session, an anderer Stelle:** 30 DAGs laufen im Median länger als ihr Takt, 29 davon driften nicht, weil ihre Läufe überlappen dürfen. Das ist der Beleg, dass "Laufzeit über Takt" als Diagnose wertlos ist, und das ist an echten Daten gemessen. Diese Zahl trägt den Fall, nicht λ = 3598,4.
 
 **Nebenbefund, der in den Report gehört:** λ auf dem Mittelwert ist ausreißer-empfindlich. Bei `wcqs` verzerrt ein einzelner hängender Lauf von 400.132 s (4,6 Tage) den Mittelwert um rund 560 s bei 712 Läufen. Für den asymptotischen Drift ist der Mittelwert die richtige Statistik, aber ein hängender Lauf vergiftet ihn. Das ist zu benennen, nicht zu glätten.
+
+---
+
+## ADR-018 — Zwei Risiko-Klassen: die Kern-Quote bleibt definitionsgleich, Signal G bekommt eine eigene
+
+**Status:** entschieden, 2026-07-14 (Session 006)
+
+**Kontext:** ADR-016 macht `max_active_runs=1` (Signal G) zum starken Signal. Würde G stillschweigend in das `STRONG`-Set von `report.py` wandern, spränge die Risiko-Quote nach oben — und zwar durch eine Definitionsänderung **nach** dem ersten Scan. Das ist genau die Bewegung, die ADR-005 verbietet, wenn sie die Zahl aufbläst: der erste kritische Leser sagt "eure Risiko-Kandidaten sind DAGs, deren Laufzeit über dem Takt liegt, das zeigt mir jedes Dashboard". Er hätte recht: für DAGs, deren einzige Cross-Run-Kante G ist, gilt λ = Makespan (ADR-017), Laufzeit-Monitoring gibt dort dieselbe Antwort. Gleichzeitig wäre Weglassen falsch — der Wikimedia-Fall hat gemessen, dass die Kante real bindet.
+
+**Entscheidung:** Zwei getrennt ausgewiesene Klassen.
+
+| Klasse | Definition | Bedeutung |
+|---|---|---|
+| `risk_candidate` (Kern) | mindestens ein starkes Signal aus **A, B, C, D, F** und sub-täglich | der Kreis ist ein Teilpfad, λ < Makespan möglich, kein heutiges Tool beantwortet das. Das bleibt die Launch-Zahl, und sie bleibt mit Session 003 vergleichbar, weil die Definition unverändert ist |
+| `risk_candidate_g_only` | **nur** G als starkes Signal und sub-täglich | Kante real, aber λ = Makespan; beantwortbar durch Laufzeit-Monitoring. Eigene Zeile im Report, nie in die Kern-Quote gemischt |
+
+Ein DAG mit A–F-Signal **und** G zählt in die Kern-Klasse; G wird als Spalte (`sig_g_max_active_runs`) trotzdem ausgewiesen.
+
+**Begründung:** Die Zwei-Klassen-Lösung erlaubt beides zugleich: die Kern-Quote bleibt definitionsgleich und damit über die Scans hinweg vergleichbar, und die neue Kante steht daneben, mit gemessener Begründung statt versteckt. Der Report legt die Definitionsänderung offen, statt sie in eine gewachsene Zahl einzubacken. Für die Produkt-Aussage ist die Trennung ohnehin die ehrlichere: der Analyzer verdient sein Geld dort, wo der Kreis ein Teilpfad ist, nicht dort, wo ein Dashboard reicht.
+
+**Umsetzung:** `report.py` — `STRONG` bleibt unverändert (A, B, C, D, F-stark), neue Menge für G, neue Spalten `sig_g_max_active_runs` und `risk_candidate_g_only` in `scan_results.csv`, eigene Zeile im Report. `scanner/analyze.py` bleibt unberührt: dessen `STRONG_KINDS` (mit G) speist nur die Lauf-Konsole, die Klassifikation für die Marktzahl passiert in `report.py`.

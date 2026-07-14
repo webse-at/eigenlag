@@ -16,9 +16,12 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 Json = dict[str, Any]  # State-Files sind Ein-/Ausgabe-Schema, kein Modell.
 
+# Kern-Signale A–F. Signal G bleibt bewusst draussen: die Kern-Quote muss definitionsgleich
+# mit Session 003 bleiben, G bekommt eine eigene Klasse (ADR-018).
 STRONG = {
     "depends_on_past",
     "wait_for_downstream",
@@ -27,6 +30,7 @@ STRONG = {
     "prev_run_success",
 }
 WEAK = {"prev_run_date"}
+G_KIND = "max_active_runs"
 
 SIGNAL_COLUMNS = {
     "sig_a_depends_on_past": "depends_on_past",
@@ -35,12 +39,14 @@ SIGNAL_COLUMNS = {
     "sig_d_include_prior_dates": "include_prior_dates",
     "sig_f_prev_success_tmpl": "prev_run_success",
     "sig_f_weak_prev_ds": "prev_run_date",
+    "sig_g_max_active_runs": "max_active_runs",
 }
 
 RESULT_FIELDS = [
     "repo",
     "file",
     "dag_id",
+    "dag_id_missing",
     "dag_lineno",
     "schedule_raw",
     "schedule_class",
@@ -48,9 +54,19 @@ RESULT_FIELDS = [
     *SIGNAL_COLUMNS,
     "has_crossrun",
     "risk_candidate",
+    "risk_candidate_g_only",
     "evidence",
     "permalink",
 ]
+
+# Referenzwerte aus dem ersten vollen Lauf (Session 003, scan/report.md). Der Report weist
+# jede Abweichung einer Ursache zu, statt die alte Zahl zu ueberschreiben (Spec 006).
+BASELINE_003 = {
+    "dags": 51426,
+    "dags_crossrun": 1303,
+    "dags_risk": 176,
+    "repos_with_risk": 100,
+}
 
 
 def load_records(state_dir: Path) -> list[Json]:
@@ -68,7 +84,7 @@ def load_errors(path: Path) -> list[Json]:
 def permalink(repo: str, sha: str | None, file: str, lineno: int) -> str:
     if not sha:
         return ""
-    return f"https://github.com/{repo}/blob/{sha}/{file}#L{lineno}"
+    return f"https://github.com/{repo}/blob/{sha}/{quote(file, safe='/')}#L{lineno}"
 
 
 def evidence(signals: list[Json]) -> str:
@@ -81,18 +97,21 @@ def result_rows(records: list[Json]) -> list[Json]:
         for dag in record["dags"]:
             kinds = {s["kind"] for s in dag["signals"]}
             has_crossrun = bool(kinds & STRONG)
+            subdaily = dag["schedule_class"] == "subdaily"
             rows.append(
                 {
                     "repo": record["repo"],
                     "file": dag["file"],
                     "dag_id": dag["dag_id"] or "",
+                    "dag_id_missing": int(not dag["dag_id"]),
                     "dag_lineno": dag["lineno"],
                     "schedule_raw": dag["schedule_raw"] or "",
                     "schedule_class": dag["schedule_class"],
                     "task_count": dag["task_count"],
                     **{col: int(kind in kinds) for col, kind in SIGNAL_COLUMNS.items()},
                     "has_crossrun": int(has_crossrun),
-                    "risk_candidate": int(has_crossrun and dag["schedule_class"] == "subdaily"),
+                    "risk_candidate": int(has_crossrun and subdaily),
+                    "risk_candidate_g_only": int(G_KIND in kinds and not has_crossrun and subdaily),
                     "evidence": evidence(dag["signals"]),
                     "permalink": permalink(
                         record["repo"], record["sha"], dag["file"], dag["lineno"]
@@ -151,8 +170,11 @@ class Stats:
     dags_crossrun: int = 0
     dags_subdaily: int = 0
     dags_risk: int = 0
+    dags_risk_g_only: int = 0
+    dags_without_id: int = 0
     repos_with_dags: int = 0
     repos_with_risk: int = 0
+    repos_with_risk_g_only: int = 0
     signal_dags: Counter[str] = field(default_factory=Counter)
     schedule_classes: Counter[str] = field(default_factory=Counter)
     error_kinds: Counter[str] = field(default_factory=Counter)
@@ -196,17 +218,23 @@ def compute(records: list[Json], errors: list[Json]) -> Stats:
             stats.dbt_materialized_from[signal["materialized_from"]] += 1
 
     risk_repos: set[str] = set()
+    g_only_repos: set[str] = set()
     for row in rows:
         stats.dags += 1
         stats.schedule_classes[row["schedule_class"]] += 1
         stats.dags_crossrun += row["has_crossrun"]
         stats.dags_subdaily += int(row["schedule_class"] == "subdaily")
         stats.dags_risk += row["risk_candidate"]
+        stats.dags_risk_g_only += row["risk_candidate_g_only"]
+        stats.dags_without_id += row["dag_id_missing"]
         if row["risk_candidate"]:
             risk_repos.add(row["repo"])
+        if row["risk_candidate_g_only"]:
+            g_only_repos.add(row["repo"])
         for col in SIGNAL_COLUMNS:
             stats.signal_dags[col] += row[col]
     stats.repos_with_risk = len(risk_repos)
+    stats.repos_with_risk_g_only = len(g_only_repos)
 
     unresolved_repos: set[str] = set()
     ambiguous_repos: set[str] = set()
@@ -307,7 +335,7 @@ def render(
     add(f"| davon `SyntaxError` (protokolliert, kein Abbruch) | {stats.syntax_errors} |")
     add(f"| Repos mit mindestens einem DAG | {stats.repos_with_dags} |")
     add("")
-    add("Fehler-Kategorien aus `data/scan_errors.jsonl`:")
+    add("Fehler-Kategorien aus dem Fehler-Log des Laufs (Regel 7):")
     add("")
     add("| Kategorie | Vorkommen |")
     add("|---|---|")
@@ -329,10 +357,74 @@ def render(
         f"{pct(stats.dags_subdaily, stats.dags)} |"
     )
     add(
-        f"| **Risiko-Kandidaten (Cross-Run **und** sub-täglich im selben DAG)** | "
+        f"| **Risiko-Kandidaten Kern (Signal aus A–F **und** sub-täglich im selben DAG)** | "
         f"**{stats.dags_risk}** | **{pct(stats.dags_risk, stats.dags)}** |"
     )
-    add(f"| Repos mit mindestens einem Risiko-Kandidaten | {stats.repos_with_risk} | — |")
+    add(
+        f"| Risiko-Kandidaten nur Signal G (`max_active_runs=1` **und** sub-täglich, "
+        f"kein A–F-Signal; ADR-018) | {stats.dags_risk_g_only} | "
+        f"{pct(stats.dags_risk_g_only, stats.dags)} |"
+    )
+    add(f"| Repos mit mindestens einem Kern-Kandidaten | {stats.repos_with_risk} | — |")
+    add(f"| Repos mit mindestens einem G-only-Kandidaten | {stats.repos_with_risk_g_only} | — |")
+    add(
+        f"| DAGs ohne `dag_id` (Konstruktor-Aufruf, die id setzt erst der Aufrufer; ADR-015) | "
+        f"{stats.dags_without_id} | {pct(stats.dags_without_id, stats.dags)} |"
+    )
+    add("")
+    add(
+        "**Die zwei Klassen sind bewusst getrennt (ADR-018).** Die Kern-Quote ist "
+        "definitionsgleich mit Session 003 und bleibt die Launch-Zahl: dort ist der Kreis ein "
+        "Teilpfad, λ < Makespan ist möglich, und kein heutiges Tool beantwortet das. Bei den "
+        "G-only-Kandidaten ist die Kante real, aber λ = Makespan. Dort reicht "
+        "Laufzeit-Monitoring, und der Report sagt das selbst, bevor es ein Kritiker tut."
+    )
+    add("")
+    add("### Vorher/Nachher gegen Session 003")
+    add("")
+    add(
+        "Zwischen den beiden Läufen liegen zwei Änderungen: ADR-015 (repo-eigene "
+        "DAG-Konstruktoren werden erkannt) und ADR-016/018 (Signal G als neue, getrennt "
+        "ausgewiesene Klasse). Die Definition der Kern-Quote ist unverändert. Jedes Delta ist "
+        "einer Ursache zugeordnet; die Stichproben dazu stehen in `sample_verification.md`."
+    )
+    add("")
+
+    def cause(new: int, old: int, grown: str) -> str:
+        return grown if new != old else "unverändert, Definition und Treffer-Menge identisch"
+
+    cause_crossrun = cause(
+        stats.dags_crossrun,
+        BASELINE_003["dags_crossrun"],
+        "mehr DAGs sichtbar (ADR-015), Definition unverändert",
+    )
+    cause_risk = cause(
+        stats.dags_risk,
+        BASELINE_003["dags_risk"],
+        "mehr DAGs im Nenner und im Zähler (ADR-015), Definition unverändert",
+    )
+    add("| Größe | 003 (alt) | 006 (neu) | Ursache |")
+    add("|---|---|---|---|")
+    add(
+        f"| DAGs gefunden | {BASELINE_003['dags']} | {stats.dags} | "
+        f"{cause(stats.dags, BASELINE_003['dags'], 'ADR-015 findet Konstruktor-DAGs')} |"
+    )
+    add(
+        f"| DAGs mit Cross-Run-Kante (A–F) | {BASELINE_003['dags_crossrun']} | "
+        f"{stats.dags_crossrun} | {cause_crossrun} |"
+    )
+    add(
+        f"| Risiko-Kandidaten (Kern) | {BASELINE_003['dags_risk']} | {stats.dags_risk} | "
+        f"{cause_risk} |"
+    )
+    add(
+        f"| Risiko-Kandidaten (nur G) | — | {stats.dags_risk_g_only} | "
+        "neue Klasse (ADR-016, ADR-018), in 003 nicht erhoben |"
+    )
+    add(
+        f"| Repos mit Kern-Kandidat | {BASELINE_003['repos_with_risk']} | "
+        f"{stats.repos_with_risk} | folgt den Kern-Kandidaten |"
+    )
     add("")
     add("Schedule-Klassen:")
     add("")
@@ -347,7 +439,12 @@ def render(
     add("|---|---|---|---|")
     for col, kind in SIGNAL_COLUMNS.items():
         count = stats.signal_dags[col]
-        strength = "ja" if kind in STRONG else "nein (ADR-005)"
+        if kind in STRONG:
+            strength = "ja, Kern"
+        elif kind == G_KIND:
+            strength = "eigene Klasse (ADR-018)"
+        else:
+            strength = "nein (ADR-005)"
         add(f"| `{col}` | {count} | {pct(count, stats.dags)} | {strength} |")
     add("")
     add("### Beispiele (Risiko-Kandidaten, ein DAG je Repo, nach Sternen sortiert)")
@@ -372,6 +469,12 @@ def render(
         "Repos. Die Risiko-Bedingung (starkes Signal **und** sub-täglich im selben DAG) ist "
         "hier konstruktionsbedingt nicht auswertbar, deshalb taucht kein dbt-Model in der "
         "Airflow-Quote auf (ADR-012)."
+    )
+    add("")
+    add(
+        "**Die dbt-Zahlen sind aus Session 003 übernommen.** ADR-015 und ADR-016 sind "
+        "Airflow-seitig, `analyze_dbt.py` ist unverändert; der Re-Lauf über dieselben Clones "
+        "reproduziert dieselben Werte."
     )
     add("")
     add("| Kennzahl | Wert |")
@@ -461,6 +564,20 @@ def render(
         "Struktur haben, in der Instabilität entstehen kann, und dass kein Werkzeug ihnen zeigt, "
         "ob sie es sind."
     )
+    add(
+        "- **Die Definition hat sich zwischen den Läufen geändert, und das steht hier "
+        "absichtlich.** Signal G (`max_active_runs=1`) kam nach dem ersten Scan dazu, mit "
+        "gemessener Begründung: der Wikimedia-Fall hat gezeigt, dass die Kante real bindet "
+        "(ADR-016). Es wurde als eigene Klasse ausgewiesen statt in die Kern-Quote gemischt "
+        "(ADR-018); die Kern-Quote ist definitionsgleich mit Session 003 geblieben."
+    )
+    add(
+        "- **G-only heißt: Laufzeit-Monitoring reicht dort.** Für einen DAG, dessen einzige "
+        "Cross-Run-Kante `max_active_runs=1` ist, gilt λ = Makespan: die Taktgrenze ist die "
+        "Laufzeit selbst, und die zeigt jedes Dashboard. Der Analyzer verdient sein Geld erst, "
+        "wo der Kreis ein Teilpfad ist und λ < Makespan sein kann. Genau deshalb stehen die "
+        "beiden Klassen getrennt."
+    )
     add("")
     add("## Die Aussage, die nicht an der Prozentzahl hängt")
     add("")
@@ -506,7 +623,8 @@ def main(argv: list[str] | None = None) -> int:
 
     print(
         f"{stats.dags} DAGs, {stats.dags_crossrun} mit Cross-Run, {stats.dags_subdaily} "
-        f"sub-täglich, {stats.dags_risk} Risiko-Kandidaten; "
+        f"sub-täglich, {stats.dags_risk} Risiko-Kandidaten (Kern), "
+        f"{stats.dags_risk_g_only} nur Signal G, {stats.dags_without_id} ohne dag_id; "
         f"{stats.dbt_incremental} dbt-Models mit Selbst-Kante"
     )
     return 0

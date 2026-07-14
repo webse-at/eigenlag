@@ -73,6 +73,66 @@ def test_risk_candidate_needs_both_halves() -> None:
     assert (rows["acme/quiet"]["has_crossrun"], rows["acme/quiet"]["risk_candidate"]) == (0, 0)
 
 
+def signal(kind: str, lineno: int = 17, source: str = "operator") -> Json:
+    return {
+        "kind": kind,
+        "file": "dags/deep/path/etl.py",
+        "lineno": lineno,
+        "source": source,
+        "inferred": False,
+    }
+
+
+def test_g_only_is_its_own_class_and_never_the_core_quote() -> None:
+    g_only = dag(signals=[signal("max_active_runs", lineno=12, source="dag_call")])
+    row = result_rows([record(dags=[g_only])])[0]
+    assert row["sig_g_max_active_runs"] == 1
+    # Kern-Quote und has_crossrun bleiben auf A–F bezogen, sonst ist 003 nicht vergleichbar.
+    assert (row["has_crossrun"], row["risk_candidate"]) == (0, 0)
+    assert row["risk_candidate_g_only"] == 1
+
+
+def test_g_only_still_needs_a_subdaily_schedule() -> None:
+    g_daily = dag(
+        schedule_class="daily_or_slower",
+        signals=[signal("max_active_runs", lineno=12, source="dag_call")],
+    )
+    row = result_rows([record(dags=[g_daily])])[0]
+    assert (row["risk_candidate"], row["risk_candidate_g_only"]) == (0, 0)
+
+
+def test_core_signal_plus_g_counts_in_the_core_class() -> None:
+    both = dag(
+        signals=[
+            signal("depends_on_past"),
+            signal("max_active_runs", lineno=12, source="dag_call"),
+        ]
+    )
+    row = result_rows([record(dags=[both])])[0]
+    assert row["sig_g_max_active_runs"] == 1
+    assert (row["risk_candidate"], row["risk_candidate_g_only"]) == (1, 0)
+
+
+def test_compute_counts_the_two_classes_separately() -> None:
+    records = [
+        record(dags=[dag()]),
+        record(
+            repo="acme/serialized",
+            dags=[dag(signals=[signal("max_active_runs", lineno=12, source="dag_call")])],
+        ),
+    ]
+    stats = compute(records, [])
+    assert (stats.dags_risk, stats.dags_risk_g_only) == (1, 1)
+
+
+def test_missing_dag_id_is_flagged_not_guessed() -> None:
+    row = result_rows([record(dags=[dag(dag_id=None)])])[0]
+    assert row["dag_id"] == ""
+    assert row["dag_id_missing"] == 1
+    stats = compute([record(dags=[dag(dag_id=None), dag()])], [])
+    assert stats.dags_without_id == 1
+
+
 def test_weak_template_does_not_make_a_risk_candidate() -> None:
     weak = dag(
         signals=[
@@ -98,6 +158,16 @@ def test_permalink_pins_the_commit_sha_and_the_full_path() -> None:
 
 def test_permalink_is_empty_without_a_sha() -> None:
     assert permalink("acme/etl", None, "dags/etl.py", 12) == ""
+
+
+def test_permalink_encodes_hash_and_space_in_the_path() -> None:
+    # njuxc/PYAM traegt Dateien wie `tests#jobs#test_scheduler_job.py`; ohne Encoding frisst
+    # das `#` den Zeilen-Anker und der Beleg ist nicht mehr nachschlagbar (Regel 6).
+    link = permalink("acme/etl", SHA, "data/tests#jobs#x.py", 7)
+    assert link == f"https://github.com/acme/etl/blob/{SHA}/data/tests%23jobs%23x.py#L7"
+    assert permalink("acme/etl", SHA, "exchange rate/init.py", 3).endswith(
+        "/exchange%20rate/init.py#L3"
+    )
 
 
 def test_dbt_never_enters_the_airflow_denominator() -> None:
@@ -197,6 +267,24 @@ def test_report_names_every_denominator_and_the_caveats() -> None:
     assert "fork" in text and "archived" in text
     assert "ADR-012" in text
     assert f"https://github.com/acme/etl/blob/{SHA}" in text
+
+
+def test_report_discloses_the_definition_change_and_the_baseline() -> None:
+    stats = compute([record(dags=[dag()])], [])
+    text = render(
+        stats,
+        top_examples([record(dags=[dag()])]),
+        (0, 1, 0, 1),
+        HARVEST,
+        [{"reason": "blocklist"}],
+    )
+    # Vorher/Nachher gegen Session 003, mit Ursache je Delta (Spec 006, Abschnitt 3).
+    assert "51426" in text and "176" in text
+    assert "ADR-015" in text and "ADR-016" in text and "ADR-018" in text
+    # G-only heisst: Laufzeit-Monitoring reicht dort. Der Satz steht im Report.
+    assert "Laufzeit-Monitoring" in text
+    # dbt ist aus 003 uebernommen, nicht neu definiert.
+    assert "übernommen" in text
 
 
 def test_main_writes_all_four_artifacts(tmp_path: Path) -> None:

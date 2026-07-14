@@ -1,4 +1,4 @@
-# Cross-Run-Signale A bis F
+# Cross-Run-Signale A bis G
 
 Diese Seite definiert exakt, was als Cross-Run-Kante zählt. Sie ist die gemeinsame Grundlage für den Scanner (Phase 1) und den Parser (Phase 2). Wenn Scanner und Parser unterschiedliche Definitionen benutzen, sind die Marktzahlen und die Produktzahlen nicht vergleichbar, und das Tool widerlegt seinen eigenen Launch-Content.
 
@@ -90,11 +90,14 @@ Dieses Signal stand bis Session 005 in der Tabelle darunter, also unter "kein Cr
 
 ## Schedule-Klassifikation
 
-Ein Signal allein ist harmlos. Gefährlich wird es erst, wenn der Schedule schneller taktet, als der Kreis erlaubt. **Risiko-Kandidat** ist deshalb definiert als: mindestens ein starkes Signal **und** sub-täglicher Schedule **im selben DAG**.
+Ein Signal allein ist harmlos. Gefährlich wird es erst, wenn der Schedule schneller taktet, als der Kreis erlaubt. Seit ADR-018 gibt es zwei getrennt ausgewiesene Risiko-Klassen:
 
-Stark sind A, B, C, D, E, G und F in den `*_success`-Varianten. Schwach sind `prev_ds`, `prev_ds_nodash` und `prev_execution_date`; sie werden getrennt gezählt und begründen für sich genommen keinen Risiko-Kandidaten (ADR-005, ADR-011).
+- **Risiko-Kandidat (Kern):** mindestens ein starkes Signal aus A, B, C, D oder F (`*_success`-Varianten) **und** sub-täglicher Schedule **im selben DAG**. Hier ist der Kreis ein Teilpfad, λ < Makespan ist möglich, und kein heutiges Tool beantwortet das. Das ist die Launch-Zahl, definitionsgleich mit Session 003.
+- **Risiko-Kandidat (nur G):** G als einziges starkes Signal **und** sub-täglich. Die Kante ist real (ADR-016), aber λ = Makespan; Laufzeit-Monitoring gibt dort dieselbe Antwort (ADR-017). Eigene Zeile im Report, nie in die Kern-Quote gemischt.
 
-Der Korpus-Scan aus Session 003 kennt Signal G noch nicht und auch die Konstruktoren aus ADR-015 nicht. Seine Zahlen (51.426 DAGs, 176 Risiko-Kandidaten) gelten unter der alten Definition und müssen vor jeder öffentlichen Behauptung neu erhoben werden.
+Ein DAG mit A–F-Signal und G zählt in die Kern-Klasse; G wird als Spalte trotzdem ausgewiesen. E (dbt) bleibt außerhalb beider Klassen, weil ein dbt-Model keinen Schedule hat (ADR-012). Schwach sind `prev_ds`, `prev_ds_nodash` und `prev_execution_date`; sie werden getrennt gezählt und begründen für sich genommen keinen Risiko-Kandidaten (ADR-005, ADR-011).
+
+Der Korpus-Scan aus Session 003 kannte weder Signal G noch die Konstruktoren aus ADR-015. Session 006 hat den Korpus unter der neuen Definition neu gescannt (`scan/v2/report.md`): die Kern-Quote blieb unverändert definiert, G steht als eigene Klasse daneben.
 
 Sub-täglich heißt: Periode kürzer als 24 Stunden.
 
