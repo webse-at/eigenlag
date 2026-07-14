@@ -27,9 +27,13 @@ Eine Bäckerei hat einen Sauerteig-Ansatz. Jeden Morgen wird ein Teil des gestri
 ## Referenzwerte (verifiziert)
 
 Seit Session 005 gibt es dazu einen **gemessenen** Referenzfall aus der Produktion:
-`wdqs_streaming_updater_reconcile_hourly` bei Wikimedia läuft im Stundentakt (T = 3600 s) mit
-λ = 3598,4 s, also 1,6 Sekunden Reserve, bei 48 Minuten dauerhafter Verspätung. Herleitung,
-PromQL und Permalinks in [../wikimedia/case.md](../wikimedia/case.md).
+`wdqs_streaming_updater_reconcile_hourly` bei Wikimedia (Stundentakt, T = 3600 s) sitzt
+eingeschwungen auf seiner Taktgrenze: mittlere Laufdauer 3598,4 s ≈ T, konstante 48 Minuten
+Verspätung. Wichtig für die Einordnung (ADR-017): auf DAG-Ebene, ohne Task-Dauern, ist λ
+schlicht die Laufdauer selbst — der Fall belegt die **These**, nicht das Werkzeug. Sein
+tragfähigster Befund ist der Sweep: 30 DAGs laufen im Median länger als ihr Takt, 29 davon
+driften nicht, weil ihre Läufe überlappen dürfen. "Laufzeit über Takt" ist als Diagnose
+wertlos. Herleitung, PromQL und Permalinks in [../wikimedia/case.md](../wikimedia/case.md).
 
 Der Prototyp [maxplus_pipeline.py](maxplus_pipeline.py) liegt vor und wurde am 2026-07-13 ausgeführt. Seine Ausgabe ist die Ground Truth für die Tests in Phase 2:
 

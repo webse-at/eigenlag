@@ -1,35 +1,39 @@
 # Roadmap
 
-Der Session-Plan. Jede Zeile ist genau eine CC-Session mit genau einer Spec in `cc-sessions/`.
+Der Session-Plan. Jede Zeile ist genau eine CC-Session mit genau einer Spec in `cc-sessions/`. Der Plan ist zweimal von der Wirklichkeit korrigiert worden (005 wurde der Wikimedia-Fall statt des Parsers, 006 wurde der Re-Scan) — die Tabelle zeigt den Ist-Stand, nicht den ursprünglichen Entwurf.
 
 ## Phase 1 — Scanner v2 (Marktbeweis, Launch-Content)
 
-| Session | Inhalt | Abhängig von |
+| Session | Inhalt | Stand |
 |---|---|---|
-| 001 | Harvest: GitHub Code-Search, Repo-Kandidaten, Dedup, Fork- und Blocklist-Filter, Größenlimit. Ergebnis: `candidates.jsonl` | keine |
-| 002 | AST-Analyse: DAG-Erkennung, Signale A-F DAG-scoped, Schedule-Klassifikation, dbt-Scan. Ergebnis: getestete Analyse-Funktionen | 001 nicht zwingend, Fixtures reichen |
-| 003 | Scan-Lauf über >= 200 Airflow- und >= 100 dbt-Repos, `scan_results.csv`, `report.md`, Stichprobe von 10 Treffern verifiziert | 001, 002 |
+| 001 | Harvest: GitHub Code-Search, Kandidaten, Filter, Resume | ✅ done, 1692 Kandidaten |
+| 002 | AST-Analyse: DAG-Scoping, Signale, Schedule-Klassifikation, dbt | ✅ done, 141 Tests |
+| 003 | Scan-Lauf über 1692 Repos, CSVs, Report, Stichproben | ✅ done — Zahlen durch ADR-015/016 veraltet |
+| 005 | Wikimedia-Fall: λ an einer Produktions-Pipeline, PromQL-Messung | ✅ done — Einordnung per ADR-017 korrigiert |
+| 006 | **Re-Scan** mit Konstruktoren (ADR-015) und Signal G (ADR-016) als eigener Klasse (ADR-018), Vorher/Nachher-Tabelle, Fall-Korrektur in `case.md` | 📄 Spec liegt |
 
-**Akzeptanz Phase 1:** Lauf ohne Absturz, CSV und Report liegen vor, zehn Treffer wurden per Repo, Datei und Zeile auf GitHub nachgeschlagen und bestätigt.
+**Akzeptanz Phase 1 (nachgeschärft):** Die Launch-Zahlen stammen aus `scan/v2/`, jede mit Nenner und Permalink-Beleg, die Definitionsänderung offengelegt. Erst danach ist irgendetwas öffentlich behauptbar.
 
 ## Phase 2 — Analyzer-Core als CLI `eigenlag`
 
+Nummern verschoben, weil 005 und 006 dazwischenkamen. Inhalte unverändert.
+
 | Session | Inhalt | Abhängig von |
 |---|---|---|
-| 004 | Mathe-Kern: `model.py`, `maxplus.py` (Kondensation, Karp, Howard, Drift). Tests gegen die Prototyp-Werte. Perioden-Versatz in der Cross-Kante | keine, Prototyp liegt vor |
-| 005 | Airflow-Parser per AST: Tasks, `>>`/`<<`, `set_upstream/downstream`, Signale, Schedule | 004 |
-| 006 | dbt-Parser (`manifest.json`) plus Dauern-Schicht (Metadaten-DB, REST, `--assume-duration`) | 004 |
-| 007 | CLI `eigenlag analyze`, deutscher Report, What-if-Ranking, Monte Carlo (λ_p50, λ_p95) | 005, 006 |
-| 008 | CI-Gate `eigenlag check --against main`, Exit-Code, fertiger PR-Kommentar-Text | 007 |
-| 009 | Packaging, `pipx install .` verifiziert, README mit dem Bäckerei-Beispiel | 008 |
+| 004 | Mathe-Kern: Kondensation, Karp, Howard, Drift, `periods` | ✅ done, abgenommen (Brute-Force-Kreuzvergleich) |
+| 007 | Airflow-Parser per AST: Tasks, `>>`/`<<`, `set_upstream/downstream`, Signale inkl. G, Schedule. Wiederholung des Karp/Howard/Brute-Force-Vergleichs auf echten geparsten DAGs (offen aus Abnahme 004) | 004, 006 (Signal-Definitionen final) |
+| 008 | dbt-Parser (`manifest.json`) plus Dauern-Schicht (Metadaten-DB, REST, `--assume-duration`) | 004 |
+| 009 | CLI `eigenlag analyze`, deutscher Report (sagt, was `simulate` misst: Makespan), What-if-Ranking, Monte Carlo (λ_p50, λ_p95, `numpy` kommt hier als Dependency) | 007, 008 |
+| 010 | CI-Gate `eigenlag check --against main`, Exit-Code, PR-Kommentar-Text | 009 |
+| 011 | Packaging, `pipx install .` verifiziert, README mit dem Bäckerei-Beispiel | 010 |
 
 **Akzeptanz Phase 2:** `pipx install .` läuft, `eigenlag analyze <pfad> --db <url>` liefert λ, kritischen Kreis und What-if-Ranking, CI-Gate-Test grün.
 
 ## Reihenfolge
 
-Phase 1 zuerst komplett, dann Phase 2. Grund: Die Marktzahlen entscheiden, ob das Produkt überhaupt gebaut werden soll. Ein Scan, der zeigt, dass Cross-Run-Kanten praktisch nie auf sub-tägliche Schedules treffen, würde Phase 2 erübrigen. Diese Möglichkeit ist real und wird nicht wegdefiniert.
+006 vor allem anderen: solange die Korpus-Zahlen veraltet sind, gibt es keinen behauptbaren Marktbeweis, und der Wikimedia-Fall ist ohne die korrigierte Darstellung nicht zitierfähig. Danach Phase 2 ab 007.
 
-Session 004 hängt nicht am Scanner und könnte parallel laufen, wenn David das will. Sie ist die inhaltlich interessanteste und die am besten abgesicherte, weil der Prototyp als Referenz vorliegt.
+Die Lehre aus dem Wikimedia-Fall für Phase 2 (ADR-017): Der Analyzer beweist seinen Wert dort, wo der Kreis ein **Teilpfad** ist und λ < Makespan gilt. Der Parser (007) sollte deshalb früh einen echten Fall dieser Sorte finden und durchrechnen — das ist der Fall, der das Produkt trägt, nicht der G-only-Fall.
 
 ## Bewusst nicht gebaut
 
@@ -37,3 +41,4 @@ Session 004 hängt nicht am Scanner und könnte parallel laufen, wenn David das 
 - **Live-Monitoring.** Kein Daemon, kein Agent im Cluster. Der Analyzer läuft auf Anforderung.
 - **Scheduler-Optimierung.** Das Tool sagt, wo der Engpass ist. Es räumt ihn nicht weg.
 - **Dagster- und Prefect-Parser.** Erst wenn Airflow und dbt stehen und jemand danach fragt.
+- **Interprozedurale Factory-Auflösung** (ADR-009) und **transitive Konstruktoren** (ADR-015): beides bewusst begrenzt, die Grenzen sind als Untergrenzen im Report ausgewiesen.
