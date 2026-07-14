@@ -128,3 +128,24 @@ Genau die vier Perioden-Tests fallen und kein anderer. Damit ist die Frage aus S
 3. **Parallele Cross-Kanten mit verschiedenem Versatz dürfen nicht zusammengefasst werden.** Bei der Kondensation liegt es nahe, pro Knotenpaar nur das maximale Gewicht zu behalten. Das ist falsch, sobald der Versatz unterschiedlich ist: Gewicht 6 bei Versatz 2 (Mittel 3) ist schlechter als Gewicht 4 bei Versatz 1 (Mittel 4), keine Kante dominiert die andere. Die kondensierte Matrix ist deshalb nach `(quelle, ziel, periods)` geschlüsselt, nicht nach `(quelle, ziel)`.
 
 4. **`numpy` wurde nicht gebraucht.** Der Kern rechnet auf der kondensierten Matrix mit einstelliger Knotenzahl, Karp läuft in Millisekunden. Das Package hat damit **null** Laufzeit-Dependencies. Wenn Monte Carlo in Session 006 kommt, wird `numpy` wieder aktuell.
+
+---
+
+## 004a — Abnahme Mathe-Kern durch den Orchestrator (2026-07-14)
+
+**Geprüft, nicht geglaubt.** Tests, `ruff` und `mypy` unabhängig nachgefahren: 35 passed, alles grün. Die acht Referenz-Pins gegen den Prototyp außerhalb der Test-Datei der Session nachgerechnet, alle deckungsgleich (λ = 4.40, Kreis `monitor → monitor` aufgelöst `core → features → retrain → score → monitor`, Critical Path 5.5, Drift 1.40 bei T = 3.0, What-ifs 3.60 / 2.50 / 3.85).
+
+**Der offene Punkt aus STATUS war berechtigt und ist jetzt erledigt.** Die Session hatte selbst benannt, dass Howards Verbesserungsschritt keine Vorlage im Prototyp hat und sein einziger Beleg die Übereinstimmung mit Karp auf acht Fixtures ist. Das ist ein schwacher Beleg, weil beide Verfahren aus derselben Session stammen: ein gemeinsamer Denkfehler in der Perioden-Behandlung (ADR-006) hätte sich in beiden gleich ausgewirkt und wäre unentdeckt geblieben.
+
+Gegenmaßnahme: ein **drittes, absichtlich stumpfes Verfahren** als Referenz. Alle einfachen Kreise aufzählen, je Kreis `Summe(w) / Summe(periods)`, Maximum. Das bildet ADR-006 direkt ab und enthält keinen Algorithmus, in dem sich ein Fehler verstecken kann. Ergebnis über 3000 Zufallsgraphen (bis 5 Knoten, mit Selbstkanten, Parallelkanten und gemischtem Versatz 1/2/3):
+
+```
+3000 Zufallsgraphen: 0 Abweichungen zwischen Brute-Force, Karp und Howard
+kreislose Graphen darin: 529
+```
+
+Die 529 kreislosen Fälle sind wichtig: sie belegen, dass der `None`-Pfad aus ADR-007 wirklich durchlaufen wurde und nicht nur behauptet ist.
+
+Der Kreuzvergleich liegt jetzt als `eigenlag/crosscheck_test.py` im Repo (1000 Graphen, 0.07 s), damit er bei jeder künftigen Änderung an Karp oder Howard mitläuft. **36 passed.** Die Restunsicherheit ist ehrlich zu benennen: getestet wurde bis 5 Knoten. Größere Graphen sind nicht abgedeckt, und der Vergleich auf echten geparsten DAGs bleibt wie in STATUS gefordert auf der Liste.
+
+**ADR-007 (Abweichung von der Spec-Signatur) wird bestätigt.** Die Spec schrieb `-> float`, die Session liefert `-> float | None`. Die Begründung ist stichhaltig: der kreislose Fall tritt nicht nur bei `cross == []` auf, sondern auch bei einer Cross-Kante ohne Rückweg, und der Optional-Typ erzwingt die Behandlung beim Aufrufer statt sie zu vergessen. Die Spec war an dieser Stelle zu eng, nicht die Implementierung falsch.

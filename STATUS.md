@@ -39,10 +39,14 @@ Nach Roadmap ist Phase 1 (Scanner) die Vorgabe: **001 — Scanner-Harvest**. Fal
 2. **`croniter` als Scanner-Dependency** (aus Session 000 offen). Spec 002 erlaubt sie im Scanner, nicht im `eigenlag`-Package.
 3. **`pipx` ist nicht installiert.** Wird für Session 009 gebraucht.
 
-### Was der Orchestrator prüfen soll
+### Vom Orchestrator geprüft (2026-07-14) — Session 004 abgenommen
 
-- **Howards Verbesserungsschritt** ist die einzige Stelle im Kern ohne Vorlage im Prototyp. Er hat zwei Kriterien (erst η maximieren, dann bei gleichem η den Bias) und eine Reißleine gegen Nicht-Terminierung, die nie greift. Der Beleg für die Korrektheit ist ausschließlich die Übereinstimmung mit Karp auf acht Fixtures. Das ist der stärkste verfügbare Beleg, aber es ist kein Beweis. Wenn später ein Parser echte DAGs liefert, gehört der Vergleich Karp/Howard auf diesen echten Graphen wiederholt.
-- **`simulate` misst die Latenz als Makespan des Laufs** (spätestes Task-Ende minus Release). Der Prototyp misst `c["reports"]`, also die Fertigstellung eines bestimmten Sink-Tasks. Auf der Demo-Pipeline ist das identisch, weil `reports` der späteste Task ist. Bei einer Pipeline mit mehreren Sinks laufen die Definitionen auseinander. Makespan ist die richtige Wahl für ein generisches Tool, aber die Report-Schicht sollte den späteren Nutzern sagen, was sie misst.
+Tests, `ruff` und `mypy` unabhängig nachgefahren. Die acht Pins außerhalb der Session-Testdatei gegen den Prototyp nachgerechnet, alle deckungsgleich.
+
+- **Howard-Risiko erledigt.** Der Einwand der Session war berechtigt: Karp und Howard stammen aus derselben Session, ein gemeinsamer Denkfehler in ADR-006 wäre unentdeckt geblieben. Gegenmaßnahme: ein drittes, absichtlich stumpfes Verfahren (Brute-Force über alle einfachen Kreise) als Referenz. **3000 Zufallsgraphen, null Abweichungen**, davon 529 kreislos, der `None`-Pfad aus ADR-007 wurde also wirklich durchlaufen. Liegt als `eigenlag/crosscheck_test.py` im Repo und läuft künftig bei jeder Änderung an Karp oder Howard mit. 36 Tests grün.
+- **Restrisiko, ehrlich benannt:** getestet bis 5 Knoten. Der Vergleich auf echten, geparsten DAGs bleibt offen und gehört in die Parser-Session.
+- **ADR-007 bestätigt.** Die Spec schrieb `-> float`, die Session liefert `-> float | None`. Die Spec war zu eng: der kreislose Fall tritt auch bei einer Cross-Kante ohne Rückweg auf. Richtig entschieden, die Spec war falsch, nicht die Implementierung.
+- **`simulate` misst Makespan** (spätestes Task-Ende minus Release), der Prototyp misst einen bestimmten Sink-Task (`reports`). Auf der Demo identisch, bei mehreren Sinks nicht. Makespan ist die richtige Wahl für ein generisches Tool, aber **die Report-Schicht muss dem Nutzer sagen, was sie misst.** Gehört in die Spec der CLI-Session (007).
 
 ### Ungelöste Fragen
 
