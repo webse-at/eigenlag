@@ -26,7 +26,7 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass, field
 
-from scanner.schedule import call_name
+from eigenlag.schedule import call_name
 
 DAG_NAMES = frozenset({"DAG"})
 

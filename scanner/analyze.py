@@ -16,8 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from eigenlag.schedule import ScheduleClass, call_name, classify_node, timedelta_seconds
 from scanner import wrappers
-from scanner.schedule import ScheduleClass, call_name, classify_node, timedelta_seconds
 
 Json = dict[str, Any]  # Fehler-Records gehen als JSONL nach aussen, kein festes Schema.
 

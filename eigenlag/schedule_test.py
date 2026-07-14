@@ -2,7 +2,7 @@ import ast
 
 import pytest
 
-from scanner.schedule import ScheduleClass, classify_node, min_gap_minutes, period_seconds
+from eigenlag.schedule import ScheduleClass, classify_node, min_gap_minutes, period_seconds
 
 
 def node(expr: str) -> ast.expr:

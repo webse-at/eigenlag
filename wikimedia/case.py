@@ -17,8 +17,8 @@ from typing import Any
 
 from eigenlag.maxplus import condense, drift, howard
 from eigenlag.model import CrossEdge, Pipeline
+from eigenlag.schedule import period_seconds
 from scanner.analyze import RepoAnalysis, analyze_repo
-from scanner.schedule import period_seconds
 from wikimedia.fetch import Fetcher, Json
 from wikimedia.runs import Run, Window, extract_runs, samples, stats, windows
 
