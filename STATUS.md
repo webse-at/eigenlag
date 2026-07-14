@@ -2,88 +2,76 @@
 
 > Wird am Ende jeder Session überschrieben. Schnelle Orientierung für die nächste Session.
 
-## Stand: Session 005 — Der Wikimedia-Fall (2026-07-14)
+## Stand: Session 006 — Re-Scan mit Zwei-Klassen-Risiko, Fall-Korrektur (2026-07-14)
 
-**λ ist zum ersten Mal an einer echten Pipeline gerechnet, mit gemessenen Laufzeiten, und der
-Fall trägt.** Er trägt anders als die Vorrecherche annahm, und die Korrektur ist die bessere
-Geschichte.
+**Die Korpus-Zahlen sind neu erhoben und damit wieder behauptbar. `scan/v2/` ist der
+zitierfähige Stand.** Voller Lauf über die 1692 gecachten Clones (1193 s, kein Neu-Klonen,
+kein GitHub-Request), unter der Definition nach ADR-015/016, mit Signal G als eigener Klasse
+(ADR-018).
 
-`wdqs_streaming_updater_reconcile_hourly` bei Wikimedia: stündlicher Takt (T = 3600 s),
-`depends_on_past=True` und `max_active_runs=1`, also ein Kreis über die Zeitachse. Gemessen
-über 398 Läufe in einem lückenfreien Fenster von 16,5 Tagen: **λ = 3598,4 s.** Der DAG driftet
-nicht, er sitzt mit **1,6 Sekunden Reserve** auf seiner eigenen Taktgrenze. Der Preis dafür ist
-eine Verspätung von **48 Minuten**, die nicht mehr wächst und nicht mehr verschwindet.
+### Die Zahlen
 
-Der Fall liegt in `wikimedia/case.md`, mit PromQL und Permalink zu jeder Zahl.
+| Größe | 003 | 006 | Einordnung |
+|---|---|---|---|
+| DAGs gefunden | 51.426 | 51.789 | +363 durch ADR-015, fast alle ohne `dag_id` und signalfrei |
+| Cross-Run (A–F) | 1.303 | 1.303 | mengen-identisch, nicht nur zahlengleich |
+| **Risiko-Kandidaten (Kern)** | 176 | **176** | dieselben Zeilen; das bleibt die Launch-Zahl |
+| Risiko-Kandidaten (nur G) | — | **473** | neue Klasse, 159 Repos; λ = Makespan, dort reicht Laufzeit-Monitoring |
+| DAGs ohne `dag_id` | 4.587 | 4.952 | geflaggt, nicht geraten |
+| dbt-Models mit Selbst-Kante | 3.369 | 3.369 | byte-identisch übernommen |
 
-### Was liegt
+**Der überraschende Befund:** Die 005-Hypothese "die Marktzahl steigt deutlich" ist gemessen
+widerlegt. Der öffentliche Korpus kapselt seine DAG-Erzeugung kaum; ADR-015 wirkt fast nur bei
+professionellen Umgebungen (Wikimedia: 71 → 345 DAGs), und genau die sind in der
+Code-Search-Stichprobe unterrepräsentiert. Details und Stichproben:
+`scan/v2/sample_verification.md` (3 × 10 Stichproben, 0 Falsch-Positive, 0 Falsch-Negative).
 
-- `wikimedia/fetch.py` — Prometheus über Wikimedias Grafana-Proxy, Cache-first, Rate-Limit,
-  Fehler nach `data/wikimedia/fetch_errors.jsonl`. 27 Requests im ganzen Lauf, read-only.
-- `wikimedia/runs.py` — Läufe aus der Gauge rekonstruieren: ein Wertwechsel ist ein Lauf
-  (ADR-017). Fenster ohne Metrik-Lücke, Statistik.
-- `wikimedia/case.py` — Scan, Messung, λ über den Kern, Sweep über die Organisation.
-  `python -m wikimedia.case` schreibt `data/wikimedia/case_numbers.json` und
-  `wikimedia/wikimedia_dags.csv` (453 Zeilen, je DAG und Airflow-Instanz).
-- `scanner/wrappers.py` — repo-eigene DAG-Konstruktoren (ADR-015).
-- `scanner/analyze.py` — Signal G: `max_active_runs=1` (ADR-016).
-- `scanner/schedule.py` — `period_seconds`: der Takt T wird aus dem Ausdruck gerechnet.
+### Was sonst passiert ist
 
-### Was verifiziert wurde
+- **ADR-018** (zwei Risiko-Klassen) in `wiki/decisions.md`; `signals.md` entsprechend
+  korrigiert. Wäre G still ins STRONG-Set gewandert, wäre die Quote 176 → 649 gesprungen —
+  mit Kandidaten, die jedes Dashboard findet. Die Trennung ist die Verteidigung der Zahl.
+- **`wikimedia/case.md` nach ADR-017 korrigiert:** Sweep als Überschrift (30 über Takt, 29
+  driften nicht), "1,6 Sekunden Reserve" gestrichen (Fixpunkt statt Marge), λ = Laufdauer auf
+  DAG-Ebene explizit, wcqs-Ausreißer-Absatz. Messwerte unverändert.
+- **`report.py`:** `sig_g_max_active_runs`, `risk_candidate_g_only`, `dag_id_missing`,
+  Vorher/Nachher-Tabelle, Offenlegung der Definitionsänderung. Permalinks jetzt URL-encodiert
+  (Dateien mit `#` im Namen waren nicht nachschlagbar, Regel-6-Fund aus der Stichprobe).
 
-- `pytest`: **207 passed**. `ruff check`, `ruff format --check`, `mypy` grün.
-- **Scanner auf Wikimedia:** 71 → **345 DAGs**, mit `dag_id` 58 → 255, mit Cross-Run-Signal
-  0 → **68**, Risiko-Kandidaten 0 → **8**.
-- **Gauge-Semantik belegt, nicht angenommen:** serverseitiges `changes()` liefert 397 Läufe,
-  unsere Rekonstruktion 398. Mediane Laufzeit (3733,8 s) und medianer Abstand zweier Laufenden
-  (3720 s) liegen 13,8 s auseinander, also unter der Scrape-Auflösung.
-- **Der Sweep trennt echte von scheinbaren Problemen:** 30 DAGs haben eine mediane Laufzeit über
-  ihrem Takt. **29 davon driften nicht**, weil ihre Läufe überlappen dürfen. Sie wären die
-  Fehlalarme jedes Werkzeugs, das nur Laufzeit gegen Schedule hält.
+### Verifiziert
+
+- `pytest`: **214 passed.** `ruff check`, `ruff format --check`, `mypy` (29 Files) grün.
+- Gegenprobe Definitionsgleichheit: neues `report.py` auf dem **003-State** reproduziert
+  exakt 51.426 / 1.303 / 176 / 0 G-only.
+- `scan/v2/scan_dbt.csv` per `diff` byte-identisch mit `scan/scan_dbt.csv`.
+- Lauf-Beleg: `data/scan_run_v2.log` ("Fertig: 1692 Repos in 1193s").
 
 ## Hinweise für nächste Session
 
-### Zwei Entscheidungen, die frühere kippen
+- **Phase 1 ist damit abgeschlossen** (Akzeptanz laut `wiki/roadmap.md`: Launch-Zahlen aus
+  `scan/v2/`, mit Nenner, Permalink und offengelegter Definitionsänderung). Nächste Session
+  laut Roadmap: **007, Airflow-Parser** (Phase 2). Ein Spec-Entwurf liegt als
+  `cc-sessions/007_offen-airflow-parser.md`; er stammt aus der Implementer-Session 006 und
+  paraphrasiert nur Roadmap und offene Abnahme-Punkte — der Orchestrator sollte ihn vor
+  Start schärfen oder ersetzen.
+- **ADR-Kandidat aus der Stichprobe (keine Regel-Änderung in 006, Spec-Grenze):** Die
+  repo-weite Namensauflösung von ADR-015 übertreibt bei generischen Methodennamen. 330 der
+  422 neuen DAG-Zeilen stammen aus einem generierten OpenAPI-Client, dessen Modellklasse
+  `DAG` heißt (`mik-laj/airflow-api-clients`, Methode `make_instance`). Signalfrei, keine
+  Quote berührt, aber der Nenner dieses Repos ist aufgebläht. Import-genaue Auflösung wäre
+  die Fortsetzung.
+- **Weiter offen aus 005:** DAG-Generatoren mit Literal-Argumenten an der Aufrufstelle
+  auflösen (90 Wikimedia-DAGs ohne `dag_id`); die zehn Wikimedia-DAGs mit unplausiblen
+  Gauge-Wertwechseln (kein λ gerechnet); Task-Ebene braucht die Airflow-Metadaten-DB, also
+  einen Kunden.
+- Die beiden ADR-017-Einträge in `wiki/decisions.md` tragen dieselbe Nummer (Gauge-Rekonstruktion
+  und Fall-These, beide aus 005). Nicht umnummeriert, weil Querverweise auf "ADR-017" in
+  mehreren Dokumenten stehen; bei Gelegenheit vom Orchestrator zu bereinigen.
 
-- **ADR-016 ersetzt eine dokumentierte Festlegung.** `max_active_runs=1` stand in `signals.md`
-  ausdrücklich unter "kein Cross-Run-Signal". Der Fall hat das widerlegt: ohne diese Kante hätte
-  unser Modell für einen DAG, dessen Läufe rückenan liegen, "kein Kreis, kein λ" ergeben.
-  `signals.md` und `math.md` sind korrigiert.
-- **ADR-017** legt fest, dass Läufe aus der Gauge rekonstruiert und nicht über sie gemittelt
-  werden. Die Vorrecherche hatte per `avg_over_time` "60 bis 109 Minuten" gelesen. Das war
-  Scrape-Mittelung, nicht Lauf-Mittelung.
+## Was David entscheiden muss
 
-### Der Punkt, der als erstes entschieden werden muss
-
-**Der Korpus-Scan aus Session 003 ist veraltet, und zwar zweifach.** Er kennt weder die
-Konstruktoren (ADR-015) noch Signal G (ADR-016). Die Zahlen 51.426 DAGs / 1303 mit Cross-Run /
-176 Risiko-Kandidaten stammen aus der alten Definition. Bei Wikimedia hat ADR-015 allein die
-gefundenen DAGs verfünffacht. **Vor jeder öffentlichen Behauptung muss neu gescannt werden.**
-Die Clones liegen noch (`data/repos/`, 74 GB), der Lauf ist wiederholbar, die Kosten sind
-Rechenzeit, kein GitHub-Kontingent. Das ist der naheliegende Inhalt von Session 006.
-
-Erwartung: die Marktzahl steigt deutlich, und der Anteil an Beispiel-Code sinkt, weil gekapselte
-Repos jetzt sichtbar sind. Sicher ist das nicht, es ist eine Hypothese und muss gemessen werden.
-
-### Weitere offene Punkte
-
-- **90 der 345 Wikimedia-DAGs haben keine `dag_id`**, weil erst die aufrufende Funktion sie
-  einsetzt (`build_dag(dag_id='wdqs_...')`). Unser eigener Fall-DAG ist einer davon, weshalb er
-  in der Organisations-Tabelle fehlt. DAG-Generatoren mit Literal-Argumenten an der Aufrufstelle
-  aufzulösen, wäre die Fortsetzung von ADR-015.
-- **Zehn DAGs melden mehr Wertwechsel, als ihr Takt erlaubt** (`refine_api_requests_hourly`:
-  3360 in 30 Tagen bei stündlichem Takt). Ursache unbekannt, λ wird für sie nicht gerechnet.
-- **Die Task-Ebene gibt die Metrik nicht her.** Keine Dauer-Metrik für den Spark-Task,
-  `airflow_task_duration` ohne `dag_id`/`task_id`, Sensoren im Reschedule-Modus melden Dauern
-  nahe null. Gerechnet wird auf DAG-Ebene. Für die Task-Ebene braucht es die
-  Airflow-Metadaten-DB, also einen Kunden.
-- `numpy` wird im Kern erst bei Monte Carlo gebraucht, `pipx` ist noch nicht installiert.
-
-### Was David entscheiden muss
-
-1. **Session 006: Korpus neu scannen** (siehe oben) oder direkt Produkt bauen? Der Fall trägt
-   auch ohne neue Marktzahl, aber die alte Zahl darf so nicht mehr behauptet werden.
-2. **Der Fall ist Launch-Inhalt**, sobald David das will: eine bekannte Organisation, öffentlich
-   nachprüfbar, mit einer Zahl (1,6 Sekunden Reserve, 48 Minuten Verspätung), die vorher niemand
-   ausgerechnet hat. Kein Kontakt zu Wikimedia, keine Veröffentlichung, nichts nach außen ist
-   passiert. Das entscheidet er.
+1. **Launch-Zeitpunkt.** Die Marktzahl (176 Kern-Kandidaten, 0,3 %, dazu 1.303 Kreise ohne
+   bekannte Taktgrenze) und der Wikimedia-Fall sind jetzt konsistent, belegt und zitierfähig.
+   Nichts davon ist veröffentlicht, nichts nach außen gegangen. Ob und wann, entscheidet David.
+2. **Session 007 (Parser) starten** oder vorher etwas anderes priorisieren. Der Spec-Entwurf
+   liegt, die Roadmap sieht 007 als nächsten Schritt.

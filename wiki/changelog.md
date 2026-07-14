@@ -4,6 +4,15 @@ Feature-Historie. Ein Eintrag pro abgeschlossenem Feature, nicht pro Commit.
 
 ## Unreleased
 
+### Session 006 — Re-Scan mit Zwei-Klassen-Risiko, Fall-Korrektur (2026-07-14)
+
+- Voller Re-Scan über die 1692 gecachten Clones (1193 s, kein Neu-Klonen, State versioniert unter `data/scan_state_v2/`), Artefakte unter `scan/v2/`, die 003-Artefakte bleiben unverändert liegen
+- `scanner/report.py`: Zwei-Klassen-Risiko nach ADR-018 (`risk_candidate` unverändert A–F, neu `risk_candidate_g_only`), Spalten `sig_g_max_active_runs` und `dag_id_missing`, Vorher/Nachher-Tabelle gegen 003, Offenlegung der Definitionsänderung im Report-Text; Permalinks URL-encodiert (Dateinamen mit `#` waren nicht nachschlagbar)
+- Ergebnis: 51.789 DAGs (+363 durch ADR-015), Cross-Run (A–F) und Kern-Kandidaten **mengen-identisch** mit 003 (1303 / 176), neu 473 G-only-Kandidaten in 159 Repos, 4952 DAGs ohne `dag_id`; dbt byte-identisch übernommen (3369). Die 005-Hypothese "Marktzahl steigt deutlich" ist gemessen widerlegt: der öffentliche Korpus kapselt seine DAG-Erzeugung kaum
+- Drei 10er-Stichproben (Kern, G-only, signalfrei) mit 0 Falsch-Positiven und 0 Falsch-Negativen in `scan/v2/sample_verification.md`, Delta-Zuordnung mit zwei 5er-Stichproben (+422 Konstruktor-Aufrufstellen, −59 Schablonen)
+- `wikimedia/case.md` nach ADR-017 überarbeitet: der Sweep (30 DAGs über Takt, 29 driften nicht) ist die Überschrift, "1,6 Sekunden Reserve" gestrichen (der Wert ist der Fixpunkt des rückgekoppelten Systems, keine Marge), λ = Laufdauer auf DAG-Ebene explizit benannt, wcqs-Ausreißer-Absatz ergänzt; Messwerte unverändert. Die 005-Einträge in Log und Changelog bleiben als Historie stehen, die Richtigstellung steht in 005a und ADR-017
+- ADR-018 in `wiki/decisions.md`, `signals.md` auf die Zwei-Klassen-Definition gebracht (Titel jetzt "A bis G")
+
 ### Session 003 — Scan-Lauf und Report (2026-07-14)
 
 - `scanner/run.py`: voller Lauf über 1692 Kandidaten, resume-fähig, Clone-SHA im Permalink

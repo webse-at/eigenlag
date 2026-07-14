@@ -438,3 +438,31 @@ Das ist kein Fehler der Session: Wikimedia liefert `airflow_dagrun_duration`, al
 **Nebenbefund, den die Session nicht nennt:** λ auf dem Mittelwert ist ausreißer-empfindlich. Bei `wcqs` verzerrt ein einzelner hängender Lauf von 400.132 s (4,6 Tage) den Mittelwert um rund 560 s bei 712 Läufen. Für den asymptotischen Drift ist der Mittelwert die richtige Statistik, aber ein hängender Lauf vergiftet ihn. Gehört benannt, nicht geglättet.
 
 **Der Re-Scan (Session 006) ist zwingend.** Die Zahlen aus 003 (51.426 DAGs, 176 Risiko-Kandidaten) kennen weder die Konstruktoren (ADR-015) noch Signal G (ADR-016). Bei Wikimedia allein hat ADR-015 die gefundenen DAGs verfünffacht. Vor jeder öffentlichen Behauptung wird neu gescannt.
+
+---
+
+## Session 006 — Re-Scan mit Zwei-Klassen-Risiko, Fall-Korrektur (2026-07-14)
+
+**Auftrag:** Korpus unter der Definition nach ADR-015/016 neu scannen, Signal G als eigene Klasse ausweisen (ADR-018), `case.md` nach ADR-017 korrigieren. Spec: `cc-sessions/006_offen-rescan-korrektur.md`.
+
+**Was gemacht wurde:** ADR-018 (zwei Risiko-Klassen), `report.py` um `sig_g_max_active_runs`, `risk_candidate_g_only`, `dag_id_missing`, Vorher/Nachher-Tabelle und Offenlegungs-Absätze erweitert (Tests zuerst, 6 neue rot → grün). Voller Re-Scan über die 1692 gecachten Clones, State versioniert neu unter `data/scan_state_v2/` (Clones unangetastet, Regel 8). Artefakte nach `scan/v2/`, die alten bleiben liegen. `wikimedia/case.md` nach ADR-017 umgebaut. `signals.md` auf die Zwei-Klassen-Definition gebracht.
+
+**Der Lauf:** 1692 Repos in 1193 s, 10 Worker, 0 Abbrüche, kein Neu-Klonen (Log: `data/scan_run_v2.log`). Etwa doppelt so lang wie der 003-Lauf (615 s), das ist der Preis des ADR-015-Vorlaufs, der jedes Repo zweimal parst.
+
+**Was gemessen wurde, und was überrascht hat:**
+
+**1. Die Kern-Quote ist nicht nur gleich groß, sie ist mengen-identisch.** 1303 Cross-Run-DAGs und 176 Kern-Kandidaten sind exakt dieselben Zeilen wie in 003 (per Key `repo, file, dag_id, lineno` verglichen, beide Richtungen leer). Gegenprobe: das neue `report.py` auf dem alten 003-State reproduziert 51.426 / 1303 / 176 mit 0 G-only. Die Definitionsgleichheit ist damit in beide Richtungen belegt, nicht behauptet.
+
+**2. Die 005-Hypothese "die Marktzahl steigt deutlich" ist widerlegt.** ADR-015 bringt im öffentlichen Korpus +422 DAG-Zeilen und −59 (netto +363, also +0,7 %), davon 401 ohne `dag_id`, und kein einziges neues Signal. 330 der 422 stammen aus einem einzigen Repo (`mik-laj/airflow-api-clients`): ein generierter OpenAPI-Client, dessen Modellklasse `DAG` heißt und dessen Test-Methode `make_instance` sie zurückgibt — die repo-weite Namensauflösung von ADR-015 macht daraus DAG-Scopes. Die −59 sind die Schablonen in Konstruktor-Rümpfen (überwiegend vendorierter Airflow-Quellcode), die 003 fälschlich als DAGs zählte. Der öffentliche Korpus kapselt seine DAG-Erzeugung schlicht kaum; Konstruktoren sind ein Muster professioneller Umgebungen (Wikimedia: Verfünffachung), und genau die fehlen in der Code-Search-Stichprobe. Das ist die ehrlichere Pointe von ADR-015 und ein weiterer Beleg für den Demo-Vorbehalt des Reports.
+
+**3. Die neue G-Klasse ist groß: 3529 DAGs mit `max_active_runs=1` (6,8 %), davon 473 sub-tägliche G-only-Kandidaten in 159 Repos.** Hätte man G stillschweigend ins STRONG-Set gemischt, wäre die "Risiko-Quote" von 176 auf 649 gesprungen — mit Kandidaten, die jedes Laufzeit-Dashboard genauso findet. Genau das verhindert ADR-018: 176 bleibt die Launch-Zahl, 473 steht als eigene Zeile daneben, mit dem Satz "Laufzeit-Monitoring reicht dort" im Report, bevor ihn ein Kritiker sagt. Nur 10 der 176 Kern-Kandidaten tragen zusätzlich G.
+
+**4. Stichproben: 0 Falsch-Positive, 0 Falsch-Negative, ein Beleg-Fehler gefunden und behoben.** Drei 10er-Stichproben (Kern, G-only, signalfrei; `random.Random(6)`, ein DAG je Repo) in `scan/v2/sample_verification.md`. Der wertvollste Fund der Negativ-Stichprobe: `shaqbari/de6_3th_day6_naver` setzt `execution_delta=timedelta(hours=0)` — der ADR-014-Fall in freier Wildbahn, korrekt kein Signal. Der Beleg-Fehler: `njuxc/PYAM` trägt Dateien mit `#` im Namen, der Permalink verlor dadurch den Zeilen-Anker (Regel-6-Verstoß). `permalink()` encodiert seit dieser Session die Pfade, mit Test.
+
+**5. dbt exakt übernommen, nicht neu definiert.** `analyze_dbt.py` unverändert, `scan/v2/scan_dbt.csv` byte-identisch mit 003 (per `diff` geprüft), im Report als übernommen gekennzeichnet.
+
+**6. Fall-Korrektur nach ADR-017 umgesetzt.** `case.md` führt jetzt mit dem Sweep (30 DAGs über Takt, 29 driften nicht), "1,6 Sekunden Reserve" ist überall gestrichen und durch den Fixpunkt-Befund ersetzt (Korrelation −0,504, mittlere Dauer ≈ T ist der eingeschwungene Zustand), λ = Laufdauer auf DAG-Ebene steht explizit im Dokument, der wcqs-Ausreißer (400.132 s verschieben den Mittelwert um ~560 s bei 712 Läufen) hat seinen eigenen Absatz. Messwerte unverändert. Log-Eintrag 005 blieb unangetastet: die Richtigstellung steht bereits vollständig in 005a, ein Nachtrag hätte nur dupliziert.
+
+**Kleine Deltas am Rand, der Vollständigkeit halber:** `unresolved_default_args` 5641 → 5629, `ambiguous_task` 428 → 434, Repos mit DAG 1286 → 1287. Alles Folgen von ADR-015 (mehr bzw. andere Scopes ändern die Zuordnung einzelner Fundstellen); keine dieser Größen geht in eine Quote ein.
+
+**Verifiziert:** `pytest` 214 passed, `ruff check`, `ruff format --check`, `mypy` über `eigenlag/`, `scanner/`, `wikimedia/` grün. Kein GitHub-Request im ganzen Lauf, alles aus dem Clone-Cache.

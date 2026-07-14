@@ -10,7 +10,7 @@ Der Session-Plan. Jede Zeile ist genau eine CC-Session mit genau einer Spec in `
 | 002 | AST-Analyse: DAG-Scoping, Signale, Schedule-Klassifikation, dbt | ✅ done, 141 Tests |
 | 003 | Scan-Lauf über 1692 Repos, CSVs, Report, Stichproben | ✅ done — Zahlen durch ADR-015/016 veraltet |
 | 005 | Wikimedia-Fall: λ an einer Produktions-Pipeline, PromQL-Messung | ✅ done — Einordnung per ADR-017 korrigiert |
-| 006 | **Re-Scan** mit Konstruktoren (ADR-015) und Signal G (ADR-016) als eigener Klasse (ADR-018), Vorher/Nachher-Tabelle, Fall-Korrektur in `case.md` | 📄 Spec liegt |
+| 006 | **Re-Scan** mit Konstruktoren (ADR-015) und Signal G (ADR-016) als eigener Klasse (ADR-018), Vorher/Nachher-Tabelle, Fall-Korrektur in `case.md` | ✅ done — Kern-Quote unverändert 176, dazu 473 G-only; `scan/v2/` ist der zitierfähige Stand |
 
 **Akzeptanz Phase 1 (nachgeschärft):** Die Launch-Zahlen stammen aus `scan/v2/`, jede mit Nenner und Permalink-Beleg, die Definitionsänderung offengelegt. Erst danach ist irgendetwas öffentlich behauptbar.
 
