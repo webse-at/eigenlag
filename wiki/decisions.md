@@ -160,3 +160,16 @@ Die Alternative wäre eine Dependency für eine Funktion von rund achtzig Zeilen
 **Begründung:** Ein Task, der auf `{{ prev_start_date_success }}` zugreift, wartet per Definition auf den erfolgreichen Vorlauf. Das ist genau die Kante, die λ erzeugt. Die Aufzählung "A bis E" war eine Verkürzung aus der Zeit vor der Abstufung, kein eigener Beschluss. Die Abstufung ist die begründete Aussage, sie gewinnt.
 
 **Konsequenz:** `signals.md` ist korrigiert. `STRONG_KINDS` in `scanner/analyze.py` enthält `prev_run_success`, nicht `prev_run_date`.
+
+---
+
+## ADR-012 — dbt hat keinen Schedule und darf nie in die Airflow-Risiko-Quote
+
+**Status:** entschieden, 2026-07-14 (Überarbeitung Spec 003)
+**Kontext:** Die Risiko-Definition lautet "starkes Signal **und** sub-täglicher Schedule im selben DAG". Beim Überarbeiten von Spec 003 fiel auf, dass diese Bedingung für dbt-Repos gar nicht auswertbar ist: ein dbt-Model enthält kein Schedule. Wie oft es läuft, steht in Airflow, in dbt Cloud oder in einem Cron außerhalb des Repos. `scanner/analyze_dbt.py` kennt entsprechend keinen Schedule-Begriff, und das ist richtig so.
+
+**Entscheidung:** Airflow und dbt werden **getrennt** ausgewertet. Die Risiko-Quote wird ausschließlich über Airflow-DAGs gebildet. dbt bekommt eine eigene Tabelle mit einer eigenen Aussage: wie viele Models sind inkrementell mit `is_incremental()`, haben also eine echte Selbst-Kante.
+
+**Begründung:** Ein dbt-Repo kann die Risiko-Bedingung konstruktionsbedingt nie erfüllen. Mischt man die 364 dbt-Repos in den Nenner, verdünnt sich die Quote um einen Faktor, der nichts mit der Wirklichkeit zu tun hat. Mischt man sie in den Zähler, behauptet man ein Risiko, das man nicht belegen kann, weil der Takt unbekannt ist. Beides wäre eine Zahl, die niemand verteidigen kann.
+
+**Der positive Dreh:** Bei dbt kennen wir den Kreis, aber nicht den Takt. Das ist kein Mangel des Scanners, sondern genau die Lücke, die das Produkt schließt. Ein inkrementelles Model mit `is_incremental()` hat eine Selbst-Kante, und ob sein Takt darunter liegt, weiß heute niemand, weil Kreis und Takt in getrennten Systemen stehen. Der Report soll das so sagen.
