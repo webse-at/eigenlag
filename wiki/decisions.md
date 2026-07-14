@@ -273,3 +273,38 @@ Aufrufe dieser Namen sind DAG-Scopes wie `DAG(...)` selbst. Das `DAG(...)` **im*
 **Grenze:** Zwei aufeinanderfolgende Läufe mit exakt gleicher Dauer auf die Millisekunde zählen als einer. Bei Fließkomma-Dauern ist das praktisch ausgeschlossen, und der Fehler ginge zu unseren Ungunsten (ein Lauf zu wenig). Bei zehn Wikimedia-DAGs meldet die Gauge **mehr** Wertwechsel, als der Takt erlaubt (`refine_api_requests_hourly`: 3360 in 30 Tagen bei stündlichem Takt). Die Ursache ist unbekannt, und für diese DAGs rechnen wir kein λ, statt eine Erklärung zu erfinden.
 
 **Task-Ebene:** nicht möglich. Für den Spark-Task und den Abschluss-Task existiert keine Dauer-Metrik, `airflow_task_duration` trägt weder `dag_id` noch `task_id`, und die Sensoren melden im Reschedule-Modus Dauern nahe null. Gerechnet wird auf DAG-Ebene, und das steht im Report.
+
+---
+
+## ADR-017 — Der Wikimedia-Fall belegt die These, nicht das Werkzeug
+
+**Status:** entschieden, 2026-07-14 (Abnahme Session 005)
+**Kontext:** Session 005 meldet "λ = 3598,4 s an einer echten Pipeline gemessen" und stellt den Fall als Validierung des Analyzers dar. Die Abnahme hat nachgerechnet, wie diese Zahl entsteht.
+
+`wikimedia/case.py`, `lambda_of()` baut:
+
+```python
+Pipeline(durations={"dagrun": duration}, intra=[], cross=[CrossEdge("dagrun", "dagrun", 1)])
+```
+
+Ein Knoten, eine Selbst-Kante. Der Max-Plus-Eigenwert eines solchen Graphen ist **per Definition das Kantengewicht**. In den Messdaten steht das unverstellt:
+
+```
+dauer_s.mittel = 3598.4   →   lambda_s.mittel = 3598.4
+dauer_s.median = 3733.8   →   lambda_s.median = 3733.8
+dauer_s.p95    = 3778.8   →   lambda_s.p95    = 3778.8
+```
+
+λ ist in jeder Statistik identisch mit der eingesetzten Dauer. Kondensation, Karp und Howard sind auf diesem Graphen eine Identitätsfunktion. "λ = 3598,4 s" heißt: **die mittlere Laufdauer beträgt 3598,4 s.**
+
+**Das ist kein Fehler der Session.** Wikimedias Prometheus liefert `airflow_dagrun_duration`, also Dauern auf **DAG-Ebene**, keine Task-Dauern. Ohne Task-Dauern lässt sich der Task-Graph nicht gewichten, und das DAG-Ebenen-Modell fällt zwangsläufig auf einen Knoten zusammen. Die Session hat das einzig Mögliche getan.
+
+**Entscheidung:** Der Fall wird als Beleg der **These** geführt, nicht als Validierung des **Werkzeugs**. Zwei Dinge, die daraus folgen und die nicht verwischt werden dürfen:
+
+1. **Die Formulierung "1,6 Sekunden Reserve" wird gestrichen.** Sie unterstellt eine knappe Marge und damit einen Zufall. Nach `math.md` Abschnitt 9 (Korrelation Verspätung/Laufzeit = −0,504) ist das Gegenteil der Fall: Das System ist rückgekoppelt und **pendelt sich genau dort ein**, wo die mittlere Dauer ≈ T ist. Eine mittlere Dauer 1,6 s unter dem Takt ist kein Balanceakt, sondern der Fixpunkt, den ein selbststabilisierendes System einnehmen muss. Die Session schreibt die Zirkularität in `math.md` selbst hin ("die gemessenen Dauern sind bereits das Ergebnis des eingeschwungenen Zustands"). Dann darf dieselbe Zahl nicht als knappe Marge verkauft werden.
+
+2. **Für DAGs, deren einzige Cross-Run-Kante Signal G ist, gilt λ = Makespan.** Das ist die Laufzeit, die jedes Tool heute schon anzeigt. Der Analyzer verdient sein Geld erst dort, wo der Kreis ein **Teilpfad** ist (`depends_on_past` an einer einzelnen Task, `ExternalTaskSensor` mit `execution_delta`): dann ist λ < Makespan, und die naive Regel "Laufzeit gegen Schedule" liegt in beide Richtungen falsch. wdqs ist damit der **am wenigsten** aussagekräftige Falltyp für das Produkt.
+
+**Die richtige Überschrift des Falls steht bereits in der Session, an anderer Stelle:** 30 DAGs laufen im Median länger als ihr Takt, 29 davon driften nicht, weil ihre Läufe überlappen dürfen. Das ist der Beleg, dass "Laufzeit über Takt" als Diagnose wertlos ist, und das ist an echten Daten gemessen. Diese Zahl trägt den Fall, nicht λ = 3598,4.
+
+**Nebenbefund, der in den Report gehört:** λ auf dem Mittelwert ist ausreißer-empfindlich. Bei `wcqs` verzerrt ein einzelner hängender Lauf von 400.132 s (4,6 Tage) den Mittelwert um rund 560 s bei 712 Läufen. Für den asymptotischen Drift ist der Mittelwert die richtige Statistik, aber ein hängender Lauf vergiftet ihn. Das ist zu benennen, nicht zu glätten.

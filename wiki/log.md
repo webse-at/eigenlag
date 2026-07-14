@@ -411,3 +411,30 @@ zweites Mal, diesmal von der anderen Seite.
 **Was offen bleibt:** Bei zehn DAGs meldet die Gauge mehr Wertwechsel, als ihr Takt erlaubt (`refine_api_requests_hourly`: 3360 in 30 Tagen bei stündlichem Takt). Ursache unbekannt, λ wird für sie nicht gerechnet.
 
 **Last auf fremder Infrastruktur:** 27 Requests insgesamt, alles read-only, jede Antwort im Cache unter `data/wikimedia/cache/`. Kein Kontakt zu Wikimedia.
+
+---
+
+## 005a — Abnahme Wikimedia-Fall durch den Orchestrator (2026-07-14)
+
+**Angenommen mit einer Korrektur an der Überschrift.** Die Messarbeit ist die beste des Projekts bisher. Die Schlussfolgerung, die daraus gezogen wird, ist es nicht.
+
+**Nachgerechnet, wie λ = 3598,4 s entsteht.** `wikimedia/case.py`, `lambda_of()` baut eine Pipeline aus einem Knoten mit einer Selbst-Kante. Der Eigenwert eines solchen Graphen ist das Kantengewicht. In `data/wikimedia/case_numbers.json` steht es unverstellt: `dauer_s.mittel = 3598.4` und `lambda_s.mittel = 3598.4`, dasselbe für Median und p95. **λ ist die eingesetzte Dauer**, Kondensation und Howard sind hier eine Identitätsfunktion.
+
+Das ist kein Fehler der Session: Wikimedia liefert `airflow_dagrun_duration`, also Dauern auf DAG-Ebene. Ohne Task-Dauern gibt es keinen gewichteten Task-Graphen, und das Modell fällt zwangsläufig auf einen Knoten zusammen. Die Session hat das einzig Mögliche getan, aber der Bericht verkauft es als etwas, das es nicht ist. Daraus wurde **ADR-017**.
+
+**Zwei Korrekturen:**
+
+1. **"1,6 Sekunden Reserve" muss weg.** Die Formulierung unterstellt eine knappe Marge, also einen Zufall. Die Session hat aber selbst die Korrelation −0,504 zwischen Startverspätung und Laufzeit gemessen und in `math.md` Abschnitt 9 geschrieben, dass "die gemessenen Dauern bereits das Ergebnis des eingeschwungenen Zustands" sind. Genau das heißt: Das System ist rückgekoppelt und pendelt sich dort ein, wo die mittlere Dauer ≈ T ist. Eine mittlere Dauer 1,6 s unter dem Takt ist **kein Balanceakt, sondern der Fixpunkt**, den ein selbststabilisierendes System einnehmen muss. Dieselbe Zahl kann nicht gleichzeitig ein Zirkularitäts-Beleg und eine knappe Marge sein.
+
+2. **Der Fall belegt die These, nicht das Werkzeug.** Für DAGs, deren einzige Cross-Run-Kante Signal G (`max_active_runs=1`) ist, gilt λ = Makespan, und das ist die Laufzeit, die jedes Dashboard heute schon zeigt. Der Analyzer verdient sein Geld erst, wo der Kreis ein **Teilpfad** ist und λ < Makespan gilt. wdqs ist der am wenigsten aussagekräftige Falltyp für das Produkt.
+
+**Die tragfähige Überschrift steht bereits in der Session, nur an der falschen Stelle:** 30 DAGs laufen im Median länger als ihr Takt, **29 davon driften nicht**, weil ihre Läufe überlappen dürfen. Das ist an echten Produktionsdaten gemessen und belegt, dass "Laufzeit über Takt" als Diagnose wertlos ist. Das trägt den Fall.
+
+**Bestätigt, gegen meine eigene frühere Festlegung:**
+
+- **ADR-016 ist richtig, `signals.md` war falsch.** Ich hatte `max_active_runs=1` ausdrücklich unter "kein Cross-Run-Signal" geführt, mit der Begründung, es begrenze die Nebenläufigkeit und nicht die Rekurrenz. Für den Eigenwert ist diese Unterscheidung bedeutungslos: `Ende(k−1) ≤ Start(k)` ist eine Kante über die Zeitachse, und eine Kante ist eine Kante. Hätte die Session meiner Festlegung gehorcht, hätte das Modell für eine Pipeline, deren Läufe nachweislich rückenan liegen, "kein Kreis, kein λ" gemeldet. Die Session hat richtig widersprochen.
+- **ADR-015** (Funktionen, die ein `DAG(...)` zurückgeben, sind DAG-Konstruktoren): bei Wikimedia allein verfünffacht das die gefundenen DAGs (71 → 345). Der Verzicht auf Transitivität ist richtig begründet, und der Preis (90 DAGs ohne `dag_id`) wird protokolliert statt geraten.
+
+**Nebenbefund, den die Session nicht nennt:** λ auf dem Mittelwert ist ausreißer-empfindlich. Bei `wcqs` verzerrt ein einzelner hängender Lauf von 400.132 s (4,6 Tage) den Mittelwert um rund 560 s bei 712 Läufen. Für den asymptotischen Drift ist der Mittelwert die richtige Statistik, aber ein hängender Lauf vergiftet ihn. Gehört benannt, nicht geglättet.
+
+**Der Re-Scan (Session 006) ist zwingend.** Die Zahlen aus 003 (51.426 DAGs, 176 Risiko-Kandidaten) kennen weder die Konstruktoren (ADR-015) noch Signal G (ADR-016). Bei Wikimedia allein hat ADR-015 die gefundenen DAGs verfünffacht. Vor jeder öffentlichen Behauptung wird neu gescannt.
