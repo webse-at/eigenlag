@@ -221,3 +221,30 @@ oulrich-ops/dbt_certif_prepare models/base/stg_transactions.sql:17           {% 
 3. **Ein Paging-Bug wurde erst im echten Lauf sichtbar.** Bei `ExternalTaskSensor` lieferte Seite 7 nur 52 Treffer, die Query war erschöpft. Der Scanner hat trotzdem die Seiten 8, 9 und 10 abgefragt (je 0 Treffer), weil die Schleife nur gegen den Seiten-Deckel prüfte und nicht gegen das `done`-Flag. Drei verschwendete Requests gegen ein Kontingent von 30 pro Minute, keine falschen Daten. Behoben, indem die Fortschaltung als reine Funktion `advance(entry, n_items)` herausgezogen und mit einer Tabelle getestet wurde. Beleg am echten Endpunkt nach dem Fix: die Query bei Seite 7 wieder aufgesetzt, es kam genau eine Antwort mit 52 Treffern und dann Schluss. Der Fund ist ein Argument für die Regel, dass eine grüne Test-Suite Code-Korrektheit prüft und nicht Feature-Korrektheit: die HTTP-Schleife war zu keinem Zeitpunkt getestet, und genau dort saß der Fehler.
 
 4. **Der 502 hat sich selbst repariert.** Das Repo fehlte nach dem Fehler in beiden Ausgabedateien und galt dem nächsten Lauf deshalb als offen. Er hat es nachgeholt, 1691 wurden 1692. Das war nicht geplant, sondern fällt aus der Zweistufigkeit heraus (ADR-008).
+
+---
+
+## 001a — Abnahme Scanner-Harvest durch den Orchestrator (2026-07-14)
+
+**Zahlen unabhängig nachgerechnet**, direkt aus `data/`: 1692 Kandidaten (1328 Airflow, 364 dbt), 1692 davon eindeutig (keine Duplikate), 403 verworfen (251 Blocklist, 152 Größe), 2095 bewertet. Deckt sich exakt mit dem Bericht der Session. Akzeptanzschwelle der Spec (250 / 120) ohne Aufweichen der Filter übertroffen.
+
+**Stichprobe gegengeprüft.** Sechs der zehn Belege selbst per `raw.githubusercontent.com` aufgelöst. Alle sechs stehen genau dort, wo die Session sie verortet hat:
+
+```
+speaud/scripts-and-scraps      .../dags/tutorial.py:35        'depends_on_past': False,
+Steve-YJ/pseudocon-...         .../dags/sample.py:25          # 'wait_for_downstream': False,
+navikt/team_familie_...        operators/kafka_operators.py:33   wait_for_downstream: bool = True,
+mlmicozzi/AprendizajeMaquinaII .../dags/music_process.py:15   'depends_on_past': False,
+antweiss/airflow-test          bashtest5.py:10                'depends_on_past': False,
+cyrillettlin/DataEngineering_… .../us_accidents_bq_dag.py:81  execution_delta=timedelta(hours=3),
+```
+
+Der Befund der Session hält: rohe Code-Search-Treffer sind zur Hälfte keine Signale. ADR-004 ist damit gemessen und nicht nur begründet.
+
+**Zwei Korrekturen am Befund der Session:**
+
+1. **Der `navikt`-Fall ist kein Falsch-Positiv, sondern ein Falsch-Negativ mit Ansage.** Die Session hat ihn als "nur eine Funktionssignatur, kein DAG-Argument" abgetan. Tatsächlich ist es eine **Task-Factory**: die Funktion führt `depends_on_past: bool = True` und `wait_for_downstream: bool = True` als Defaults und gibt einen `KubernetesPodOperator` zurück (Zeile 83). Jeder Task aus dieser Factory trägt beide starken Signale. Das Signal ist echt, es steht nur in einem Helper-Modul, das kein DAG instanziiert. Spec 002 in ihrer bisherigen Form ("scanne DAG-Files, ordne DAG-scoped zu") hätte dieses Repo als signalfrei gemeldet. Daraus wurde **ADR-009**, und Spec 002 hat jetzt einen Abschnitt 4b: Factories werden erkannt, getrennt gezählt und **nicht** in die Hauptquote gemischt. Die Hauptquote ist damit ausdrücklich eine Untergrenze. Das ist die verteidigbare Fehlerrichtung, aber sie gehört in den Report.
+
+2. **Die Belege im Session-Log sind gekürzt und damit nicht auflösbar.** Dort steht `dags/tutorial.py:35`, der echte Pfad ist `docker/sandbox/ubuntu-airflow/airflow/dags/tutorial.py`. Auch die Repo-Namen sind mit `...` abgeschnitten. Beim Nachprüfen liefen die ersten sechs `curl`-Aufrufe deshalb ins Leere, und ich musste zurück in `hits.jsonl`. Genau das verbietet Regel 6: ein Treffer, der sich nicht in dreißig Sekunden nachschlagen lässt, zählt nicht. In `scan_results.csv` und in `report.md` ist das kein Schönheitsfehler mehr, sondern ein Substanzfehler, weil der Beleg dort das Produkt ist. Spec 002 hält das jetzt fest.
+
+**Übernommen für Session 003:** der 1000er-Deckel der Code-Search (vier von sechs Queries laufen hinein, `depends_on_past` meldet `total_count` 2284), die null Treffer der Filter `fork` und `archived`, und die zwölf Prozent Blocklist-Quote. Alle drei gehören in den Abschnitt "Was diese Zahlen nicht sagen".

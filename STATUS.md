@@ -31,9 +31,14 @@
 
 - **ADR-008** — Der Harvest ist zweistufig. Stufe 1 schreibt Rohtreffer nach `hits.jsonl`, Stufe 2 holt Metadaten und filtert. Die Resume-Grenze liegt zwischen beiden, damit ein Abbruch das knappe `search`-Kontingent schützt und nicht das reichliche `core`-Kontingent.
 
-### Was der Orchestrator prüfen soll
+### Vom Orchestrator geprüft (2026-07-14) — Session 001 abgenommen, mit zwei Korrekturen
 
-1. **Die Stichprobe ist der eigentliche Befund der Session.** Von zehn zufälligen Kandidaten sind fünf inhaltlich **kein** Signal: dreimal `'depends_on_past': False`, einmal auskommentiert, einmal die Signatur einer eigenen Operator-Klasse. Die Code-Search-Zahl taugt damit unter keinen Umständen als Marktzahl. Für `report.md` (Session 003) heißt das: die Risiko-Quote wird ausschließlich auf die AST-Ergebnisse aus 002 bezogen, und der Nenner ist zu benennen.
+Zahlen direkt aus `data/` nachgerechnet, deckungsgleich. Sechs der zehn Stichproben-Belege selbst per `raw.githubusercontent.com` aufgelöst, alle stehen genau dort, wo die Session sie verortet. Der Kernbefund hält: rohe Code-Search-Treffer sind zur Hälfte keine Signale, ADR-004 ist damit gemessen.
+
+1. **Korrektur — der `navikt`-Fall ist kein Falsch-Positiv, sondern ein Falsch-Negativ mit Ansage.** Die Session hat ihn als "nur eine Funktionssignatur" abgetan. Es ist eine **Task-Factory**: `depends_on_past: bool = True` und `wait_for_downstream: bool = True` als Defaults, `return KubernetesPodOperator(...)`. Jeder Task daraus trägt beide starken Signale. Spec 002 hätte das Repo als signalfrei gemeldet, weil das Signal in einem Helper-Modul steht, das kein DAG instanziiert. → **ADR-009**, Spec 002 Abschnitt 4b: Factories erkennen, **getrennt** zählen, nicht in die Hauptquote mischen. Die Hauptquote ist damit ausdrücklich eine **Untergrenze**, und das gehört in `report.md`.
+2. **Korrektur — die Belege im Log sind gekürzt und damit nicht auflösbar.** Dort steht `dags/tutorial.py:35`, echt ist `docker/sandbox/ubuntu-airflow/airflow/dags/tutorial.py`. Beim Nachprüfen liefen sechs `curl`-Aufrufe ins Leere. Regel 6 verlangt Auflösbarkeit in dreißig Sekunden. Im Log ist das ein Schönheitsfehler, in `scan_results.csv` und `report.md` wäre es ein Substanzfehler, weil der Beleg dort das Produkt ist. In Spec 002 festgehalten.
+
+### Was der Orchestrator für 003 übernimmt
 2. **Vier der sechs Queries laufen in den 1000er-Deckel** der Code-Search (`depends_on_past` meldet `total_count` 2284, geholt: 1000). Die Stichprobe ist nach oben abgeschnitten und nicht repräsentativ für "alle Airflow-Repos". Der Einschränkungssatz aus Spec 001 muss in `report.md` wirklich stehen.
 3. **`fork` und `archived` haben null Mal gegriffen.** Nachgeprüft an 20 zufälligen Kandidaten: alle `fork=false archived=false`. Die klassische Code-Search liefert offenbar weder Forks noch archivierte Repos. Kein Filter-Fehler, aber im Report zu erwähnen, sonst liest es sich wie einer.
 4. **Blocklist frisst 12 Prozent** (251 von 2095). Anfechtbar über `rejected.jsonl`, jede Zeile mit `reason` und `description`.

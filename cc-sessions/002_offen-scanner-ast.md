@@ -48,6 +48,30 @@ Implementiere A bis F exakt nach `wiki/signals.md`. Die drei Fallen, an denen ei
 
 Für jedes gefundene Signal: **Datei plus Zeilennummer** aus `node.lineno`. Ohne Zeilennummer kein Treffer (CLAUDE.md, Regel 6).
 
+**Pfade werden vollständig protokolliert, nie gekürzt.** Bei der Abnahme von 001 stand im Log `dags/tutorial.py:35`, der echte Pfad war `docker/sandbox/ubuntu-airflow/airflow/dags/tutorial.py`. Der Beleg ließ sich damit nicht in dreißig Sekunden auflösen, und genau das verlangt Regel 6. In `scan_results.csv` und in jedem Report steht der volle Repo-Pfad.
+
+### 4b. Task-Factories (nachgetragen bei der Abnahme von 001, ADR-009)
+
+Die Stichprobe aus 001 hat ein Muster aufgedeckt, das die ursprüngliche Spec übersehen hätte. In `navikt/team_familie_airflow_dags`, `operators/kafka_operators.py:32-33` steht:
+
+```python
+def kafka_consumer_kubernetes_pod_operator(
+    ...,
+    depends_on_past: bool = True,
+    wait_for_downstream: bool = True,
+    ...,
+):
+    return KubernetesPodOperator(...)
+```
+
+Jeder Task aus dieser Factory trägt beide starken Signale. Das Signal ist echt, es steht nur in einem Helper-Modul, das **kein DAG instanziiert**. Nach der Regel "scanne DAG-Files, ordne DAG-scoped zu" würde der Scanner dieses Repo als signalfrei melden. Das wäre ein Falsch-Negativ mit Ansage.
+
+**Also:** Python-Files, die kein DAG-File sind, werden trotzdem auf dieses eine Muster geprüft. Erkennungsregel, bewusst schlicht: eine Funktion, die einen Operator oder Sensor instanziiert und zurückgibt, und die ein Signal-Schlüsselwort als Parameter-Default `True` führt oder es an den Operator durchreicht.
+
+Treffer werden als `factory_signal` mit Datei und Zeile protokolliert und **getrennt gezählt**. Sie fließen **nicht** in die DAG-scoped Risiko-Quote, weil sie sich keinem DAG zuordnen lassen, ohne die Aufrufstellen zurückzuverfolgen. Genau diese Rückverfolgung wird **nicht** gebaut (Begründung in ADR-009: `**kwargs`, dynamische Imports, Schleifen, unverhältnismäßig für eine Marktzahl).
+
+Die Konsequenz ist, dass unsere Hauptquote eine **Untergrenze** ist. Das ist die richtige Fehlerrichtung, aber es muss im Report stehen, und die Factory-Zahl gehört daneben.
+
 ### 5. Schedule-Klassifikation
 
 `scanner/schedule.py`, eigene getestete Funktion. Nimmt `schedule`, `schedule_interval` oder `timetable` aus dem DAG-Aufruf und liefert:

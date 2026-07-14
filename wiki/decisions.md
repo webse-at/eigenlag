@@ -102,3 +102,33 @@ Zyklusmittel = Summe der Kantengewichte / Summe der periods
 **Begründung:** `hits.jsonl` ist die Stelle, an der ein Abbruch keinen Schaden anrichtet. Ein Repo, dessen Metadaten schon geholt sind, steht in `candidates` oder `rejected` und wird beim Neustart übersprungen; ein Repo, das nur als Rohtreffer vorliegt, kostet beim Neustart einen `core`-Request und keinen `search`-Request. Damit ist das knappe Kontingent das, was der Resume schützt. Der Preis ist eine zusätzliche Datei, deren Zeilenzahl (5520) größer ist als die Zahl der Repos (2095), weil ein Repo mehrfach getroffen wird. Das ist gewollt: `merge_hits` dedupliziert beim Lesen, und die Rohdaten bleiben nachprüfbar.
 
 **Konsequenz:** Ein Fehler bei einem einzelnen Repo (etwa der 502 im Lauf vom 2026-07-14) führt dazu, dass das Repo weder in `candidates` noch in `rejected` landet. Der nächste Lauf sieht es deshalb wieder als offen und holt es nach. Genau das ist im Lauf passiert, ohne Zutun.
+
+---
+
+## ADR-009 — Task-Factories sind ein eigenes Muster und werden getrennt gezählt
+
+**Status:** entschieden, 2026-07-14 (Abnahme Session 001)
+**Kontext:** Die Stichprobe aus Session 001 enthielt `navikt/team_familie_airflow_dags`, `operators/kafka_operators.py:32-33`. Die Session hat den Fund als Falsch-Positiv eingestuft ("nur eine Funktionssignatur, kein DAG-Argument"). Das ist bei genauerem Hinsehen falsch:
+
+```python
+def kafka_consumer_kubernetes_pod_operator(
+    ...,
+    depends_on_past: bool = True,       # Zeile 32
+    wait_for_downstream: bool = True,   # Zeile 33
+    ...,
+):
+    """Factory function for creating KubernetesPodOperator ..."""
+    return KubernetesPodOperator(...)   # Zeile 83
+```
+
+Jeder Task, der über diese Factory entsteht, trägt beide starken Signale (A **und** B). Das Signal ist echt. Es steht nur nicht dort, wo Spec 002 sucht.
+
+**Das Problem:** Spec 002 scannt DAG-Files und ordnet Signale DAG-scoped zu. Eine Factory lebt in einem Helper-Modul, das kein DAG instanziiert. Die DAG-Files, die sie aufrufen, sehen völlig unauffällig aus. Der Scanner würde dieses Repo als signalfrei melden, obwohl es das Gegenteil ist.
+
+**Entscheidung:** Der Scanner erkennt das Muster und zählt es **getrennt**, statt es zu übersehen oder in die Hauptquote zu mischen.
+
+Erkennungsregel, bewusst schlicht: eine Funktion, die einen Operator instanziiert und zurückgibt (`return <Irgendwas>Operator(...)` oder `return <Irgendwas>Sensor(...)`), und die eines der Signal-Schlüsselwörter als Parameter-Default mit dem Wert `True` führt oder es an den Operator durchreicht. Treffer werden als `factory_signal` protokolliert, mit Datei und Zeile.
+
+**Was bewusst NICHT gemacht wird:** eine interprozedurale Analyse, die Aufrufstellen zurückverfolgt und die Factory-Tasks den aufrufenden DAGs zuordnet. Das ist ein statisches Auflösungsproblem mit `**kwargs`, dynamischen Imports und Schleifen, und es ist für eine Marktzahl unverhältnismäßig.
+
+**Konsequenz für den Report (Session 003):** Die Risiko-Quote bleibt auf die DAG-scoped Treffer bezogen und ist damit eine **Untergrenze**. Der Report muss das benennen: Repos mit Task-Factories werden mit ihrer Zahl separat ausgewiesen, mit dem Satz, dass die Hauptquote sie nicht enthält. Die Richtung des Fehlers ist die verteidigbare: wir unterschätzen, statt aufzublähen. Eine kleinere Zahl, die hält, ist mehr wert als eine größere, die kippt (vgl. ADR-005).
