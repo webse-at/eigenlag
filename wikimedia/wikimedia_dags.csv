@@ -1,0 +1,454 @@
+dag_id,instanz,im_code,laeuft,schedule,takt_s,laeufe_30d,median_dauer_s,signale,beleg
+ALIS,airflow-platform-eng,0,1,"",,2,4971.0,,
+Datahub_Cleanup,airflow-test-k8s,0,1,"",,1,21.7,,
+SEAL,airflow-platform-eng,0,1,"",,2,121054.7,,
+SLIS,airflow-platform-eng,0,1,"",,2,143706.2,,
+active_reader_baseline_hourly,airflow-main,1,1,"'@hourly'",3600.0,713,190.4,max_active_runs,main/dags/active_reader_baseline/active_reader_baseline_dag.py:75
+actor_label_pageviews_daily,airflow-analytics-product,1,1,"'@daily'",86400.0,27,9176.9,,analytics_product/dags/actor_label_pageviews/actor_label_pageviews_daily_dag.py:26
+actor_metrics_pageviews_daily,airflow-analytics-product,1,1,"'@daily'",86400.0,27,9844.5,,analytics_product/dags/actor_label_pageviews/actor_metrics_pageviews_daily_dag.py:26
+add_a_link_pipeline,,1,0,"None",,0,,,ml/dags/add_a_link_pipeline_dag.py:327
+add_a_link_release_prod,,1,0,"None",,0,,,ml/dags/add_a_link_release_prod_dag.py:314
+add_a_link_release_staging,,1,0,"None",,0,,,ml/dags/add_a_link_release_staging_dag.py:311
+analyze_experiments_hourly,airflow-analytics-product,1,1,"'@hourly'",3600.0,710,1810.8,,analytics_product/dags/experiment_analytics/experiment_analytics_analyze_experiments_hourly_dag.py:37
+annotate_oomed_skein_task_instances,airflow-analytics-test,1,1,"'@hourly'",3600.0,713,10.1,,analytics_test/dags/report_skein_oom.py:32
+anomaly_detection_mobile_os_distribution_daily,airflow-main,0,1,"",,28,8369.2,,
+anomaly_detection_traffic_distribution_daily,airflow-main,0,1,"",,28,8728.3,,
+anomaly_detection_useragent_distribution_daily,airflow-main,0,1,"",,28,6316.2,,
+anomaly_detection_useragent_distribution_daily_test,airflow-analytics-test,0,1,"",,27,3243.1,,
+aqs_hourly,airflow-main,1,1,"'@hourly'",3600.0,712,6898.5,,main/dags/aqs/aqs_hourly_dag.py:51
+aqs_hourly_test,airflow-analytics-test,1,1,"'@hourly'",3600.0,713,4939.4,,analytics_test/dags/aqs/aqs_hourly_dag.py:43
+article_features,airflow-research,1,1,"'@daily'",86400.0,27,25936.8,,research/dags/article_quality_dag.py:81
+article_quality_scores,airflow-research,1,1,"'@weekly'",604800.0,1,281140.3,,research/dags/article_quality_dag.py:127
+article_topics,,1,0,"'@monthly'",2419200.0,0,,,research/dags/article_topics_dag.py:55
+attribution_hourly,airflow-main,1,1,"'@hourly'",3600.0,707,407.1,max_active_runs,main/dags/attribution/attribution_hourly_dag.py:57
+automoderator_activity_snapshot_monthly,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,171025.9,max_active_runs,analytics_product/dags/automoderator/automoderator_activity_snapshot_monthly_dag.py:101
+automoderator_config_weekly,airflow-analytics-product,1,1,"'@weekly'",604800.0,1,167.5,,analytics_product/dags/automoderator/automoderator_config_weekly_dag.py:62
+automoderator_monitoring_snapshot_daily,airflow-analytics-product,1,1,"'@daily'",86400.0,26,18068.3,max_active_runs,analytics_product/dags/automoderator/automoderator_daily_snapshot_dag.py:90
+automoderator_potential_vandalism_reverted_monthly,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,161972.9,max_active_runs,analytics_product/dags/automoderator/automoderator_potential_vandalism_reverted_monthly_dag.py:98
+banner_activity_minutely,airflow-dev,0,1,"",,8,2608.0,,
+base_features_pipeline,,1,0,"None",,0,,,research/dags/revert_risk_dag.py:81
+browser_general_daily,airflow-main,1,1,"'@daily'",86400.0,28,8820.7,,main/dags/browser/browser_general_daily_dag.py:48
+browser_metrics_weekly,airflow-main,1,1,"'@weekly'",604800.0,2,8841.0,external_task_sensor,main/dags/browser/browser_metrics_weekly_dag.py:94
+canary_events,airflow-main,1,1,"'15 * * * *'",3600.0,691,44.2,,main/dags/canary_events/canary_events_dag.py:96
+cassandra,airflow-platform-eng,0,1,"",,2,130343.3,,
+cassandra_load_editors_by_country_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,171491.8,,main/dags/cassandra_load/cassandra_load_editors_by_country_dag.py:37
+cassandra_load_mediarequest_per_file_daily,airflow-main,1,1,"'@daily'",86400.0,28,10800.4,,main/dags/cassandra_load/cassandra_load_mediarequest_per_file_dag.py:47
+cassandra_load_mediarequest_per_referer_daily,airflow-main,1,1,"'@daily'",86400.0,28,7544.6,,main/dags/cassandra_load/cassandra_load_mediarequest_per_referer_dag.py:70
+cassandra_load_mediarequest_per_referer_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,11933.3,,main/dags/cassandra_load/cassandra_load_mediarequest_per_referer_dag.py:99
+cassandra_load_mediarequest_top_files_daily,airflow-main,1,1,"'@daily'",86400.0,28,8307.7,,main/dags/cassandra_load/cassandra_load_mediarequest_top_files_dag.py:76
+cassandra_load_mediarequest_top_files_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,5557.8,,main/dags/cassandra_load/cassandra_load_mediarequest_top_files_dag.py:105
+cassandra_load_pageview_per_article_daily,airflow-main,1,1,"'@daily'",86400.0,28,12634.1,,main/dags/cassandra_load/cassandra_load_pageview_per_article_dag.py:49
+cassandra_load_pageview_per_editor_daily,airflow-main,0,1,"",,28,9463.1,,
+cassandra_load_pageview_per_editor_monthly,airflow-main,0,1,"",,0,9491.3,,
+cassandra_load_pageview_per_project_daily,airflow-main,1,1,"'@daily'",86400.0,28,8678.9,,main/dags/cassandra_load/cassandra_load_pageview_per_project_dag.py:98
+cassandra_load_pageview_per_project_hourly,airflow-main,1,1,"'@hourly'",3600.0,704,8036.7,,main/dags/cassandra_load/cassandra_load_pageview_per_project_dag.py:61
+cassandra_load_pageview_per_project_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,8718.2,,main/dags/cassandra_load/cassandra_load_pageview_per_project_dag.py:131
+cassandra_load_pageview_top_articles_daily,airflow-main,1,1,"'@daily'",86400.0,28,8778.8,,main/dags/cassandra_load/cassandra_load_pageview_top_articles_dag.py:85
+cassandra_load_pageview_top_articles_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,9519.1,,main/dags/cassandra_load/cassandra_load_pageview_top_articles_dag.py:119
+cassandra_load_pageview_top_by_country_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,8810.5,,main/dags/cassandra_load/cassandra_load_pageview_top_by_country_dag.py:50
+cassandra_load_pageview_top_pages_per_editor_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,9685.4,,main/dags/cassandra_load/cassandra_load_pageview_top_pages_per_editor_dag.py:69
+cassandra_load_pageview_top_per_country_daily,airflow-main,1,1,"'@daily'",86400.0,28,8312.9,,main/dags/cassandra_load/cassandra_load_pageview_top_per_country_dag.py:51
+cassandra_load_unique_devices_daily,airflow-main,1,1,"'@daily'",86400.0,191,8381.0,,main/dags/cassandra_load/cassandra_load_unique_devices_dag.py:67
+cassandra_load_unique_devices_monthly,airflow-main,1,1,"'@monthly'",2419200.0,5,83.1,,main/dags/cassandra_load/cassandra_load_unique_devices_dag.py:101
+check_bad_parsing,airflow-platform-eng,0,1,"",,2,70083.6,,
+cirrus_check_consistency_monthly,airflow-search,0,1,"",,0,31602.4,,
+cirrus_namespace_map_daily,airflow-search,1,1,"'0 1 * * *'",86400.0,28,228.1,max_active_runs,search/dags/cirrus_namespace_map_daily_dag.py:15
+citation_needed_clickthroughs_daily,airflow-analytics-product,1,1,"'@daily'",86400.0,27,8311.8,,analytics_product/dags/citation_needed/citation_needed_clickthroughs_daily_dag.py:42
+citation_needed_searches_daily,airflow-analytics-product,1,1,"'@daily'",86400.0,27,6484.1,,analytics_product/dags/citation_needed/citation_needed_searches_daily_dag.py:34
+clickstream_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,239280.8,,main/dags/clickstream/clickstream_monthly_dag.py:128
+commons_impact_metrics_dumps_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,240165.7,,main/dags/commons/commons_impact_metrics_dumps_monthly_dag.py:97
+commons_impact_metrics_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,238634.3,external_task_sensor,main/dags/commons/commons_impact_metrics_monthly_dag.py:144
+commons_structured_data_dump_to_hive_weekly,airflow-main,1,1,"'0 0 * * 1'",604800.0,2,186479.6,,main/dags/dump_to_hive/commons_structured_data_dump_to_hive_weekly_dag.py:47
+compute_user_agent_compliance_hourly,airflow-main,1,1,"'@hourly'",3600.0,2726,3540.1,max_active_runs,main/dags/user_agent_compliance/compute_user_agent_compliance_hourly_dag.py:40
+compute_user_agent_top_non_compliant_daily,airflow-main,1,1,"'@daily'",86400.0,156,16739.8,max_active_runs,main/dags/user_agent_compliance/compute_user_agent_top_non_compliant_daily_dag.py:37
+compute_user_agents_info_hourly,airflow-dev,0,1,"",,4,295.9,,
+content_diff,airflow-research,1,1,"'@daily'",86400.0,29,26496.1,,research/dags/content_diff_dag.py:104
+content_diff_backfill,,1,0,"None",,0,,,research/dags/content_diff_dag.py:266
+country_project_page_daily_dag,airflow-platform-eng,1,1,"'@daily'",86400.0,28,9123.9,max_active_runs,platform_eng/dags/differential_privacy/country_project_page_daily.py:73
+custom_operators_tryout,,1,0,"'@daily'",86400.0,0,,,analytics_test/dags/custom_operators_tryout_dag.py:33
+cx_corpora_load_monthly,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,442.1,,analytics_product/dags/content_translation/cx_corpora_monthly_dag.py:54
+cx_daily_report,airflow-analytics-product,1,1,"'@daily'",86400.0,27,6453.4,,analytics_product/dags/content_translation/cx_daily_report_dag.py:34
+cx_deletion_stats_monthly,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,160827.2,,analytics_product/dags/content_translation/cx_deletion_stats_monthly_dag.py:62
+cx_key_metrics_monthly,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,161700.3,,analytics_product/dags/content_translation/cx_key_metrics_monthly_dag.py:61
+cx_monitoring_metrics_daily,airflow-analytics-product,1,1,"'@daily'",86400.0,27,859.4,,analytics_product/dags/content_translation/cx_daily_monitoring_metrics_dag.py:75
+cx_mt_default_service_comparison_monthly,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,163883.4,,analytics_product/dags/content_translation/cx_mt_default_service_comparison_monthly_dag.py:63
+cx_mt_service_availability_monthly,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,1614.2,,analytics_product/dags/content_translation/cx_mt_service_availability_monthly_dag.py:59
+cx_mt_service_usage_monthly,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,162153.3,,analytics_product/dags/content_translation/cx_mt_service_usage_monthly_dag.py:59
+cx_suggestions_menu_interactions_daily,airflow-analytics-product,1,1,"'@daily'",86400.0,27,931.9,,analytics_product/dags/content_translation/cx_suggestions_menu_interactions_daily_dag.py:61
+cx_translations_load_daily,airflow-analytics-product,1,1,"'@daily'",86400.0,27,207.9,,analytics_product/dags/content_translation/cx_translations_daily_dag.py:69
+cx_translators_load_daily,,1,0,"'@daily'",86400.0,0,,,analytics_product/dags/content_translation/cx_translators_daily_dag.py:70
+datahub_lineage_emitter,airflow-test-k8s,0,1,"",,18,15.8,,
+dbt_daily,airflow-dev,0,1,"",,2,5010.0,,
+dbt_daily,airflow-main,0,1,"",,28,29950.2,,
+dbt_monthly,airflow-main,0,1,"",,0,517.3,,
+dbt_weekly,airflow-main,0,1,"",,4,1580.6,,
+drop_old_data_daily,airflow-search,1,1,"'@daily'",86400.0,28,257.6,max_active_runs,search/dags/drop_old_data_daily.py:11
+druid_load_banner_activity_minutely_aggregated_daily,airflow-main,1,1,"'@daily'",86400.0,28,8873.4,,main/dags/druid_load/druid_load_banner_activity_minutely_dag.py:97
+druid_load_banner_activity_minutely_aggregated_monthly,airflow-main,1,1,"DelayedMonthlyTimetable(props.monthly_dag_delay)",,0,53070.7,,main/dags/druid_load/druid_load_banner_activity_minutely_dag.py:163
+druid_load_edit_hourly,airflow-main,1,1,"'@monthly'",2419200.0,0,169630.4,,main/dags/druid_load/druid_load_edit_hourly_dag.py:71
+druid_load_editattemptstep_daily,airflow-main,1,1,"'@daily'",86400.0,28,7159.7,,main/dags/druid_load/druid_load_editattemptstep_dag.py:92
+druid_load_editattemptstep_hourly,airflow-main,1,1,"'0 0-22 * * *'",3600.0,680,6082.2,,main/dags/druid_load/druid_load_editattemptstep_dag.py:66
+druid_load_geoeditors_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,168078.5,,main/dags/druid_load/druid_load_geoeditors_monthly_dag.py:74
+druid_load_navigationtiming_daily,airflow-main,1,1,"'@daily'",86400.0,28,6622.2,,main/dags/druid_load/druid_load_navigationtiming_dag.py:110
+druid_load_navigationtiming_hourly,airflow-main,1,1,"'0 0-22 * * *'",3600.0,680,5996.9,,main/dags/druid_load/druid_load_navigationtiming_dag.py:84
+druid_load_netflow_daily,airflow-main,1,1,"'@daily'",86400.0,28,11981.6,,main/dags/druid_load/druid_load_netflow_dag.py:137
+druid_load_netflow_hourly,airflow-main,1,1,"'@hourly'",3600.0,712,10771.3,,main/dags/druid_load/druid_load_netflow_dag.py:111
+druid_load_netflow_sanitized,airflow-main,1,1,"DelayedDailyTimetable(timedelta(days=props.sanitization_delay_in_days))",,28,3951.3,,main/dags/druid_load/druid_load_netflow_dag.py:175
+druid_load_network_flows_internal_hourly,airflow-main,1,1,"'@hourly'",3600.0,713,10819.5,,main/dags/druid_load/druid_load_network_flows_internal_dag.py:62
+druid_load_pageviews_daily_aggregated_daily,airflow-main,1,1,"'@daily'",86400.0,28,10524.5,,main/dags/druid_load/druid_load_pageviews_daily_dag.py:115
+druid_load_pageviews_daily_aggregated_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,22153.1,,main/dags/druid_load/druid_load_pageviews_daily_dag.py:201
+druid_load_pageviews_hourly,airflow-main,1,1,"'@hourly'",3600.0,708,8561.3,,main/dags/druid_load/druid_load_pageviews_hourly_dag.py:118
+druid_load_pageviews_hourly_aggregated_daily,airflow-main,0,1,"",,28,12038.0,,
+druid_load_prefupdate_daily,airflow-main,1,1,"'@daily'",86400.0,28,6545.6,,main/dags/druid_load/druid_load_prefupdate_dag.py:83
+druid_load_prefupdate_hourly,airflow-main,1,1,"'0 0-22 * * *'",3600.0,679,5733.8,,main/dags/druid_load/druid_load_prefupdate_dag.py:57
+druid_load_unique_devices_per_domain_daily,airflow-main,1,1,"'@daily'",86400.0,28,8895.2,,main/dags/druid_load/druid_load_unique_devices_per_domain_daily_dag.py:90
+druid_load_unique_devices_per_domain_daily_aggregated_monthly,airflow-main,1,1,"DelayedMonthlyTimetable(timedelta(days=3))",,0,425.2,,main/dags/druid_load/druid_load_unique_devices_per_domain_daily_dag.py:158
+druid_load_unique_devices_per_domain_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,13770.3,,main/dags/druid_load/druid_load_unique_devices_per_domain_monthly_dag.py:74
+druid_load_unique_devices_per_project_family_daily,airflow-main,1,1,"'@daily'",86400.0,28,8922.9,,main/dags/druid_load/druid_load_unique_devices_per_project_family_daily_dag.py:95
+druid_load_unique_devices_per_project_family_daily_aggregated_monthly,airflow-main,1,1,"DelayedMonthlyTimetable(timedelta(days=3))",,0,259.7,,main/dags/druid_load/druid_load_unique_devices_per_project_family_daily_dag.py:163
+druid_load_unique_devices_per_project_family_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,13066.3,,main/dags/druid_load/druid_load_unique_devices_per_project_family_monthly_dag.py:73
+druid_load_virtualpageview_daily,airflow-main,1,1,"'@daily'",86400.0,28,6809.0,,main/dags/druid_load/druid_load_virtualpageview_dag.py:127
+druid_load_virtualpageview_monthly,airflow-main,1,1,"DelayedMonthlyTimetable(timedelta(days=3))",,0,1290.6,,main/dags/druid_load/druid_load_virtualpageview_dag.py:181
+druid_load_webrequest_sampled_live_hourly,airflow-main,1,1,"'@hourly'",3600.0,714,5888.4,,main/dags/druid_load/druid_load_webrequest_sampled_live_hourly_dag.py:60
+dump_day_of_hourly_pageviews,airflow-main,1,1,"'@daily'",86400.0,28,9380.0,,main/dags/pageview/dump_day_of_hourly_pageviews_dag.py:50
+dump_month_of_daily_pageviews,airflow-main,1,1,"'@monthly'",2419200.0,0,17963.5,,main/dags/pageview/dump_month_of_daily_pageviews_dag.py:49
+edit_hourly,airflow-main,1,1,"'@monthly'",2419200.0,0,165799.5,,main/dags/edit/edit_hourly_dag.py:37
+edit_per_editor_per_page_daily,airflow-main,1,1,"'@daily'",86400.0,28,6558.7,,main/dags/wmf_contributors/edit_per_editor_per_page_daily_dag.py:41
+edit_types_html,airflow-research,1,1,"'@daily'",86400.0,27,33305.3,,research/dags/edit_types_dag.py:95
+edit_types_wikitext,airflow-research,1,1,"'@daily'",86400.0,26,28062.1,,research/dags/edit_types_dag.py:149
+editor_counts_per_page_daily,airflow-dev,1,1,"'@daily'",86400.0,0,5703.9,max_active_runs,main/dags/wmf_contributors/editor_counts_per_page_daily_dag.py:62
+editor_counts_per_page_daily,airflow-main,1,1,"'@daily'",86400.0,18,10814.8,max_active_runs,main/dags/wmf_contributors/editor_counts_per_page_daily_dag.py:62
+editor_month,airflow-analytics-product,0,1,"",,0,161613.1,,
+editors_daily_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,162116.8,,main/dags/geoeditors/editors_daily_monthly_dag.py:35
+embeddings_weekly,airflow-search,0,1,"",,2,13809.8,,
+external_task_sensor,airflow-test-k8s,0,1,"",,21,18.3,,
+fetch_wiki_list_from_noc,airflow-test-k8s,0,1,"",,20,20.9,,
+flagged_revisions_pending_hourly,,1,0,"'@hourly'",3600.0,0,,,analytics_product/dags/moderation/flagged_revisions_pending_hourly_dag.py:70
+fulltext_head_queries_daily,airflow-search,0,1,"",,28,158.3,,
+geoeditors_dag,airflow-platform-eng,1,1,"props.source_granularity",,0,173374.4,max_active_runs,platform_eng/dags/differential_privacy/geoeditors.py:79
+geoeditors_edits_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,164180.2,,main/dags/geoeditors/geoeditors_edits_monthly_dag.py:27
+geoeditors_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,164246.5,,main/dags/geoeditors/geoeditors_monthly_dag.py:34
+geoeditors_public_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,168065.5,,main/dags/geoeditors/geoeditors_public_monthly_dag.py:52
+geoeditors_yearly,,1,0,"'@yearly'",31536000.0,0,,,main/dags/geoeditors/geoeditors_yearly_dag.py:36
+geoip_test,airflow-test-k8s,0,1,"",,18,37.2,,
+glent_weekly,airflow-search,1,1,"'0 2 * * 6'",604800.0,2,17697.0,depends_on_past;max_active_runs,search/dags/glent_weekly.py:84
+gobblin_event_default,airflow-main,0,1,"",,1417,186.7,,
+gobblin_event_default_test,airflow-analytics-test,0,1,"",,713,83.2,,
+gobblin_eventlogging_legacy,airflow-main,0,1,"",,1412,108.7,,
+gobblin_eventlogging_legacy_test,airflow-analytics-test,0,1,"",,713,82.3,,
+gobblin_netflow,airflow-main,0,1,"",,2120,127.8,,
+gobblin_webrequest_frontend,airflow-main,0,1,"",,2125,201.4,,
+gobblin_webrequest_frontend_test,airflow-analytics-test,0,1,"",,4266,83.1,,
+gobblin_webrequest_sampled,airflow-main,0,1,"",,1414,97.3,,
+google_search_console_to_hdfs_daily,airflow-dev,0,1,"",,3,18714.7,,
+growthbook_hourly,airflow-analytics-product,1,1,"'@hourly'",3600.0,706,6629.5,,analytics_product/dags/growthbook/growthbook_hourly_dag.py:46
+growthbook_ldap_sync,airflow-test-k8s,0,1,"",,868,19.3,,
+growthbook_next_ldap_sync,airflow-test-k8s,0,1,"",,822,19.8,,
+hdfs_usage_weekly,airflow-main,1,1,"'0 0 * * 1'",604800.0,3,24051.7,,main/dags/hdfs_usage/hdfs_usage_weekly_dag.py:96
+hive_partition_sensor,airflow-test-k8s,0,1,"",,505,4517.5,,
+image_suggestions_manual,,1,0,"None",,0,,depends_on_past,search/dags/transfer_to_es.py:103
+image_suggestions_weekly,airflow-search,1,1,"'0 0 * * 4'",604800.0,2,183570.5,depends_on_past,search/dags/transfer_to_es.py:129
+import_cirrus_indexes_weekly,airflow-search,1,1,"'0 0 * * 0'",604800.0,2,48694.5,max_active_runs,search/dags/import_cirrus_indexes.py:233
+import_commons_ttl,airflow-search,1,1,"'0 3 * * 3'",604800.0,1,98876.7,max_active_runs,search/dags/import_ttl.py:125
+import_enterprise_snapshots_weekly,airflow-search,0,1,"",,2,3599.8,,
+import_semsearch_index_weekly,airflow-search,0,1,"",,4,15162.8,,
+import_ttl_init,,1,0,"'@once'",,0,,,search/dags/import_ttl.py:85
+import_wikidata_ttl,airflow-search,1,1,"'0 3 * * 5'",604800.0,1,20662.5,max_active_runs,search/dags/import_ttl.py:195
+incoming_links_weekly,airflow-search,1,1,"'0 0 * * 0'",604800.0,2,49454.1,max_active_runs,search/dags/incoming_links.py:42
+ingestion_wikis_monthly,airflow-main,1,1,"'@monthly'",2419200.0,2,3758.0,,main/dags/mediawiki/database/ingestion_wikis_monthly_dag.py:45
+interlanguage_daily,airflow-main,1,1,"'@daily'",86400.0,28,8326.2,,main/dags/interlanguage/interlanguage_daily_dag.py:47
+ja3n_ua_hourly,airflow-main,1,1,"'@hourly'",3600.0,712,7057.2,,main/dags/ja3n_ua/ja3n_ua_hourly_dag.py:33
+k8s_pod_operator,airflow-test-k8s,0,1,"",,18,34.9,,
+knowledge_gaps,,1,0,"'@monthly'",2419200.0,0,,,research/dags/knowledge_gaps_dag.py:86
+load_commons_impact_metrics,airflow-main,1,1,"'@monthly'",2419200.0,0,241299.8,,main/dags/cassandra_load/cassandra_load_commons_impact_metrics_dag.py:117
+load_configurations_daily,airflow-analytics-product,1,1,"'@daily'",86400.0,29,123.2,,analytics_product/dags/experiment_analytics/experiment_analytics_load_configurations_daily_dag.py:40
+maintenance_cleanup_airflow_db,airflow-analytics-product,1,1,"'0 16 * * *'",86400.0,27,42.9,max_active_runs,wmf_airflow_common/factories/db_cleaner_dag_factory.py:154
+maintenance_cleanup_airflow_db,airflow-analytics-test,1,1,"'0 16 * * *'",86400.0,27,50.0,max_active_runs,wmf_airflow_common/factories/db_cleaner_dag_factory.py:154
+maintenance_cleanup_airflow_db,airflow-dev,1,1,"'0 16 * * *'",86400.0,0,24.7,max_active_runs,wmf_airflow_common/factories/db_cleaner_dag_factory.py:154
+maintenance_cleanup_airflow_db,airflow-fr-tech,1,1,"'0 16 * * *'",86400.0,27,33.7,max_active_runs,wmf_airflow_common/factories/db_cleaner_dag_factory.py:154
+maintenance_cleanup_airflow_db,airflow-main,1,1,"'0 16 * * *'",86400.0,28,622.8,max_active_runs,wmf_airflow_common/factories/db_cleaner_dag_factory.py:154
+maintenance_cleanup_airflow_db,airflow-ml,1,1,"'0 16 * * *'",86400.0,28,33.9,max_active_runs,wmf_airflow_common/factories/db_cleaner_dag_factory.py:154
+maintenance_cleanup_airflow_db,airflow-platform-eng,1,1,"'0 16 * * *'",86400.0,28,46.7,max_active_runs,wmf_airflow_common/factories/db_cleaner_dag_factory.py:154
+maintenance_cleanup_airflow_db,airflow-research,1,1,"'0 16 * * *'",86400.0,29,56.6,max_active_runs,wmf_airflow_common/factories/db_cleaner_dag_factory.py:154
+maintenance_cleanup_airflow_db,airflow-search,1,1,"'0 16 * * *'",86400.0,28,62.8,max_active_runs,wmf_airflow_common/factories/db_cleaner_dag_factory.py:154
+maintenance_cleanup_airflow_db,airflow-sre,1,1,"'0 16 * * *'",86400.0,27,36.6,max_active_runs,wmf_airflow_common/factories/db_cleaner_dag_factory.py:154
+maintenance_cleanup_airflow_db,airflow-test-k8s,1,1,"'0 16 * * *'",86400.0,19,65.4,max_active_runs,wmf_airflow_common/factories/db_cleaner_dag_factory.py:154
+maintenance_cleanup_airflow_db,airflow-wikidata,1,1,"'0 16 * * *'",86400.0,27,36.0,max_active_runs,wmf_airflow_common/factories/db_cleaner_dag_factory.py:154
+maintenance_cleanup_airflow_db,airflow-wmde,1,1,"'0 16 * * *'",86400.0,28,37.7,max_active_runs,wmf_airflow_common/factories/db_cleaner_dag_factory.py:154
+maintenance_cleanup_expired_logs,airflow-analytics-product,1,1,"'0 10 * * *'",86400.0,27,12.7,,wmf_airflow_common/factories/log_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_logs,airflow-analytics-test,1,1,"'0 10 * * *'",86400.0,28,12.0,,wmf_airflow_common/factories/log_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_logs,airflow-dev,1,1,"'0 10 * * *'",86400.0,0,6.3,,wmf_airflow_common/factories/log_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_logs,airflow-fr-tech,1,1,"'0 10 * * *'",86400.0,26,13.7,,wmf_airflow_common/factories/log_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_logs,airflow-main,1,1,"'0 10 * * *'",86400.0,27,23.8,,wmf_airflow_common/factories/log_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_logs,airflow-ml,1,1,"'0 10 * * *'",86400.0,27,12.7,,wmf_airflow_common/factories/log_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_logs,airflow-platform-eng,1,1,"'0 10 * * *'",86400.0,27,12.4,,wmf_airflow_common/factories/log_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_logs,airflow-research,1,1,"'0 10 * * *'",86400.0,27,10.5,,wmf_airflow_common/factories/log_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_logs,airflow-search,1,1,"'0 10 * * *'",86400.0,28,13.2,,wmf_airflow_common/factories/log_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_logs,airflow-sre,1,1,"'0 10 * * *'",86400.0,28,13.4,,wmf_airflow_common/factories/log_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_logs,airflow-test-k8s,1,1,"'0 10 * * *'",86400.0,18,17.5,,wmf_airflow_common/factories/log_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_logs,airflow-wmde,1,1,"'0 10 * * *'",86400.0,28,12.9,,wmf_airflow_common/factories/log_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_xcoms,airflow-analytics-product,1,1,"'@weekly'",604800.0,1,28.2,,wmf_airflow_common/factories/xcom_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_xcoms,airflow-analytics-test,1,1,"'@weekly'",604800.0,2,15.8,,wmf_airflow_common/factories/xcom_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_xcoms,airflow-dev,1,1,"'@weekly'",604800.0,0,6.4,,wmf_airflow_common/factories/xcom_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_xcoms,airflow-fr-tech,1,1,"'@weekly'",604800.0,1,17.3,,wmf_airflow_common/factories/xcom_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_xcoms,airflow-main,1,1,"'@weekly'",604800.0,2,25.4,,wmf_airflow_common/factories/xcom_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_xcoms,airflow-ml,1,1,"'@weekly'",604800.0,2,24.4,,wmf_airflow_common/factories/xcom_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_xcoms,airflow-platform-eng,1,1,"'@weekly'",604800.0,2,19.5,,wmf_airflow_common/factories/xcom_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_xcoms,airflow-research,1,1,"'@weekly'",604800.0,3,15.0,,wmf_airflow_common/factories/xcom_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_xcoms,airflow-search,1,1,"'@weekly'",604800.0,2,18.9,,wmf_airflow_common/factories/xcom_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_xcoms,airflow-sre,1,1,"'@weekly'",604800.0,2,15.1,,wmf_airflow_common/factories/xcom_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_xcoms,airflow-test-k8s,1,1,"'@weekly'",604800.0,1,13.7,,wmf_airflow_common/factories/xcom_cleaner_dag_factory.py:18
+maintenance_cleanup_expired_xcoms,airflow-wmde,1,1,"'@weekly'",604800.0,2,15.4,,wmf_airflow_common/factories/xcom_cleaner_dag_factory.py:18
+mediacounts_archive_daily,airflow-main,1,1,"'@daily'",86400.0,28,7758.1,,main/dags/mediacounts/mediacounts_archive_daily_dag.py:40
+mediacounts_load_hourly,airflow-main,1,1,"'@hourly'",3600.0,712,6362.6,,main/dags/mediacounts/mediacounts_load_hourly_dag.py:26
+mediarequest_hourly,airflow-main,1,1,"'@hourly'",3600.0,699,6370.7,external_task_sensor,main/dags/mediarequest/mediarequest_hourly_dag.py:46
+mediawiki_adds_changes_dump,airflow-test-k8s,0,1,"",,18,10393.8,,
+mediawiki_commons_mediainfo_json_dump,airflow-test-k8s,0,1,"",,1,159791.5,,
+mediawiki_commons_mediainfo_rdf_dump,airflow-test-k8s,0,1,"",,0,604066.6,,
+mediawiki_content_html,airflow-research,1,1,"'@daily'",86400.0,27,31357.9,,research/dags/content_html_dag.py:82
+mediawiki_content_translation_dump,airflow-test-k8s,0,1,"",,1,59396.7,,
+mediawiki_dump_categories_rdf_daily,airflow-test-k8s,0,1,"",,18,1507.8,,
+mediawiki_dump_categories_rdf_weekly,airflow-test-k8s,0,1,"",,1,19107.9,,
+mediawiki_dumps_sql_xml_regular_a_to_b_full,airflow-test-k8s,0,1,"",,0,6313.3,,
+mediawiki_dumps_sql_xml_regular_c_to_e_full,airflow-test-k8s,0,1,"",,0,10283.6,,
+mediawiki_dumps_sql_xml_regular_f_to_h_full,airflow-test-k8s,0,1,"",,0,5421.3,,
+mediawiki_dumps_sql_xml_regular_i_to_k_full,airflow-test-k8s,0,1,"",,0,2497.4,,
+mediawiki_dumps_sql_xml_regular_l_to_m_full,airflow-test-k8s,0,1,"",,0,7130.5,,
+mediawiki_dumps_sql_xml_regular_n_to_p_full,airflow-test-k8s,0,1,"",,0,3797.9,,
+mediawiki_dumps_sql_xml_regular_q_to_s_full,airflow-test-k8s,0,1,"",,0,4652.8,,
+mediawiki_dumps_sql_xml_regular_t_to_v_full,airflow-test-k8s,0,1,"",,0,9990.1,,
+mediawiki_dumps_sql_xml_regular_w_to_z_full,airflow-test-k8s,0,1,"",,0,3704.5,,
+mediawiki_growth_mentorship_dump,airflow-test-k8s,0,1,"",,1,761.9,,
+mediawiki_history_check_denormalize,airflow-main,1,1,"'@monthly'",2419200.0,0,158844.5,,main/dags/mediawiki/mediawiki_history_check_denormalize_dag.py:87
+mediawiki_history_denormalize,airflow-main,1,1,"'@monthly'",2419200.0,0,158067.9,,main/dags/mediawiki/mediawiki_history_denormalize_dag.py:71
+mediawiki_history_dumps,airflow-main,1,1,"'@monthly'",2419200.0,0,201437.8,,main/dags/mediawiki/mediawiki_history_dumps_dag.py:30
+mediawiki_history_load,airflow-main,1,1,"'@monthly'",2419200.0,0,233193.4,,main/dags/mediawiki/mediawiki_history_load_dag.py:133
+mediawiki_history_metrics_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,164228.5,,main/dags/mediawiki/mediawiki_history_metrics_monthly_dag.py:47
+mediawiki_history_reduced,airflow-main,1,1,"'@monthly'",2419200.0,0,18856.7,,main/dags/mediawiki/mediawiki_history_reduced_dag.py:114
+mediawiki_history_snapshot_config,airflow-main,1,1,"'@monthly'",2419200.0,0,240092.5,,main/dags/mediawiki/mediawiki_history_snapshot_config_dag.py:49
+mediawiki_imageinfo_dump,airflow-test-k8s,0,1,"",,1,2150.2,,
+mediawiki_mediatitles_dump,airflow-test-k8s,0,1,"",,18,1932.3,,
+mediawiki_pagetitles_dump,airflow-test-k8s,0,1,"",,18,1804.7,,
+mediawiki_revision_history_reduced,airflow-main,1,1,"'@daily'",86400.0,28,17609.4,max_active_runs,main/dags/mediawiki/mediawiki_revision_history_reduced_dag.py:76
+mediawiki_shorturls_dump,airflow-test-k8s,0,1,"",,1,957.5,,
+mediawiki_sql_xml_monitor,airflow-test-k8s,0,1,"",,422,451.1,,
+mediawiki_wikidata_all_json_dump,airflow-test-k8s,0,1,"",,0,180724.9,,
+mediawiki_wikidata_all_rdf_dump,airflow-test-k8s,0,1,"",,1,533842.9,,
+mediawiki_wikidata_lexemes_json_dump,airflow-test-k8s,0,1,"",,0,2881.5,,
+mediawiki_wikidata_lexemes_rdf_dump,airflow-test-k8s,0,1,"",,1,3653.6,,
+mediawiki_wikidata_truthy_rdf_dump,airflow-test-k8s,0,1,"",,1,143505.6,,
+mediawiki_wikitech_dump,airflow-test-k8s,0,1,"",,18,949.9,,
+merge_events_to_mw_incremental_history_daily,airflow-dev,1,1,"'@daily'",86400.0,110,3379.6,external_task_sensor;max_active_runs,main/dags/mediawiki/incremental_history/merge_events_to_mw_incremental_history_daily.py:81
+merge_events_to_mw_incremental_history_daily,airflow-main,1,1,"'@daily'",86400.0,46,8661.5,external_task_sensor;max_active_runs,main/dags/mediawiki/incremental_history/merge_events_to_mw_incremental_history_daily.py:81
+merge_mw_history_to_mw_incremental_history_monthly,airflow-dev,1,1,"'@monthly'",2419200.0,2,2933.9,max_active_runs,main/dags/mediawiki/incremental_history/merge_mw_history_to_mw_incremental_history_monthly.py:72
+merge_mw_history_to_mw_incremental_history_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,165831.0,max_active_runs,main/dags/mediawiki/incremental_history/merge_mw_history_to_mw_incremental_history_monthly.py:72
+metadata_ingest_daily,airflow-main,1,1,"'@daily'",86400.0,28,5851.2,,main/dags/datahub/ingestion/ingest_daily_dag.py:56
+mjolnir_weekly,airflow-search,1,1,"timedelta(days=7)",,0,10432.3,max_active_runs,search/dags/mjolnir.py:283
+mmd_image_inference_monthly,airflow-dev,0,1,"",,0,60067.9,,
+mmd_monthly_assembly,airflow-dev,0,1,"",,1,10766.7,,
+mw_content_history_slo_daily,airflow-main,1,1,"'0 12 * * *'",86400.0,28,6621.2,,main/dags/mediawiki/content/history/mw_content_history_slo_daily.py:71
+mw_content_history_slo_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,170693.2,max_active_runs,main/dags/mediawiki/content/history/mw_content_history_slo_monthly.py:69
+mw_content_merge_changes_to_mw_content_current_daily,airflow-main,1,1,"'@daily'",86400.0,28,27201.1,max_active_runs,main/dags/mediawiki/content/current/mw_content_merge_changes_to_mw_content_current_daily.py:57
+mw_content_merge_events_to_mw_content_history_daily,airflow-main,1,1,"'@daily'",86400.0,28,25393.6,max_active_runs,main/dags/mediawiki/content/history/mw_content_merge_events_to_mw_content_history_daily.py:100
+mw_content_reconcile_mw_content_history_daily,airflow-main,1,1,"'@daily'",86400.0,24,33842.6,max_active_runs,main/dags/mediawiki/content/history/mw_content_reconcile_mw_content_history_daily.py:95
+mw_content_reconcile_mw_content_history_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,32611.6,external_task_sensor;max_active_runs,main/dags/mediawiki/content/history/mw_content_reconcile_mw_content_history_monthly.py:95
+mw_content_xml_export_current_monthly,airflow-main,0,1,"",,0,782310.6,,
+mw_content_xml_export_history_monthly,airflow-main,0,1,"",,0,789384.6,,
+mw_revision_merge_events_to_mw_revision_history_daily,airflow-main,1,1,"'@daily'",86400.0,28,15380.1,max_active_runs,main/dags/mediawiki/revision/history/mw_revision_merge_events_to_mw_revision_history_daily.py:78
+mwaddlink,,1,0,"None",,0,,,research/dags/mwaddlink_dag.py:137
+new_editor,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,162297.2,,analytics_product/dags/new_editor/new_editor_dag.py:37
+pageview_actor_hourly,airflow-main,1,1,"'@hourly'",3600.0,711,7340.9,,main/dags/pageview/pageview_actor_hourly_dag.py:45
+pageview_allowlist_check,airflow-main,1,1,"'@daily'",86400.0,28,8740.9,,main/dags/pageview/pageview_allowlist_check_dag.py:69
+pageview_hourly,airflow-main,1,1,"'@hourly'",3600.0,713,7724.2,,main/dags/pageview/pageview_hourly_dag.py:56
+pageview_human_bot_daily,airflow-main,1,1,"'@daily'",86400.0,28,8381.2,,main/dags/pageview/dataquality/pageview_human_bot_daily_dag.py:68
+pageview_per_editor_per_page_daily,airflow-main,1,1,"'@daily'",86400.0,28,8822.1,,main/dags/wmf_contributors/pageview_per_editor_per_page_daily_dag.py:45
+pageview_wme_transfer,airflow-dev,0,1,"",,6,35.6,,
+pageviews_daily,airflow-research,1,1,"'@weekly'",604800.0,3,207.5,,research/dags/pageviews_daily.py:46
+pageviews_hourly,airflow-dev,0,1,"",,94,100.2,,
+pageviews_hourly,airflow-fr-tech,0,1,"",,43,90.7,,
+pageviews_hourly_aggregated,airflow-dev,0,1,"",,4,163.6,,
+pageviews_hourly_aggregated,airflow-fr-tech,0,1,"",,11763,95.7,,
+pageviews_transfer_test,airflow-dev,0,1,"",,1,558.5,,
+patrolled_recentchanges_daily,,1,0,"'@daily'",86400.0,0,,,analytics_product/dags/moderation/patrolled_recentchanges_daily_dag.py:42
+personal_dashboard_hourly,airflow-analytics-product,1,1,"'@hourly'",3600.0,704,6564.2,,analytics_product/dags/personal_dashboard/personal_dashboard_hourly_dag.py:38
+pingback_report_weekly_v2,,1,0,"'@weekly'",604800.0,0,,max_active_runs,main/dags/pingback/pingback_report_weekly_dag.py:90
+popularity_score_weekly,airflow-search,1,1,"'0 0 * * 0'",604800.0,3,8125.4,max_active_runs,search/dags/popularity_score.py:77
+process_sparql_query_hourly,airflow-search,1,1,"'@hourly'",3600.0,702,7016.3,,search/dags/process_sparql_query.py:106
+process_sparql_query_init,,1,0,"'@once'",,0,,,search/dags/process_sparql_query.py:30
+process_sparql_query_v1_alter,,1,0,"'@once'",,0,,,search/dags/process_sparql_query.py:80
+process_sparql_query_v2_alter,,1,0,"'@once'",,0,,,search/dags/process_sparql_query.py:93
+process_user_agents_info_hourly,airflow-dev,1,1,"'@hourly'",3600.0,19,358.2,max_active_runs,main/dags/user_agents/process_user_agents_info_hourly_dag.py:36
+process_user_agents_info_hourly,airflow-main,1,1,"'@hourly'",3600.0,827,383.5,max_active_runs,main/dags/user_agents/process_user_agents_info_hourly_dag.py:36
+projectview_geo,airflow-main,1,1,"'@hourly'",3600.0,710,8032.9,,main/dags/projectview/projectview_geo_dag.py:45
+projectview_hourly,airflow-main,1,1,"'@hourly'",3600.0,707,7896.6,,main/dags/projectview/projectview_hourly_dag.py:60
+prometheus_metrics_daily,airflow-dev,1,1,"'@daily'",86400.0,6,88.3,max_active_runs,main/dags/prometheus/prometheus_metrics_daily_dag.py:64
+prometheus_metrics_daily,airflow-main,1,1,"'@daily'",86400.0,13,86.9,max_active_runs,main/dags/prometheus/prometheus_metrics_daily_dag.py:64
+purge_kubernetes_pod_operator_xcoms,airflow-test-k8s,0,1,"",,0,11.7,,
+query_clicks_daily,airflow-search,0,1,"",,27,11127.0,,
+query_clicks_hourly,airflow-search,0,1,"",,709,10609.8,,
+querypage_most_categories_monthly,airflow-platform-eng,1,1,"'@monthly'",2419200.0,0,595840.0,,platform_eng/dags/querypage/querypage_most_categories_monthly_dag.py:62
+querypage_most_linked_templates_monthly,airflow-platform-eng,1,1,"'@monthly'",2419200.0,0,596999.6,,platform_eng/dags/querypage/querypage_most_linked_templates_monthly_dag.py:61
+reference_risk_features,,1,0,"'@monthly'",2419200.0,0,,,research/dags/reference_risk_features_dag.py:86
+referrer_daily,airflow-main,1,1,"'@daily'",86400.0,28,8372.3,,main/dags/referrer/referrer_daily_dag.py:57
+refine_api_requests_hourly,airflow-main,1,1,"'@hourly'",3600.0,3360,3254.3,max_active_runs,main/dags/api_requests/refine_api_requests_hourly_dag.py:45
+refine_to_hive_hourly,airflow-main,0,1,"",,704,2097.7,,
+refine_to_hive_hourly_test,airflow-analytics-test,0,1,"",,708,3989.1,,
+refine_webrequest_hourly_test_text,airflow-analytics-test,0,1,"",,713,4743.7,,
+refine_webrequest_hourly_text,airflow-main,0,1,"",,711,6577.5,,
+refine_webrequest_hourly_upload,airflow-main,0,1,"",,712,5950.2,,
+refinery_drop_old_partitions_dry_run,airflow-test-k8s,0,1,"",,18,32.6,,
+remove_old_miscellaneous_dumps,airflow-test-k8s,0,1,"",,137,810.5,,
+request_internal_endpoint_via_service_mesh,airflow-test-k8s,0,1,"",,18,25.0,,
+revert_risk_inference,,1,0,"'@monthly'",2419200.0,0,,,research/dags/revert_risk_inference.py:77
+revert_risk_pipeline,,1,0,"None",,0,,,research/dags/revert_risk_dag.py:389
+revert_risk_retraining,,1,0,"None",,0,,,research/dags/revert_risk_retraining_dag.py:403
+risk_observatory,,1,0,"'@monthly'",2419200.0,0,,,research/dags/risk_observatory_dag.py:56
+run_cmd_via_skein,airflow-test-k8s,0,1,"",,0,40.7,,
+s3_conn_test,airflow-dev,0,1,"",,0,5.9,,
+search_satisfaction_daily,airflow-search,1,1,"'@daily'",86400.0,28,6281.4,,search/dags/search_satisfaction.py:28
+search_satisfaction_metrics_daily,airflow-search,0,1,"",,28,6236.2,,
+section_titles_denylist,airflow-platform-eng,0,1,"",,2,123805.0,,
+section_topics,airflow-platform-eng,0,1,"",,2,133652.6,,
+session_length_daily,airflow-main,1,1,"'@daily'",86400.0,28,6511.6,,main/dags/session_length/session_length_daily_dag.py:35
+some_dag_id,,1,0,"",,0,,,tests/wmf_airflow_common/easy_dag_test.py:24
+spark_next_submit_pi_yarn_cluster_mode_via_skein,airflow-test-k8s,0,1,"",,18,53.4,,
+spark_submit_pi_yarn_cluster_mode,airflow-test-k8s,0,1,"",,18,33.6,,
+spark_submit_pi_yarn_cluster_mode_via_skein,airflow-test-k8s,0,1,"",,18,52.6,,
+spur_anonymous_residential_daily,airflow-main,0,1,"",,28,1084.2,,
+spur_dch_daily,airflow-main,0,1,"",,31,91.7,,
+spur_download_and_index_anonymous_residential_codfw,airflow-platform-eng,0,1,"",,57,6986.2,,
+spur_download_and_index_anonymous_residential_eqiad,airflow-platform-eng,0,1,"",,57,5581.1,,
+spur_retention_cleanup_codfw,airflow-platform-eng,0,1,"",,28,220.8,,
+spur_retention_cleanup_eqiad,airflow-platform-eng,0,1,"",,28,215.7,,
+subgraph_and_query_metrics_init,,1,0,"'@once'",,0,,max_active_runs,search/dags/subgraph_and_query_metrics.py:73
+subgraph_mapping_init,,1,0,"'@once'",,0,,,search/dags/subgraph_and_query_mapping.py:61
+subgraph_mapping_weekly,airflow-search,1,1,"'0 7 * * 5'",604800.0,0,17917.9,max_active_runs,search/dags/subgraph_and_query_mapping.py:113
+subgraph_metrics_weekly,airflow-search,1,1,"'0 9 * * 5'",604800.0,0,8600.8,max_active_runs,search/dags/subgraph_and_query_metrics.py:273
+subgraph_query_mapping_daily,,1,0,"'@daily'",86400.0,0,,,search/dags/subgraph_and_query_mapping.py:248
+subgraph_query_mapping_init,,1,0,"'@once'",,0,,,search/dags/subgraph_and_query_mapping.py:172
+subgraph_query_metrics_daily,,1,0,"'@daily'",86400.0,0,,,search/dags/subgraph_and_query_metrics.py:364
+sync_wikibase_commonswiki_dumps,airflow-test-k8s,0,1,"",,4,1132.7,,
+sync_wikibase_wikidatawiki_dumps,airflow-test-k8s,0,1,"",,12,1081.3,,
+table_maintenance_iceberg_daily,airflow-analytics-product,0,1,"",,20,773.1,,
+table_maintenance_iceberg_daily,airflow-main,0,1,"",,28,10206.4,,
+table_maintenance_iceberg_daily,airflow-research,0,1,"",,29,0.1,,
+table_maintenance_iceberg_monthly,airflow-analytics-product,0,1,"",,0,1242.7,,
+table_maintenance_iceberg_monthly,airflow-main,0,1,"",,0,1274.9,,
+table_maintenance_iceberg_monthly,airflow-research,0,1,"",,0,17551.7,,
+table_maintenance_iceberg_monthly,airflow-wikidata,0,1,"",,0,380.2,,
+table_maintenance_iceberg_monthly,airflow-wmde,0,1,"",,0,4150.7,,
+table_maintenance_iceberg_weekly,airflow-main,0,1,"",,2,24568.3,,
+table_maintenance_iceberg_weekly,airflow-research,0,1,"",,3,0.1,,
+test_dag,,1,0,"'@daily'",86400.0,0,,,tests/wmf_airflow_common/test_dataset.py:672
+test_dbt_op_configuration,,1,0,"'@daily'",86400.0,0,,,tests/wmf_airflow_common/operators/test_dbt.py:136
+test_dbt_op_script,,1,0,"'@daily'",86400.0,0,,,tests/wmf_airflow_common/operators/test_dbt.py:22
+test_docker_image_fsspec,,1,0,"'@once'",,0,,,analytics_test/dags/test_docker_image_fsspec_dag.py:22
+test_generic_artifact_deployment_dag,airflow-platform-eng,1,1,"'@daily'",86400.0,28,51.1,max_active_runs,platform_eng/dags/canaries/test_generic_artifact_deployment_dag.py:17
+test_produced_by_config,airflow-platform-eng,1,1,"'@daily'",86400.0,27,26228.9,,platform_eng/dags/canaries/test_produced_by_config_dag.py:19
+test_s3_connection,airflow-dev,0,1,"",,0,635.0,,
+test_s3_connection,airflow-test-k8s,0,1,"",,500,28.0,,
+test_sensor,,1,0,"",,0,,,tests/wmf_airflow_common/sensors/test_rest_helper.py:52
+test_simple_skein_exec_script_updater,,1,0,"'@daily'",86400.0,0,,,tests/wmf_airflow_common/operators/test_skein.py:32
+test_simple_skein_forwards_kerberos_ccache,,1,0,"'@daily'",86400.0,0,,,tests/wmf_airflow_common/operators/test_skein.py:72
+test_simple_skein_keytab_path,,1,0,"'@daily'",86400.0,0,,,tests/wmf_airflow_common/operators/test_skein.py:127
+test_simple_skein_no_ccache_forwarding,,1,0,"'@daily'",86400.0,0,,,tests/wmf_airflow_common/operators/test_skein.py:100
+test_skein_templates_application_spec,,1,0,"'@daily'",86400.0,0,,,tests/wmf_airflow_common/operators/test_skein.py:11
+tone_check_copy_base_model_dag,,1,0,"None",,0,,,ml/dags/tone_check_copy_base_model_dag.py:23
+tone_check_training_dag,,1,0,"None",,0,,,ml/dags/tone_check_training_dag.py:113
+top_pages,airflow-research,1,1,"'@hourly'",3600.0,606,7772.9,,research/dags/top_pages.py:55
+traffic_patterns_spectral_features,airflow-research,1,1,"'@hourly'",3600.0,519,9291.0,,research/dags/traffic_patterns_dag.py:163
+traffic_patterns_spectral_features_interactive,,1,0,"None",,0,,,research/dags/traffic_patterns_dag.py:185
+transfer_to_es_weekly,airflow-search,1,1,"'0 0 * * 0'",604800.0,6,43579.6,depends_on_past;max_active_runs,search/dags/transfer_to_es.py:48
+trust_safety_admin_request_monthly,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,110049.5,,analytics_product/dags/trust_safety_metrics/trust_safety_admin_request_monthly_dag.py:38
+tsp_admin_action_daily,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,160912.8,,analytics_product/dags/trust_safety_metrics/trust_safety_admin_action_daily_dag.py:51
+tsp_admin_action_monthly,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,160894.4,,analytics_product/dags/trust_safety_metrics/tsp_admin_action_monthly_dag.py:48
+tsp_admin_monthly,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,160803.2,,analytics_product/dags/trust_safety_metrics/tsp_admin_monthly_dag.py:48
+tsp_block_daily,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,92181.0,,analytics_product/dags/trust_safety_metrics/tsp_block_daily_dag.py:47
+tsp_block_monthly,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,92210.4,,analytics_product/dags/trust_safety_metrics/tsp_block_monthly_dag.py:47
+tsp_new_admin_monthly,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,92173.4,,analytics_product/dags/trust_safety_metrics/tsp_new_admin_monthly_dag.py:47
+unique_devices_per_domain_daily,airflow-main,0,1,"",,28,8363.8,,
+unique_devices_per_domain_monthly,airflow-main,0,1,"",,0,13222.3,,
+unique_devices_per_domain_weekly,airflow-main,0,1,"",,3,10033.4,,
+unique_devices_per_project_family_daily,airflow-main,0,1,"",,28,8311.1,,
+unique_devices_per_project_family_monthly,airflow-main,0,1,"",,0,12518.7,,
+unique_devices_per_project_family_weekly,airflow-main,0,1,"",,3,9678.7,,
+unique_editors_by_country_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,164302.7,,main/dags/geoeditors/unique_editors_by_country_monthly_dag.py:27
+unpatrolled_recentchanges_daily,,1,0,"'@daily'",86400.0,0,,,analytics_product/dags/moderation/unpatrolled_recentchanges_daily_dag.py:42
+update_geomaps,airflow-dev,0,1,"",,2,151.2,,
+upload_tracking_daily,airflow-platform-eng,0,1,"",,23,36719.1,,
+upload_tracking_monthly,airflow-platform-eng,0,1,"",,0,2355.3,,
+vandalism_pageviews_dag,airflow-analytics-product,1,1,"'@monthly'",2419200.0,0,170444.3,,analytics_product/dags/vandalism_pageviews/vandalism_pageviews_report_dag.py:39
+virtualpageview_hourly,airflow-main,1,1,"'@hourly'",3600.0,710,6010.4,,main/dags/virtualpageview/virtualpageview_hourly_dag.py:42
+wcqs_streaming_updater_reconcile_hourly,airflow-search,0,1,"",,711,3728.5,,
+wd_action_api_metrics_monthly,airflow-wmde,0,1,"",,0,8784.5,,
+wd_action_api_request_metadata_daily,airflow-wmde,0,1,"",,28,7940.4,,
+wd_article_placeholder_metrics_daily,airflow-wmde,0,1,"",,28,8151.1,,
+wd_coeditors_monthly,airflow-wmde,0,1,"",,0,160651.9,,
+wd_device_type_edits_monthly,airflow-dev,0,1,"",,0,249.2,,
+wd_device_type_edits_monthly,airflow-wmde,0,1,"",,1,771.9,,
+wd_dump_metrics_monthly,airflow-wmde,0,1,"",,0,89.1,,
+wd_dump_request_metadata_daily,airflow-wmde,0,1,"",,14,67.4,,
+wd_dump_size_monthly,airflow-dev,0,1,"",,0,4.1,,
+wd_dump_size_monthly,airflow-wmde,0,1,"",,0,67.4,,
+wd_entity_schema_namespace_metrics_daily,airflow-wmde,0,1,"",,28,7514.2,,
+wd_entity_usage_by_aspect_monthly,airflow-wmde,0,1,"",,0,208216.2,,
+wd_entity_usage_by_wiki_monthly,airflow-wmde,0,1,"",,0,205359.2,,
+wd_entity_usage_distinct_monthly,airflow-wmde,0,1,"",,0,207455.4,,
+wd_graphql_api_metrics_monthly,airflow-wmde,0,1,"",,0,8721.0,,
+wd_graphql_api_request_metadata_daily,airflow-wmde,0,1,"",,28,7904.3,,
+wd_item_sitelink_segments_weekly,airflow-wmde,0,1,"",,4,269182.1,,
+wd_page_viewer_metrics_monthly,airflow-wmde,0,1,"",,0,9026.0,,
+wd_page_viewer_request_metadata_daily,airflow-wmde,0,1,"",,28,7855.4,,
+wd_query_segments_daily,airflow-wmde,0,1,"",,28,252.4,,
+wd_reliability_metrics_daily,airflow-wmde,0,1,"",,28,7847.8,,
+wd_rest_api_metrics_monthly,airflow-wmde,0,1,"",,0,8716.2,,
+wd_rest_api_request_metadata_daily,airflow-wmde,0,1,"",,28,7872.7,,
+wd_rollback_editors_monthly,airflow-wmde,0,1,"",,0,160224.8,,
+wd_special_entity_data_metrics_daily,airflow-wmde,0,1,"",,28,7826.9,,
+wd_special_entity_schema_text_metrics_daily,airflow-wmde,0,1,"",,28,7648.1,,
+wdqm_consistency_weekly,airflow-wmde,0,1,"",,2,9.8,,
+wdqm_external_identifier_completeness_monthly,airflow-dev,0,1,"",,0,247.5,,
+wdqm_reference_completeness_weekly,airflow-wmde,0,1,"",,2,10.1,,
+wdqm_snapshot_wikidata_rdf_weekly,airflow-wmde,0,1,"",,3,32.2,,
+wdqs_external_queries_rollup_daily,airflow-wikidata,1,1,"'@daily'",86400.0,27,6489.0,,wikidata/dags/logs_analysis/wdqs_external_queries_rollup_daily_dag.py:54
+wdqs_metrics_daily,airflow-wmde,0,1,"",,28,6463.7,,
+wdqs_metrics_monthly,airflow-wmde,0,1,"",,0,7509.9,,
+wdqs_streaming_updater_reconcile_hourly,airflow-search,0,1,"",,397,3733.9,,
+wdqs_wikidata_data_reload,airflow-dev,1,1,"'@weekly'",604800.0,7,16396.9,max_active_runs,wikidata/dags/data_reload/data_reload_dag.py:330
+wdqs_wikidata_data_reload,airflow-wikidata,1,1,"'@weekly'",604800.0,1,172606.4,max_active_runs,wikidata/dags/data_reload/data_reload_dag.py:330
+webrequest_actor_label_hourly,airflow-main,1,1,"'@hourly'",3600.0,702,7091.6,,main/dags/webrequest/actor/webrequest_actor_label_hourly_dag.py:42
+webrequest_actor_metrics_hourly,airflow-main,1,1,"'@hourly'",3600.0,712,6805.4,,main/dags/webrequest/actor/webrequest_actor_metrics_hourly_dag.py:42
+webrequest_actor_metrics_rollup_hourly,airflow-main,1,1,"'@hourly'",3600.0,704,6939.9,,main/dags/webrequest/actor/webrequest_actor_metrics_rollup_hourly_dag.py:47
+webrequest_analyzer,airflow-main,1,1,"'@hourly'",3600.0,712,7520.0,,main/dags/webrequest/refine_webrequest_analyzer_hourly_dag.py:59
+webrequest_blocked_requests_requestctl,airflow-dev,1,1,"'@daily'",86400.0,0,1054.2,,sre/dags/webrequest_blocked_ips.py:137
+webrequest_blocked_requests_requestctl,airflow-sre,1,1,"'@daily'",86400.0,28,1573.1,,sre/dags/webrequest_blocked_ips.py:137
+webrequest_metrics_daily,airflow-search,0,1,"",,28,9824.9,,
+webrequest_signals,airflow-dev,1,1,"'@hourly'",3600.0,139,753.1,external_task_sensor;max_active_runs,main/dags/webrequest/webrequest_signals_dag.py:110
+webrequest_signals,airflow-main,1,1,"'@hourly'",3600.0,176,445.4,external_task_sensor;max_active_runs,main/dags/webrequest/webrequest_signals_dag.py:110
+webrequest_time_series,airflow-research,1,1,"'@hourly'",3600.0,688,7330.9,,research/dags/webrequest_timeseries_dag.py:87
+webrequest_time_series_backfill,,1,0,"'@daily'",86400.0,0,,,research/dags/webrequest_timeseries_dag.py:145
+webrequest_v2,airflow-dev,0,1,"",,50,1140.0,,
+wiki_editor_activity_levels_monthly,airflow-wmde,0,1,"",,0,163193.0,,
+wiki_page_cite_references_monthly,airflow-dev,1,1,"'@monthly'",2419200.0,0,284.1,max_active_runs,wmde/dags/wiki_page_cite_references/wiki_page_cite_references_monthly.py:178
+wiki_page_cite_references_monthly,airflow-wmde,1,1,"'@monthly'",2419200.0,0,17188.9,max_active_runs,wmde/dags/wiki_page_cite_references/wiki_page_cite_references_monthly.py:178
+wiki_page_wd_entity_usage_monthly,airflow-wmde,0,1,"",,0,208240.7,,
+wikidata_and_lead_images,airflow-platform-eng,0,1,"",,2,1449.3,,
+wikidata_dump_to_hive_weekly,airflow-main,1,1,"'0 0 * * 1'",604800.0,2,267914.8,,main/dags/dump_to_hive/wikidata_dump_to_hive_weekly_dag.py:36
+wikidata_item_page_link_weekly,airflow-main,1,1,"'0 0 * * 1'",604800.0,2,268583.7,,main/dags/wikidata/item_page_link/wikidata_item_page_link_weekly_dag.py:73
+wikipedia_content_pages_monthly,airflow-wmde,0,1,"",,0,4147.6,,
+wikipedia_newcomer_ve_edit_intervals_monthly,airflow-wmde,0,1,"",,0,1798.4,,
+wikipedia_newcomer_ve_reference_monthly,airflow-wmde,0,1,"",,0,7400.5,,
+wikipedia_newcomer_ve_retained_reference_editors_monthly,airflow-wmde,0,1,"",,0,104138.9,,
+wikipedia_preview_stats_daily,airflow-analytics-product,1,1,"'@daily'",86400.0,27,8630.4,,analytics_product/dags/wikipedia_preview/wikipedia_preview_stats_daily_dag.py:33
+wikipedia_template_monthly,airflow-wmde,0,1,"",,0,236596.5,,
+wit_docs_pageview_metrics_monthly,airflow-wmde,0,1,"",,0,18192.7,,
+wlb_commons_video_metrics_monthly,airflow-wmde,0,1,"",,0,3673.7,,
+wmcs_report_monthly,airflow-main,1,1,"'@monthly'",2419200.0,0,164859.1,,main/dags/wmcs/wmcs_report_monthly_dag.py:53
+wmde_bi_yearly_data_cleanup_emails,,1,0,"props.schedule",,0,,max_active_runs,wmde/dags/maintenance/wmde_bi_yearly_data_cleanup_emails.py:24
+wme_pageviews_daily,airflow-platform-eng,1,1,"'0 2 * * *'",86400.0,27,1347.0,,platform_eng/dags/wme_pageviews/wme_pageviews_daily_dag.py:55
+wme_pageviews_hdfs_to_s3_poc,,1,0,"None",,0,,,platform_eng/dags/wme_pageviews/wme_pageviews_hdfs_to_s3_poc_dag.py:47
+wme_pageviews_hourly,airflow-dev,1,1,"'@hourly'",3600.0,165,8521.8,,platform_eng/dags/wme_pageviews/wme_pageviews_hourly_dag.py:67
+wme_pageviews_hourly,airflow-platform-eng,1,1,"'@hourly'",3600.0,464,8615.6,,platform_eng/dags/wme_pageviews/wme_pageviews_hourly_dag.py:67
+wme_pageviews_monthly,airflow-platform-eng,1,1,"'0 2 1 * *'",2419200.0,1,3624.5,,platform_eng/dags/wme_pageviews/wme_pageviews_monthly_dag.py:95
+wme_pageviews_weekly,airflow-platform-eng,1,1,"'0 10 * * 3'",604800.0,2,209.9,,platform_eng/dags/wme_pageviews/wme_pageviews_weekly_dag.py:54
+wme_traffic_weekly,airflow-analytics-product,1,1,"'0 6 * * 1'",604800.0,4,69.2,max_active_runs,analytics_product/dags/infrastructure_metrics/wme_traffic_weekly_dag.py:39

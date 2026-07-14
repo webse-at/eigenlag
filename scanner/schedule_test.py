@@ -2,7 +2,7 @@ import ast
 
 import pytest
 
-from scanner.schedule import ScheduleClass, classify_node, min_gap_minutes
+from scanner.schedule import ScheduleClass, classify_node, min_gap_minutes, period_seconds
 
 
 def node(expr: str) -> ast.expr:
@@ -79,3 +79,14 @@ def test_dom_and_dow_are_or_semantics() -> None:
 def test_cron_that_never_fires_is_unknown() -> None:
     assert min_gap_minutes("0 12 30 2 *") is None
     assert classify_node(node('"0 12 30 2 *"'))[0] == "unknown"
+
+
+def test_period_seconds_rechnet_den_takt_aus_dem_ausdruck() -> None:
+    assert period_seconds("@hourly") == 3600.0
+    assert period_seconds("'@hourly'") == 3600.0  # so, wie ast.unparse ihn liefert
+    assert period_seconds("@daily") == 86400.0
+    assert period_seconds("0 */6 * * *") == 6 * 3600.0
+    assert period_seconds("*/15 * * * *") == 900.0
+    assert period_seconds("0 6,18 * * *") == 12 * 3600.0  # kleinste Distanz, nicht die groesste
+    assert period_seconds("@once") is None
+    assert period_seconds("kein cron") is None

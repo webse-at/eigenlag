@@ -17,13 +17,13 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["eigenlag"]
+packages = ["eigenlag"]  # Scanner und wikimedia sind Werkzeuge des Repos, kein Teil der CLI.
 
 [tool.pytest.ini_options]
 python_files = ["*_test.py"]
 # data/ ist der Clone-Cache: fremde Repos bringen eigene Testfiles mit, die pytest sonst
 # einsammelt und beim Import sprengt. scanner/fixtures ist Testdaten, nicht Testcode.
-testpaths = ["eigenlag", "scanner"]
+testpaths = ["eigenlag", "scanner", "wikimedia"]
 norecursedirs = ["data", "scanner/fixtures", ".venv"]
 
 [tool.ruff]
@@ -40,5 +40,5 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["eigenlag", "scanner"]
+files = ["eigenlag", "scanner", "wikimedia"]
 exclude = "scanner/fixtures"

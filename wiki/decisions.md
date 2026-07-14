@@ -208,3 +208,68 @@ Der Scanner zählte jedes gesetzte `execution_delta`, das nicht `None` war, als 
 **Begründung:** Ein Falsch-Positiv in einer Zahl, die öffentlich behauptet wird, kostet mehr als jede Untererfassung. Die Stichprobe hat genau dafür existiert, und die Spec verlangt bei einem Fund: Ursache beheben, Lauf wiederholen, nicht die Stichprobe nachziehen.
 
 **Wirkung im vollen Lauf:** Cross-Run-DAGs 1335 → 1303, Risiko-Kandidaten 182 → 176.
+
+---
+
+## ADR-015 — Ein Repo definiert seine eigenen DAG-Konstruktoren, und der Scanner muss sie lesen
+
+**Status:** entschieden, 2026-07-14 (Session 005)
+
+**Kontext:** In Wikimedias `airflow-dags` fand der Scanner 71 von 325 produktiven DAGs und **null** Cross-Run-Signale, obwohl `depends_on_past=True` dort mehrfach im Klartext steht. Der Grund ist keine Lücke in der Signal-Erkennung, sondern eine in der DAG-Erkennung: Wikimedia schreibt `with create_easy_dag(...)`, und dahinter steht eine Methode, die ein `DAG(...)` zurückgibt (`wmf_airflow_common/easy_dag.py:79`, gebunden in `search/config/dag_config.py:71`). `analyze.py` kannte nur `DAG(...)` und `@dag`.
+
+Das ist der teuerste Befund aus Session 003: **professionelle Umgebungen kapseln ihre DAG-Erzeugung, und genau die waren für uns unsichtbar.** Die Demo-Lastigkeit der Marktzahl (78 % Beispiel-Code) erklärt sich damit auch von der anderen Seite: wir haben systematisch dort gemessen, wo unverpackt geschrieben wird, also im Lernmaterial.
+
+**Entscheidung:** Ein Vorlauf über alle Files eines Repos sammelt seine DAG-Konstruktoren (`scanner/wrappers.py`). Konstruktor ist:
+
+1. eine Funktion oder Methode, deren **eigener** Rumpf ein `DAG(...)` zurückgibt (ein `return` in einer verschachtelten Funktion zählt nicht für die äußere),
+2. ein Modul-Alias darauf: `EasyDag = EasyDAGFactory(...).create_easy_dag`.
+
+Aufrufe dieser Namen sind DAG-Scopes wie `DAG(...)` selbst. Das `DAG(...)` **im** Konstruktor ist die Schablone und zählt nicht mit, sonst hätte ein Repo einen DAG mehr, als es Aufrufstellen hat.
+
+**Keine Transitivität.** Eine Funktion, die ihrerseits einen Konstruktor aufruft und dessen Ergebnis weiterreicht (`build_dag()` bei Wikimedia), wird nicht befördert. Der DAG entsteht dort, wo der Konstruktor aufgerufen wird, und **Schedule und `default_args` stehen genau an dieser Stelle**. Würde man den Aufrufer befördern, läge der Fund an der Aufrufstelle, wo beides fehlt: wir hätten die `dag_id` gewonnen und den Schedule verloren. Ein Fund ohne `dag_id` ist ehrlicher als ein Fund ohne Schedule.
+
+**Preis:** 90 der 345 gefundenen Wikimedia-DAGs haben keine `dag_id`, weil erst der Aufrufer sie einsetzt. Sie lassen sich nicht mit Laufzeit-Metriken verknüpfen. Das ist eine offene Lücke, kein gelöstes Problem (Kandidat für Session 006: DAG-Generatoren mit Literal-Argumenten an der Aufrufstelle auflösen).
+
+**Wirkung (Wikimedia):** DAGs 71 → 345, davon mit `dag_id` 58 → 255, mit Cross-Run-Signal 0 → 13, Risiko-Kandidaten 0 → 3.
+
+**Kosten:** Jedes Repo wird zweimal geparst. Das ist der Preis dafür, dass der Konstruktor in einem anderen File steht als seine Aufrufe.
+
+---
+
+## ADR-016 — `max_active_runs=1` ist eine Cross-Run-Kante (kippt eine frühere Entscheidung)
+
+**Status:** entschieden, 2026-07-14 (Session 005). **Ersetzt** die gegenteilige Festlegung in `signals.md` ("Was ausdrücklich kein Cross-Run-Signal ist") und den entsprechenden Punkt in `math.md`, Abschnitt 8.
+
+**Bisherige Position:** "`max_active_runs=1` serialisiert Läufe, erzeugt aber keine Datenabhängigkeit. Begrenzt die Nebenläufigkeit, nicht die Rekurrenz. Relevant für die reale Taktzeit, nicht für λ." Dazu in `math.md`: nicht modelliert, kann die reale Taktzeit nur erhöhen, also bleibt λ eine gültige Untergrenze.
+
+**Was sie widerlegt:** Der Wikimedia-Fall. `wdqs_streaming_updater_reconcile_hourly` läuft stündlich mit `max_active_runs=1`, und seine Läufe folgen im Mittel alle 3599,5 Sekunden aufeinander, bei einer mittleren Laufzeit von 3598,4 Sekunden. Die Läufe liegen **rückenan**. Ohne diese Kante im Modell hätte ein Teil dieser DAGs "kein Kreis, kein λ" ergeben, für Pipelines, die nachweislich nicht schneller können als ihre eigene Laufzeit.
+
+**Die Unterscheidung, die die alte Position gemacht hat, ist die falsche.** Sie trennt Daten- von Ressourcen-Abhängigkeit. Der Max-Plus-Eigenwert kennt diesen Unterschied nicht: er sieht Kanten. `max_active_runs=1` sagt `Ende(k−1) ≤ Start(k)`, und das ist eine Kante über die Zeitachse, gleich ob sie aus einer Datei oder aus einem Scheduler-Limit kommt. Sie ist obendrein oft die **bindende** Kante, weil sie den ganzen Lauf umspannt und nicht nur einen Task.
+
+**Was an der alten Position richtig bleibt:** λ wird durch diese Kante nie kleiner, nur größer. Die Untergrenzen-Eigenschaft geht nicht verloren, λ wird schärfer.
+
+**Entscheidung:** `max_active_runs=1` ist ein starkes Signal (`max_active_runs`, Signal G). Nur die explizite `1` zählt. Airflows Default ist größer und lässt Läufe nebeneinander laufen; ein nicht auflösbarer Ausdruck zählt nicht.
+
+**Wirkung (Wikimedia):** DAGs mit Cross-Run-Signal 13 → 68, Risiko-Kandidaten 3 → 8.
+
+**Folge, die offen ist:** Der Korpus-Scan aus Session 003 (51.426 DAGs, 176 Risiko-Kandidaten) ist unter der alten Definition **und** ohne ADR-015 gelaufen. Beide Zahlen sind damit veraltet. Vor jeder öffentlichen Behauptung muss neu gescannt werden. Die Clones liegen noch (`data/repos/`, 74 GB), der Lauf ist wiederholbar.
+
+---
+
+## ADR-017 — Läufe werden aus der Gauge rekonstruiert, nicht aus ihr gemittelt
+
+**Status:** entschieden, 2026-07-14 (Session 005)
+
+**Kontext:** `airflow_dagrun_duration` ist eine Gauge, keine Verteilung. Airflow meldet am Ende eines Laufs dessen Dauer an StatsD, der Exporter hält den Wert, Prometheus scrapt ihn. Ein `avg_over_time` darüber mittelt **Scrapes, nicht Läufe**: ein Wert, der länger stehen bleibt, wiegt schwerer. Ob das dasselbe Ergebnis liefert wie ein Mittel über Läufe, hängt davon ab, wie lange jeder Wert steht, und das ist eine Annahme über den Exporter, keine Zusicherung.
+
+**Entscheidung:** Der Lauf wird rekonstruiert (`wikimedia/runs.py`): **ein Wertwechsel der Gauge ist ein Lauf.** Der Wechsel wird je Serie gesucht, nicht auf der zusammengeführten Zeitachse, weil mehrere StatsD-Pods je einen eigenen letzten Wert halten und die überlagerte Reihe sonst zwischen ihnen hin und her springt. Lücken über vier Stunden trennen Fenster: über einen Metrik-Ausfall hinweg einen Takt zu mitteln, wäre eine erfundene Zahl.
+
+**Belege, dass die Lesart trägt (wdqs, 30 Tage):**
+
+- Serverseitig gerechnet ergibt `sum by (dag_id) (changes(...))` **397** Läufe, die Rekonstruktion aus den Rohsamples **398**.
+- Mediane Laufzeit 3733,8 s, medianer Abstand zweier Laufenden 3720 s: 13,8 Sekunden Differenz, unter der Scrape-Auflösung von einer Minute. Der Abstand stammt aus den Zeitstempeln, die Dauer aus den Werten. Zwei unabhängige Größen, die sich gegenseitig prüfen, und sie passen nur zusammen, wenn `max_active_runs=1` die Läufe wirklich hintereinander legt.
+- Damit ist auch die Einheit belegt: Millisekunden, nicht Sekunden.
+
+**Grenze:** Zwei aufeinanderfolgende Läufe mit exakt gleicher Dauer auf die Millisekunde zählen als einer. Bei Fließkomma-Dauern ist das praktisch ausgeschlossen, und der Fehler ginge zu unseren Ungunsten (ein Lauf zu wenig). Bei zehn Wikimedia-DAGs meldet die Gauge **mehr** Wertwechsel, als der Takt erlaubt (`refine_api_requests_hourly`: 3360 in 30 Tagen bei stündlichem Takt). Die Ursache ist unbekannt, und für diese DAGs rechnen wir kein λ, statt eine Erklärung zu erfinden.
+
+**Task-Ebene:** nicht möglich. Für den Spark-Task und den Abschluss-Task existiert keine Dauer-Metrik, `airflow_task_duration` trägt weder `dag_id` noch `task_id`, und die Sensoren melden im Reschedule-Modus Dauern nahe null. Gerechnet wird auf DAG-Ebene, und das steht im Report.

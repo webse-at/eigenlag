@@ -108,5 +108,25 @@ Ehrlich benannt, damit niemand mehr hineinliest, als drinsteht:
 
 - **Unbeschränkte Parallelität angenommen.** λ ist eine Untergrenze. Bei zu wenigen Workern ist die reale Taktzeit größer. Das Tool sagt "nicht schneller als λ", nicht "λ ist erreichbar".
 - **Deterministische Dauern im Kern.** Die Stochastik sitzt außen herum als Monte Carlo, nicht in der Max-Plus-Rechnung selbst.
-- **Retries, Sensor-Poking, `max_active_runs` und Pool-Limits** sind nicht modelliert. Sie können die reale Taktzeit nur erhöhen, nie senken, also bleibt λ eine gültige Untergrenze.
+- **Retries, Sensor-Poking und Pool-Limits** sind nicht modelliert. Sie können die reale Taktzeit nur erhöhen, nie senken, also bleibt λ eine gültige Untergrenze. `max_active_runs=1` stand bis Session 005 ebenfalls in dieser Liste; es ist inzwischen als Kante modelliert, weil es die Läufe serialisiert und damit oft die bindende Kante stellt (ADR-016). λ wird dadurch schärfer, die Untergrenzen-Eigenschaft bleibt.
 - **Kein Cross-Run-Kante heißt kein λ.** Ein DAG ohne Rekurrenz hat keinen Kreis über die Zeitachse. Das Ergebnis ist dann nicht "λ = 0", sondern "nicht anwendbar". Der Unterschied gehört sauber in den Output, sonst liest jemand eine Null als Entwarnung.
+
+## 9. Die Grenze, die der Wikimedia-Fall gezeigt hat: Tasks, die auf die Uhr warten
+
+Das Modell nimmt an, dass Task-Dauern **unabhängig vom Startzeitpunkt** sind. Ein Sensor, der auf die Daten der laufenden Stunde wartet, verletzt genau das.
+
+`wdqs_streaming_updater_reconcile_hourly` wartet auf Hive-Partitionen der Stunde, für die er läuft. Startet er pünktlich, wartet er auf Daten, die es noch nicht gibt. Startet er 50 Minuten zu spät, liegen die Daten längst da, und er ist in zwei Minuten durch. Gemessen: **Korrelation zwischen Verspätung beim Start und Laufzeit = −0,504** über 397 Läufe (`wikimedia/case.md`, Abschnitt 4).
+
+Formal ist das keine Bearbeitungszeit, sondern eine **Freigabe-Bedingung**: der Task kann nicht vor `Datenzeit(k)` enden, und `Datenzeit(k)` wächst mit der Wanduhr, also um genau T pro Lauf. In der Rekurrenz
+
+```
+Ende(k) ≥ max( Ende(k−1) + Arbeit ,  Datenzeit(k) + Arbeit )
+```
+
+setzt der zweite Term die Verspätung **zurück**, sobald sie groß genug geworden ist. Der Kreis wird gebrochen, und die Pipeline ist stabil, solange die reine **Arbeit** unter T bleibt, selbst wenn die gemessene Laufzeit über T liegt.
+
+**Konsequenzen, die ins Produkt gehören:**
+
+1. Eine Laufzeit über dem Takt ist **kein** Beweis für Drift. Wer nur Laufzeit gegen Schedule hält, produziert Fehlalarme. Bei Wikimedia wären das 29 von 30 DAGs (`wikimedia/case.md`, Abschnitt 6).
+2. Wo λ nahe an T liegt, entscheidet diese Rückkopplung über stabil oder driftend, und aus der Laufzeit-Metrik allein ist sie nicht aufzulösen: die gemessenen Dauern **sind bereits das Ergebnis** des eingeschwungenen Zustands. Das ist zirkulär, und man muss es wissen.
+3. Der sichtbare Preis einer Pipeline an ihrer Taktgrenze ist nicht wachsende, sondern **konstante** Verspätung. Bei wdqs sind es 48 Minuten, jede Stunde aufs Neue.

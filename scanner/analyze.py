@@ -16,11 +16,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from scanner import wrappers
 from scanner.schedule import ScheduleClass, call_name, classify_node, timedelta_seconds
 
 Json = dict[str, Any]  # Fehler-Records gehen als JSONL nach aussen, kein festes Schema.
 
-DAG_NAMES = {"DAG"}
+DAG_NAMES = frozenset({"DAG"})
 DECORATOR_NAMES = {"dag"}
 TASK_DECORATOR = "task"
 TASK_CALL_SUFFIXES = ("Operator", "Sensor")
@@ -52,6 +53,7 @@ STRONG_KINDS = {
     "include_prior_dates",
     "prev_run_success",
     "dbt_incremental",
+    "max_active_runs",
 }
 WEAK_KINDS = {"prev_run_date"}
 
@@ -96,6 +98,7 @@ class RepoAnalysis:
     errors: list[Json] = field(default_factory=list)
     files_parsed: int = 0
     syntax_errors: int = 0
+    dag_names: frozenset[str] = frozenset()  # DAG plus die Konstruktoren des Repos (ADR-015)
 
     @property
     def risk_candidates(self) -> list[DagFinding]:
@@ -111,8 +114,8 @@ class _Scope:
     span: tuple[int, int] | None
 
 
-def _is_dag_call(node: ast.expr) -> bool:
-    return isinstance(node, ast.Call) and call_name(node) in DAG_NAMES
+def _is_dag_call(node: ast.expr, dag_names: frozenset[str]) -> bool:
+    return isinstance(node, ast.Call) and call_name(node) in dag_names
 
 
 def _kwarg(call: ast.Call, name: str) -> ast.expr | None:
@@ -212,18 +215,30 @@ def _default_args_signals(
     return signals
 
 
-def _collect_scopes(tree: ast.Module, path: str, errors: list[Json]) -> list[_Scope]:
+def _collect_scopes(
+    tree: ast.Module, path: str, errors: list[Json], dag_names: frozenset[str]
+) -> list[_Scope]:
     scopes: list[_Scope] = []
+    # Ein DAG-Aufruf im Rumpf eines Konstruktors ist dessen Schablone (ADR-015), kein DAG.
+    templates = wrappers.definition_spans(tree, dag_names)
+
+    def is_template(lineno: int) -> bool:
+        return any(start <= lineno <= end for start, end in templates)
+
     for node in ast.walk(tree):
         if isinstance(node, ast.With | ast.AsyncWith):
             for item in node.items:
-                if not _is_dag_call(item.context_expr):
+                if not _is_dag_call(item.context_expr, dag_names) or is_template(node.lineno):
                     continue
                 call = item.context_expr
                 assert isinstance(call, ast.Call)
                 var = item.optional_vars.id if isinstance(item.optional_vars, ast.Name) else None
                 scopes.append(_scope(call, tree, path, errors, var, (node.lineno, node.end_lineno)))
-        elif isinstance(node, ast.Assign) and _is_dag_call(node.value):
+        elif (
+            isinstance(node, ast.Assign)
+            and _is_dag_call(node.value, dag_names)
+            and not is_template(node.lineno)
+        ):
             call = node.value
             assert isinstance(call, ast.Call)
             target = node.targets[0]
@@ -272,6 +287,22 @@ def _is_task_call(call: ast.Call) -> bool:
     return call_name(call).endswith(TASK_CALL_SUFFIXES)
 
 
+def _serialized(call: ast.Call, path: str) -> list[Signal]:
+    """ADR-016: `max_active_runs=1` serialisiert die Laeufe und ist damit eine Cross-Run-Kante.
+
+    Lauf k kann nicht beginnen, bevor Lauf k-1 fertig ist. Das ist ein Kreis ueber die
+    Zeitachse, unabhaengig davon, ob ein Task auf seinen Vorlauf schaut. Nur die explizite 1
+    zaehlt: Airflows Default ist groesser und laesst Laeufe nebeneinander laufen.
+    """
+    node = _kwarg_node(call, "max_active_runs")
+    if node is None or not isinstance(node.value, ast.Constant):
+        return []
+    value = node.value.value
+    if isinstance(value, bool) or not isinstance(value, int) or value != 1:
+        return []
+    return [Signal(kind="max_active_runs", file=path, lineno=node.lineno, source="dag_call")]
+
+
 def _scope(
     call: ast.Call,
     tree: ast.Module,
@@ -289,6 +320,7 @@ def _scope(
         schedule=schedule,
         schedule_expr=expr,
     )
+    finding.signals.extend(_serialized(call, path))
     finding.signals.extend(_default_args_signals(call, tree, path, errors))
     end = span[1] if span and span[1] is not None else None
     return _Scope(
@@ -477,8 +509,13 @@ def _factory_signals(tree: ast.Module, path: str) -> list[Signal]:
     return list(dict.fromkeys(signals))
 
 
-def analyze_source(source: str, path: str) -> FileAnalysis:
-    """Ein Python-File analysieren. `path` ist der volle Repo-Pfad und wandert in jeden Beleg."""
+def analyze_source(source: str, path: str, dag_names: frozenset[str] = DAG_NAMES) -> FileAnalysis:
+    """Ein Python-File analysieren. `path` ist der volle Repo-Pfad und wandert in jeden Beleg.
+
+    `dag_names` sind die DAG-Konstruktoren des Repos: `DAG` plus die, die das Repo selbst
+    definiert (ADR-015). Sie kommen aus einem Vorlauf ueber alle Files, weil der Konstruktor
+    in einem anderen File steht als seine Aufrufe.
+    """
     analysis = FileAnalysis()
     try:
         tree = ast.parse(source)
@@ -494,7 +531,7 @@ def analyze_source(source: str, path: str) -> FileAnalysis:
         )
         return analysis
 
-    scopes = _collect_scopes(tree, path, analysis.errors)
+    scopes = _collect_scopes(tree, path, analysis.errors, dag_names)
     if not scopes:
         analysis.factories = _factory_signals(tree, path)
         return analysis
@@ -579,12 +616,30 @@ def python_files(root: Path) -> list[Path]:
     return files
 
 
+def repo_dag_names(files: list[Path]) -> frozenset[str]:
+    """Vorlauf: welche DAG-Konstruktoren definiert dieses Repo selbst (ADR-015)?
+
+    Ein Syntax-Fehler im Vorlauf wird uebergangen, nicht protokolliert: derselbe File laeuft
+    gleich noch einmal durch `analyze_source`, dort wird er gemeldet.
+    """
+    scans: list[wrappers.ConstructorScan] = []
+    for path in files:
+        try:
+            tree = ast.parse(path.read_bytes().decode("utf-8", "replace"))
+        except (SyntaxError, ValueError):
+            continue
+        scans.append(wrappers.scan_file(tree))
+    return DAG_NAMES | wrappers.resolve(scans)
+
+
 def analyze_repo(root: Path, repo: str) -> RepoAnalysis:
-    result = RepoAnalysis(repo=repo)
-    for path in python_files(root):
+    files = python_files(root)
+    dag_names = repo_dag_names(files)
+    result = RepoAnalysis(repo=repo, dag_names=dag_names)
+    for path in files:
         rel = path.relative_to(root).as_posix()
         source = path.read_bytes().decode("utf-8", "replace")
-        analysis = analyze_source(source, rel)
+        analysis = analyze_source(source, rel, dag_names)
         result.files_parsed += 1
         result.syntax_errors += int(analysis.syntax_error)
         result.dags.extend(analysis.dags)

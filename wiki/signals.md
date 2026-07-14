@@ -66,11 +66,22 @@ Wer nur den ersten Fundort erkennt, misst die Verbreitung einer Schreibweise, ni
 
 **Abstufung:** Die `*_success`-Varianten sind harte Kanten, weil sie auf den **erfolgreichen** Vorlauf verweisen und damit auf dessen Abschluss warten. `prev_ds` und `prev_execution_date` sind reine Datums-Arithmetik ohne Wartesemantik: sie zeigen eine Datenabhängigkeit an, erzwingen aber keine Reihenfolge. Sie werden deshalb als **schwaches Signal** geführt, getrennt gezählt und **nicht** in die Risiko-Kandidaten-Quote eingerechnet. Wer sie mitzählt, bläst die Marktzahl auf und liefert dem ersten kritischen Leser die Munition, um sie zu kippen.
 
+### G — `max_active_runs=1`
+
+```python
+with DAG(dag_id="reconcile", schedule="@hourly", max_active_runs=1) as dag:
+```
+
+**Graph-Wirkung:** Lauf k kann nicht beginnen, bevor Lauf k−1 fertig ist. `Ende(k−1) ≤ Start(k)` ist eine Kante über die Zeitachse, die den **ganzen** Lauf umspannt und deshalb oft die bindende ist.
+
+Dieses Signal stand bis Session 005 in der Tabelle darunter, also unter "kein Cross-Run-Signal", mit der Begründung, es begrenze die Nebenläufigkeit und nicht die Rekurrenz. Der Wikimedia-Fall hat das widerlegt: `wdqs_streaming_updater_reconcile_hourly` liefert seine Läufe im Abstand von 3599,5 Sekunden bei einer mittleren Laufzeit von 3598,4 Sekunden, die Läufe liegen also rückenan. Die Unterscheidung zwischen Daten- und Ressourcen-Abhängigkeit ist für den Eigenwert bedeutungslos, er sieht Kanten. Siehe ADR-016.
+
+**Nur die explizite `1` zählt.** Airflows Default ist größer und lässt Läufe nebeneinander laufen. Ein Ausdruck, der statisch nicht auflösbar ist, zählt nicht.
+
 ## Was ausdrücklich kein Cross-Run-Signal ist
 
 | Konstrukt | Warum nicht |
 |---|---|
-| `max_active_runs=1` | Serialisiert Läufe, erzeugt aber keine Datenabhängigkeit. Begrenzt die Nebenläufigkeit, nicht die Rekurrenz. Relevant für die reale Taktzeit, nicht für λ. |
 | `ExternalTaskSensor` ohne Zeitversatz | Zeigt auf denselben Logical Date. Intra-Run. |
 | `depends_on_past=False` | Explizite Verneinung. |
 | `TriggerDagRunOperator` | Löst einen neuen Lauf aus, wartet aber nicht auf den vorigen. Kette, kein Kreis. |
@@ -81,7 +92,9 @@ Wer nur den ersten Fundort erkennt, misst die Verbreitung einer Schreibweise, ni
 
 Ein Signal allein ist harmlos. Gefährlich wird es erst, wenn der Schedule schneller taktet, als der Kreis erlaubt. **Risiko-Kandidat** ist deshalb definiert als: mindestens ein starkes Signal **und** sub-täglicher Schedule **im selben DAG**.
 
-Stark sind A, B, C, D, E und F in den `*_success`-Varianten. Schwach sind `prev_ds`, `prev_ds_nodash` und `prev_execution_date`; sie werden getrennt gezählt und begründen für sich genommen keinen Risiko-Kandidaten (ADR-005, ADR-011).
+Stark sind A, B, C, D, E, G und F in den `*_success`-Varianten. Schwach sind `prev_ds`, `prev_ds_nodash` und `prev_execution_date`; sie werden getrennt gezählt und begründen für sich genommen keinen Risiko-Kandidaten (ADR-005, ADR-011).
+
+Der Korpus-Scan aus Session 003 kennt Signal G noch nicht und auch die Konstruktoren aus ADR-015 nicht. Seine Zahlen (51.426 DAGs, 176 Risiko-Kandidaten) gelten unter der alten Definition und müssen vor jeder öffentlichen Behauptung neu erhoben werden.
 
 Sub-täglich heißt: Periode kürzer als 24 Stunden.
 

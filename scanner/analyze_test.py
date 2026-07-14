@@ -29,6 +29,7 @@ def kinds(finding: DagFinding) -> set[str]:
 
 def test_all_dags_are_found_exactly_once(result: RepoAnalysis) -> None:
     assert sorted(d.dag_id or "" for d in result.dags) == [
+        "",  # via_factory.build_dag: dag_id kommt erst von der Aufrufstelle (ADR-015)
         "alpha",
         "beta",
         "delta",
@@ -36,9 +37,42 @@ def test_all_dags_are_found_exactly_once(result: RepoAnalysis) -> None:
         "eta",
         "gamma",
         "iota",
+        "kappa",
+        "lambda_dag",
         "theta",
         "zeta",
     ]
+
+
+def test_repo_eigener_konstruktor_wird_erkannt(result: RepoAnalysis) -> None:
+    # ADR-015: create_easy_dag gibt ein DAG(...) zurueck, EasyDag ist ein Alias darauf.
+    assert result.dag_names >= {"DAG", "create_easy_dag", "EasyDag"}
+
+
+def test_dag_ueber_den_konstruktor_traegt_schedule_und_signal(result: RepoAnalysis) -> None:
+    kappa = dag(result, "kappa")
+    assert kappa.schedule == "subdaily"
+    assert kappa.schedule_expr == "'0 */2 * * *'"
+    assert kinds(kappa) == {"depends_on_past"}
+    assert kappa.is_risk_candidate
+
+
+def test_dag_ueber_den_alias_wird_gefunden(result: RepoAnalysis) -> None:
+    assert dag(result, "lambda_dag").schedule == "daily_or_slower"
+
+
+def test_die_schablone_im_konstruktor_ist_kein_eigener_dag(result: RepoAnalysis) -> None:
+    # Das DAG(...) in create_easy_dag wird pro Aufrufstelle instanziiert, nicht ein Mal extra.
+    assert [d for d in result.dags if d.file == "utils/easy_dag.py"] == []
+
+
+def test_konstruktor_in_einer_hilfsfunktion_zaehlt_einmal_ohne_dag_id(result: RepoAnalysis) -> None:
+    # build_dag reicht nur weiter: der DAG entsteht am Konstruktor-Aufruf, die dag_id fehlt dort.
+    unnamed = [d for d in result.dags if d.dag_id is None]
+    assert len(unnamed) == 1
+    assert unnamed[0].file == "dags/via_factory.py"
+    assert unnamed[0].schedule == "subdaily"
+    assert kinds(unnamed[0]) == {"depends_on_past"}
 
 
 def test_variable_assignment_scopes_the_signal_to_the_right_dag(result: RepoAnalysis) -> None:
@@ -140,12 +174,14 @@ def test_helper_returning_a_dict_is_not_a_factory(result: RepoAnalysis) -> None:
 
 def test_risk_candidate_needs_a_strong_signal_and_a_subdaily_schedule(result: RepoAnalysis) -> None:
     assert sorted(d.dag_id or "" for d in result.dags if d.is_risk_candidate) == [
+        "",  # via_factory.build_dag, stuendlich mit depends_on_past
         "alpha",
         "delta",
         "epsilon",
         "eta",
         "gamma",
         "iota",
+        "kappa",
     ]
     assert dag(result, "beta").is_risk_candidate is False  # daily, kein Signal
     assert dag(result, "theta").is_risk_candidate is False  # subdaily, kein Signal
@@ -219,6 +255,9 @@ def test_tasks_are_counted_per_dag(result: RepoAnalysis) -> None:
         "eta": 4,
         "theta": 1,
         "iota": 2,
+        "kappa": 1,  # ueber den Konstruktor des Repos (ADR-015)
+        "lambda_dag": 1,
+        None: 1,  # via_factory.build_dag
     }
 
 
@@ -383,3 +422,39 @@ def test_paths_are_never_truncated(result: RepoAnalysis) -> None:
         for signal in finding.signals:
             assert (FIXTURE / signal.file).exists()
             assert signal.lineno > 0
+
+
+def test_max_active_runs_eins_ist_eine_cross_run_kante() -> None:
+    # ADR-016: Lauf k wartet auf das Ende von Lauf k-1, auch ohne depends_on_past.
+    source = """
+from airflow import DAG
+
+with DAG(dag_id="serial", schedule="@hourly", max_active_runs=1) as dag:
+    pass
+"""
+    finding = analyze_source(source, "dags/serial.py").dags[0]
+    assert kinds(finding) == {"max_active_runs"}
+    assert finding.is_risk_candidate
+
+
+def test_max_active_runs_groesser_eins_ist_kein_signal() -> None:
+    # Zwei Laeufe duerfen nebeneinander laufen: kein Kreis ueber die Zeitachse.
+    source = """
+from airflow import DAG
+
+with DAG(dag_id="parallel", schedule="@hourly", max_active_runs=2) as dag:
+    pass
+"""
+    finding = analyze_source(source, "dags/parallel.py").dags[0]
+    assert kinds(finding) == set()
+    assert finding.is_risk_candidate is False
+
+
+def test_max_active_runs_unaufloesbar_wird_nicht_geraten() -> None:
+    source = """
+from airflow import DAG
+
+with DAG(dag_id="dyn", schedule="@hourly", max_active_runs=CONF["runs"]) as dag:
+    pass
+"""
+    assert kinds(analyze_source(source, "dags/dyn.py").dags[0]) == set()

@@ -23,12 +23,20 @@ eigenlag/
 ├── scanner/                     Phase 1, eigenständig
 │   ├── harvest.py               GitHub Code-Search, Repo-Kandidaten, Filter
 │   ├── clone.py                 Shallow-Clones mit Disk-Cache
+│   ├── wrappers.py              DAG-Konstruktoren, die das Repo selbst definiert (ADR-015)
 │   ├── analyze.py               AST-Analyse je Repo, DAG-scoped, plus Factories
-│   ├── schedule.py              Cron, Preset, timedelta, Dataset: sub-täglich oder nicht
+│   ├── schedule.py              Cron, Preset, timedelta, Dataset: sub-täglich oder nicht,
+│   │                            plus period_seconds: der Takt T als Zahl
 │   ├── analyze_dbt.py           Signal E: incremental UND is_incremental()
 │   ├── report.py                CSV plus report.md
 │   ├── fixtures/                Nachgebaute Repos als Testdaten, kein Code (aus Lint/Typing raus)
 │   └── *_test.py
+├── wikimedia/                   Der erste echte Fall, eigenständig (Session 005)
+│   ├── fetch.py                 Prometheus über Wikimedias Grafana-Proxy, Cache-first
+│   ├── runs.py                  Läufe aus der Gauge rekonstruieren (ADR-017)
+│   ├── case.py                  Scan, Messung, λ über den Kern, Sweep über die Organisation
+│   ├── case.md                  Der Fall, mit PromQL und Permalink zu jeder Zahl
+│   └── wikimedia_dags.csv       453 Zeilen, je DAG und Airflow-Instanz
 └── eigenlag/                    Phase 2, das Package
     ├── model.py                 Task, Edge, Pipeline, CrossRunEdge (Datentypen)
     ├── maxplus.py               Kondensation, Karp, Howard, Drift

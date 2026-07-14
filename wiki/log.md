@@ -378,3 +378,36 @@ und `analyze.py` kennt nur `DAG(...)` und `@dag`. Professionelle Umgebungen kaps
 DAG-Erzeugung, und genau die sind für uns unsichtbar. Das erklärt die Demo-Lastigkeit der
 Marktzahl aus Session 003 besser als jede andere Vermutung, und es entwertet die 0,3 Prozent ein
 zweites Mal, diesmal von der anderen Seite.
+
+---
+
+## Session 005 — Der Wikimedia-Fall (2026-07-14)
+
+**Auftrag:** λ zum ersten Mal an einer echten Pipeline rechnen, mit echten Laufzeiten, und den Scanner-Blindfleck aus Session 003 beheben.
+
+**Was gemacht wurde:** `wikimedia/fetch.py` (Prometheus über Wikimedias Grafana-Proxy, Cache auf Disk, Fehlerprotokoll), `wikimedia/runs.py` (Läufe aus der Gauge rekonstruieren), `wikimedia/case.py` (Scan, Messung, λ über den Kern, Sweep über die ganze Organisation), `scanner/wrappers.py` (ADR-015), Signal G in `analyze.py` (ADR-016), `period_seconds` in `schedule.py`. 67 neue Tests (207 im Repo).
+
+**Was gemessen wurde, und was überrascht hat:**
+
+**1. Der Fall trägt, aber anders als die Vorrecherche dachte.** Die Vorrecherche hatte aus `avg_over_time` "60 bis 109 Minuten mittlere Laufdauer" gelesen und daraus geschlossen, der Takt sei kürzer als die Laufzeit, die Verspätung wachse also unbegrenzt. Beides musste korrigiert werden. Die mittlere Laufzeit von `wdqs_streaming_updater_reconcile_hourly` beträgt **3598,4 s**, der Takt **3600 s**. Der DAG driftet **nicht**, er sitzt mit 1,6 Sekunden Reserve auf seiner Taktgrenze. Der Median (3733,8 s) liegt über dem Takt, der Mittelwert knapp darunter, und für die Drift zählt der Mittelwert.
+
+**2. Die Bestätigung kam von einer Größe, die wir gar nicht gesucht hatten.** Die Läufe enden im Mittel alle 3599,5 s. Diese Zahl stammt aus Zeitstempeln, nicht aus Dauern, und sie sagt dasselbe: der DAG liefert genau einen Lauf pro Stunde, mehr geht nicht. Zwei unabhängige Größen, dieselbe Aussage.
+
+**3. Der Preis ist sichtbar und dauerhaft: 48 Minuten.** `airflow_dagrun_schedule_delay` steht im Median bei 2880 s und wächst nicht mehr. Genau so sieht eine Pipeline an ihrer Taktgrenze aus: sie hält den Takt, aber dauerhaft eine Dreiviertelstunde zu spät. Das ist eine bessere Geschichte als "sie driftet", weil sie überprüfbar ist und weil sie erklärt, warum niemand es merkt.
+
+**4. Warum sie trotz Median über dem Takt nicht wegdriftet, war der lehrreichste Teil.** Korrelation zwischen Verspätung beim Start und Laufzeit: **−0,504**. Je später ein Lauf startet, desto kürzer läuft er, weil die Sensoren auf die Daten der laufenden Stunde warten und diese bei einem verspäteten Start längst da sind. Der Sensor ist keine Bearbeitungszeit, sondern eine Synchronisation mit der Wanduhr, und er bricht den Kreis. Das ist eine echte Grenze des Max-Plus-Modells, sie steht jetzt in `math.md`, Abschnitt 9. Wer sie nicht kennt, bescheinigt gesunden Pipelines Drift.
+
+**5. `max_active_runs=1` war als Nicht-Signal dokumentiert, und das war falsch.** `signals.md` führte es unter "kein Cross-Run-Signal": es begrenze die Nebenläufigkeit, nicht die Rekurrenz. Der Fall widerlegt das. Ohne diese Kante hätte unser eigenes Modell für den DAG "kein Kreis, kein λ" ergeben, für eine Pipeline, deren Läufe nachweislich rückenan liegen. Der Eigenwert kennt den Unterschied zwischen Daten- und Ressourcen-Abhängigkeit nicht, er sieht Kanten (ADR-016).
+
+**6. Der Scanner-Blindfleck ist behoben, der Preis ist bekannt.** 71 → 345 DAGs, 0 → 68 mit Cross-Run-Signal, 0 → 8 Risiko-Kandidaten. Offen bleiben 90 DAGs ohne `dag_id`, weil erst die aufrufende Funktion sie einsetzt. Unser eigener Fall-DAG ist einer davon, und deshalb fehlt er in der Organisations-Tabelle. Geraten wird nicht (ADR-015).
+
+**7. Der Sweep über alle 453 (DAG, Instanz)-Paare liefert das beste Produkt-Argument der Session.** 30 DAGs haben eine mediane Laufzeit über ihrem Takt. **29 davon driften nicht**, weil ihre Läufe überlappen dürfen. Genau diese 29 wären die Fehlalarme eines Werkzeugs, das nur Laufzeit gegen Schedule hält. Der Unterschied zwischen den 30 und dem einen ist der ganze Wert des Produkts, an echten Daten.
+
+**Zwei Fehler in der eigenen Methode, gefunden durch unplausible Zahlen:**
+
+- `maintenance_cleanup_airflow_db` zeigte 323 Läufe in 30 Tagen bei täglichem Takt. Ursache: derselbe `dag_id` läuft in **13 Airflow-Instanzen**, und `sum by (dag_id)` addierte sie. Der Sweep rechnet seitdem je Instanz.
+- Die Lauf-Rekonstruktion führte anfangs die Serien mehrerer StatsD-Pods zusammen, **bevor** sie Wertwechsel zählte. Halten zwei Pods gleichzeitig verschiedene Werte, oszilliert die überlagerte Reihe, und jeder Sprung sähe aus wie ein Lauf. In diesen Daten hat es nicht zugeschlagen (die Pods lösten einander ab), die Falle ist trotzdem echt und jetzt getestet.
+
+**Was offen bleibt:** Bei zehn DAGs meldet die Gauge mehr Wertwechsel, als ihr Takt erlaubt (`refine_api_requests_hourly`: 3360 in 30 Tagen bei stündlichem Takt). Ursache unbekannt, λ wird für sie nicht gerechnet.
+
+**Last auf fremder Infrastruktur:** 27 Requests insgesamt, alles read-only, jede Antwort im Cache unter `data/wikimedia/cache/`. Kein Kontakt zu Wikimedia.

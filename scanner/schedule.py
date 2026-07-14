@@ -134,6 +134,19 @@ def classify_cron(expr: str) -> ScheduleClass:
     return "subdaily" if gap < MINUTES_PER_DAY else "daily_or_slower"
 
 
+def period_seconds(text: str) -> float | None:
+    """Der Takt T in Sekunden, aus dem Schedule-Ausdruck gerechnet, oder None bei unlesbarem.
+
+    Der Takt ist die kleinste Distanz zweier Feuerzeitpunkte, also die Periode, gegen die
+    Lambda zu halten ist. `@hourly` sind 3600 Sekunden, weil `0 * * * *` das ergibt, nicht
+    weil irgendwo eine 3600 steht (CLAUDE.md, Regel 2).
+    """
+    key = text.strip().strip("\"'").lower()
+    expr = PRESETS.get(key, key)
+    gap = min_gap_minutes(expr)
+    return None if gap is None else float(gap) * 60.0
+
+
 def timedelta_seconds(call: ast.Call) -> float | None:
     parts: dict[str, float] = {}
     for i, arg in enumerate(call.args):
