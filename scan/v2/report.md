@@ -47,11 +47,13 @@ Zwischen den beiden Läufen liegen zwei Änderungen: ADR-015 (repo-eigene DAG-Ko
 
 | Größe | 003 (alt) | 006 (neu) | Ursache |
 |---|---|---|---|
-| DAGs gefunden | 51426 | 51789 | ADR-015 findet Konstruktor-DAGs |
+| DAGs gefunden | 51426 | 51789 | ADR-015: +422 Konstruktor-Aufrufstellen, −59 Schablonen in Konstruktor-Rümpfen |
 | DAGs mit Cross-Run-Kante (A–F) | 1303 | 1303 | unverändert, Definition und Treffer-Menge identisch |
 | Risiko-Kandidaten (Kern) | 176 | 176 | unverändert, Definition und Treffer-Menge identisch |
 | Risiko-Kandidaten (nur G) | — | 473 | neue Klasse (ADR-016, ADR-018), in 003 nicht erhoben |
 | Repos mit Kern-Kandidat | 100 | 100 | folgt den Kern-Kandidaten |
+
+Eine Einschränkung zum DAG-Delta, damit sie niemand zuerst findet: **330 der 363 netto neuen "DAGs" sind keine.** Sie stammen aus einem einzigen Repo (`mik-laj/airflow-api-clients`), einem generierten OpenAPI-Client, dessen Modellklasse zufällig `DAG` heißt — ADR-015 befördert jede Funktion, die ein `DAG(...)` zurückgibt, und kann eine repo-lokale Klasse dieses Namens nicht von Airflows `DAG` unterscheiden. Alle 330 Zeilen sind signalfrei, der Zähler ist also unberührt; sie verwässern nur den Nenner um 0,6 %. Ein Import-Check (`DAG` aus `airflow` importiert oder lokal definiert?) würde das beheben und ist als ADR-Kandidat für die nächste Scanner-Session vorgemerkt (siehe `STATUS.md`), nach der Zaun-Regel aus Spec 006: keine neue Erkennungsregel in derselben Session, deren Lauf sie veralten würde.
 
 Schedule-Klassen:
 

@@ -29,7 +29,7 @@ Eine Bäckerei hat einen Sauerteig-Ansatz. Jeden Morgen wird ein Teil des gestri
 Seit Session 005 gibt es dazu einen **gemessenen** Referenzfall aus der Produktion:
 `wdqs_streaming_updater_reconcile_hourly` bei Wikimedia (Stundentakt, T = 3600 s) sitzt
 eingeschwungen auf seiner Taktgrenze: mittlere Laufdauer 3598,4 s ≈ T, konstante 48 Minuten
-Verspätung. Wichtig für die Einordnung (ADR-017): auf DAG-Ebene, ohne Task-Dauern, ist λ
+Verspätung. Wichtig für die Einordnung (ADR-019): auf DAG-Ebene, ohne Task-Dauern, ist λ
 schlicht die Laufdauer selbst — der Fall belegt die **These**, nicht das Werkzeug. Sein
 tragfähigster Befund ist der Sweep: 30 DAGs laufen im Median länger als ihr Takt, 29 davon
 driften nicht, weil ihre Läufe überlappen dürfen. "Laufzeit über Takt" ist als Diagnose

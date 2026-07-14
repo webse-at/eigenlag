@@ -276,9 +276,9 @@ Aufrufe dieser Namen sind DAG-Scopes wie `DAG(...)` selbst. Das `DAG(...)` **im*
 
 ---
 
-## ADR-017 — Der Wikimedia-Fall belegt die These, nicht das Werkzeug
+## ADR-019 — Der Wikimedia-Fall belegt die These, nicht das Werkzeug
 
-**Status:** entschieden, 2026-07-14 (Abnahme Session 005)
+**Status:** entschieden, 2026-07-14 (Abnahme Session 005). **Nummern-Hinweis:** Dieses ADR hieß bis zur Abnahme von 006 ebenfalls "ADR-017" und kollidierte mit der Gauge-Rekonstruktion oben — der Orchestrator hatte die Nummer vergeben, ohne zu prüfen, dass Session 005 sie schon belegt hatte. Umbenannt am 2026-07-14; ältere Log-Einträge und abgeschlossene Specs, die "ADR-017" im Sinn dieser These zitieren, meinen dieses ADR. Es steht in der Datei vor ADR-018, weil es früher entstand.
 **Kontext:** Session 005 meldet "λ = 3598,4 s an einer echten Pipeline gemessen" und stellt den Fall als Validierung des Analyzers dar. Die Abnahme hat nachgerechnet, wie diese Zahl entsteht.
 
 `wikimedia/case.py`, `lambda_of()` baut:

@@ -20,7 +20,7 @@ mehr verschwindet.
 **Was dieser Fall belegt, und was nicht:** Er belegt die These. Eine Pipeline mit Kreis über
 die Zeitachse kann nicht schneller takten als ihr Kreis, und sie zahlt dafür mit konstanter
 Verspätung. Er validiert nicht die Eigenwert-Maschinerie: auf DAG-Ebene, ohne Task-Dauern, ist
-der Graph ein Knoten mit Selbst-Kante, und λ ist die Laufdauer selbst (ADR-017, Abschnitt 3).
+der Graph ein Knoten mit Selbst-Kante, und λ ist die Laufdauer selbst (ADR-019, Abschnitt 3).
 
 Alle Zahlen unten stammen aus `data/wikimedia/case_numbers.json`, erzeugt von
 `python -m wikimedia.case`. Jede Rohantwort liegt in `data/wikimedia/cache/`.
@@ -148,7 +148,7 @@ Der Graph hat einen Knoten und eine Kante auf sich selbst, gerechnet wird er mit
 **Ehrlich benannt: was λ hier ist.** Auf diesem Graphen, ein Knoten mit Selbst-Kante, ist der
 Max-Plus-Eigenwert per Definition das Kantengewicht. Kondensation, Karp und Howard sind hier
 eine Identitätsfunktion: λ = 3598,4 s heißt, die mittlere Laufdauer beträgt 3598,4 s. Der Fall
-validiert deshalb nicht die Eigenwert-Maschinerie, er belegt die These (ADR-017). Das macht ihn
+validiert deshalb nicht die Eigenwert-Maschinerie, er belegt die These (ADR-019). Das macht ihn
 nicht schwächer, es ordnet ihn ein: dass die Taktgrenze mit der Laufdauer zusammenfällt, ist
 eine Eigenschaft dieses Falltyps, dessen einzige bindende Kante den ganzen Lauf umspannt
 (Signal G). Der Analyzer verdient sein Geld erst dort, wo der Kreis ein Teilpfad ist und λ

@@ -466,3 +466,30 @@ Das ist kein Fehler der Session: Wikimedia liefert `airflow_dagrun_duration`, al
 **Kleine Deltas am Rand, der Vollständigkeit halber:** `unresolved_default_args` 5641 → 5629, `ambiguous_task` 428 → 434, Repos mit DAG 1286 → 1287. Alles Folgen von ADR-015 (mehr bzw. andere Scopes ändern die Zuordnung einzelner Fundstellen); keine dieser Größen geht in eine Quote ein.
 
 **Verifiziert:** `pytest` 214 passed, `ruff check`, `ruff format --check`, `mypy` über `eigenlag/`, `scanner/`, `wikimedia/` grün. Kein GitHub-Request im ganzen Lauf, alles aus dem Clone-Cache.
+
+---
+
+## 006a — Abnahme Re-Scan durch den Orchestrator (2026-07-14)
+
+**Abgenommen.** Alle Kopfzahlen unabhängig aus beiden CSVs nachgerechnet, ohne den Report zu lesen:
+
+```
+003 (alt): DAGs=51426 crossrun=1303 kern=176 g_only=0
+006 (neu): DAGs=51789 crossrun=1303 kern=176 g_only=473 g_repos=159
+Kern nur in alt: 0   nur in neu: 0        (Mengen-Identität bestätigt)
+DAG-Delta: +422 / −59 (netto 363), Top-Quelle: mik-laj/airflow-api-clients (330, alle signalfrei)
+```
+
+Deckungsgleich mit dem Session-Bericht, Zeile für Zeile. 214 Tests, ruff, mypy selbst nachgefahren. Die "Reserve"-Formulierung ist aus `case.md` vollständig raus, der Sweep steht als Überschrift, die Definitionsänderung ist im Report offengelegt.
+
+**Der wertvollste ungeplante Fund des Reports:** 75,2 % der DAGs (und 78,4 % der Kern-Kandidaten) liegen in Beispiel-/Tutorial-Pfaden oder tragen `example_`-IDs — der Airflow-eigene Lehr-DAG `example_branch_dop_operator_v3` mit `depends_on_past=True` bei Minutentakt wird in jedes zweite Lern-Repo kopiert. Keine Spec hat diese Auswertung verlangt. Sie ist der wichtigste Vorbehalt gegen jede Marktaussage aus diesem Korpus und gehört in jede öffentliche Verwendung der Zahlen.
+
+**Zwei Bereinigungen durch den Orchestrator:**
+
+1. **ADR-Nummern-Kollision behoben, und sie war mein Fehler.** Bei der Abnahme von 005 habe ich das These-ADR als "ADR-017" nummeriert, ohne zu prüfen, dass Session 005 die Nummer bereits für die Gauge-Rekonstruktion vergeben hatte. Das These-ADR heißt jetzt **ADR-019** (mit Kollisions-Notiz im ADR selbst), die lebenden Verweise in `index.md`, `roadmap.md` und `case.md` sind umgestellt. Log-Einträge und abgeschlossene Specs bleiben als Historie unverändert.
+
+2. **Die Vorher/Nachher-Zeile im Report war zu glatt.** "ADR-015 findet Konstruktor-DAGs" als Ursache für +363 unterschlägt, dass 330 davon **keine DAGs sind**: ein generierter OpenAPI-Client, dessen Modellklasse `DAG` heißt. Zähler unberührt (alle signalfrei), Nenner um 0,6 % verwässert. Steht jetzt als eigener Absatz im Report, mit dem Import-Check als ADR-Kandidat für die nächste Scanner-Session — nicht in dieser umgesetzt, die Zaun-Regel aus Spec 006 gilt.
+
+**Bewertung der Kernbotschaft:** Dass die Kern-Quote mengen-identisch blieb, ist kein enttäuschendes, sondern das bestmögliche Ergebnis: Es belegt, dass die Zahl 176 gegen zwei Definitions-Erweiterungen stabil ist, und die Gegenprobe (neues `report.py` auf altem State reproduziert exakt die alten Zahlen) schließt aus, dass sich zwei Fehler gegenseitig aufheben. Die 473 G-only-Kandidaten daneben zeigen, was passiert wäre, hätte man G still ins STRONG-Set gemischt: eine Quote von 649, zu drei Vierteln aus Fällen, die ein Laufzeit-Dashboard beantwortet. Die Zwei-Klassen-Entscheidung (ADR-018) hat sich am ersten echten Lauf bewährt.
+
+**Phase 1 ist damit abgeschlossen.** `scan/v2/` ist der zitierfähige Stand. Nächster Schritt nach Roadmap: 007, der Airflow-Parser — mit der Auflage aus ADR-019, früh einen echten Teilpfad-Fall (λ < Makespan) zu finden, denn das ist der Falltyp, den kein Dashboard beantwortet.
