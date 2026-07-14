@@ -1,0 +1,28 @@
+{
+  "stats": {
+    "candidate_rows": 649,
+    "candidate_rows_found": 646,
+    "dags": 4892,
+    "dags_with_id": 3583,
+    "files": 626,
+    "graphs": 4836,
+    "graphs_agree": 4836,
+    "graphs_bruteforced": 4827,
+    "graphs_with_cycle": 768,
+    "repos": 207
+  },
+  "warnings": {
+    "dynamic_task_id": 822,
+    "edge_dropped": 177,
+    "file:ambiguous_task": 1472,
+    "file:dag_not_airflow": 3,
+    "max_active_runs": 45,
+    "prev_run_success": 6,
+    "sensor_dynamic_offset": 7,
+    "sensor_not_modeled": 27,
+    "task_dag_inferred": 54,
+    "task_mapping": 28,
+    "unresolved_default_args": 336,
+    "wait_for_downstream": 1
+  }
+}

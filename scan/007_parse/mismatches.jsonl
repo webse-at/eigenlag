@@ -1,0 +1,3 @@
+{"repo": "Chetan-Thorat-1172/DAGS_Testing", "file": "dags/test_scheduling_features.py", "lineno": 8, "dag_id": "test_scheduling_features", "kind": "dag_only_scanner", "scanner": ["wait_for_downstream"]}
+{"repo": "kevin0120/PythonWorld", "file": "pythontool/conf/airflow/example_dags/example_branch_python_dop_operator_3.py", "lineno": 47, "dag_id": "example_branch_dop_operator_v3", "kind": "dag_only_scanner", "scanner": ["depends_on_past"]}
+{"repo": "kevin0120/PythonWorld", "file": "pythontool/conf/airflow/smart_sensor_dags/smart_sensor_group.py", "lineno": 34, "dag_id": null, "kind": "dag_only_scanner", "scanner": ["max_active_runs"]}
