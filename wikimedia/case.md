@@ -1,13 +1,26 @@
-# Der erste echte Fall: Wikimedias stündlicher Reconcile-DAG
+# Der erste echte Fall: Wikimedias Pipelines, gemessen gegen ihren Takt
 
 Wikimedia betreibt Airflow in Produktion, und beides liegt offen: der DAG-Code auf GitLab, die
-gemessenen Laufzeiten in einem anonym abfragbaren Prometheus. Damit lässt sich λ zum ersten Mal
-an einer echten Pipeline ausrechnen und gegen ihren tatsächlichen Takt halten.
+gemessenen Laufzeiten in einem anonym abfragbaren Prometheus. Damit lässt sich die These des
+Projekts zum ersten Mal an echten Daten prüfen.
 
-**Das Ergebnis in einem Satz:** `wdqs_streaming_updater_reconcile_hourly` läuft im Stundentakt,
-und seine mittlere Laufzeit liegt bei 3598,4 Sekunden. Der Takt beträgt 3600 Sekunden. Die
-Pipeline arbeitet mit einem Abstand von **1,6 Sekunden pro Lauf** an ihrer eigenen Taktgrenze,
-und der Preis dafür ist eine Verspätung von 48 Minuten, die nie mehr verschwindet.
+**Der tragende Befund ist der Sweep über die Organisation: 30 DAGs laufen im Median länger als
+ihr Takt, und 29 davon driften nicht**, weil ihre Läufe überlappen dürfen. Diese 29 wären die
+Fehlalarme jedes Werkzeugs, das nur Laufzeit gegen Schedule hält. "Laufzeit über Takt" ist als
+Diagnose wertlos; entscheidend ist, ob eine Kante über die Zeitachse die Läufe serialisiert.
+Die Tabelle dazu steht in Abschnitt 6.
+
+Der Einzelfall dazu: `wdqs_streaming_updater_reconcile_hourly` läuft im Stundentakt
+(T = 3600 s) mit `depends_on_past=True` und `max_active_runs=1`, seine mittlere Laufzeit
+beträgt 3598,4 Sekunden. Dass die mittlere Dauer fast exakt auf dem Takt liegt, ist kein
+Balanceakt, sondern der eingeschwungene Zustand eines rückgekoppelten Systems (Abschnitt 4).
+Der Preis dieses Zustands ist eine Verspätung von 48 Minuten, die nicht mehr wächst und nicht
+mehr verschwindet.
+
+**Was dieser Fall belegt, und was nicht:** Er belegt die These. Eine Pipeline mit Kreis über
+die Zeitachse kann nicht schneller takten als ihr Kreis, und sie zahlt dafür mit konstanter
+Verspätung. Er validiert nicht die Eigenwert-Maschinerie: auf DAG-Ebene, ohne Task-Dauern, ist
+der Graph ein Knoten mit Selbst-Kante, und λ ist die Laufdauer selbst (ADR-017, Abschnitt 3).
 
 Alle Zahlen unten stammen aus `data/wikimedia/case_numbers.json`, erzeugt von
 `python -m wikimedia.case`. Jede Rohantwort liegt in `data/wikimedia/cache/`.
@@ -112,6 +125,13 @@ Lückenfreies Fenster: 2026-06-15 00:50 bis 2026-07-01 13:47 UTC, 16,5 Tage, **3
 niedriger, weil dieser DAG nach den Ausfällen einen Rückstand aufgeholt hat; sein längster Lauf
 dauerte 400.132 s, also 4,6 Tage.
 
+Dieser eine Lauf zeigt, wie ausreißer-empfindlich der Mittelwert ist: er allein verschiebt den
+Mittelwert der 712 Läufe um rund 560 Sekunden. Für den asymptotischen Drift ist der Mittelwert
+trotzdem die richtige Statistik, weil jede Sekunde Laufzeit in die Verspätung eingeht, auch die
+eines Hängers. Nur darf man ihn nicht als typische Laufzeit lesen: ein einzelner hängender Lauf
+vergiftet ihn. Wer λ auf dem Mittelwert rechnet, muss solche Läufe sehen und benennen, statt
+sie zu glätten.
+
 **wdqs hat seit dem 1. Juli 2026 keinen erfolgreichen Lauf mehr gemeldet.** Der letzte Erfolg
 liegt am 01.07. um 13:47 UTC, kurz darauf steht ein Fehlschlag über 108,9 Minuten. Seit dem
 6. Juli hält seine `airflow_dagrun_schedule_delay`-Gauge einen einzigen eingefrorenen Wert. Ob
@@ -124,6 +144,15 @@ Modell (`wikimedia/case.py:lambda_of`): auf DAG-Ebene fallen beide Kreis-Kanten 
 kann nicht beginnen, bevor Lauf k−1 fertig ist, und das Gewicht des Kreises ist die Laufzeit.
 Der Graph hat einen Knoten und eine Kante auf sich selbst, gerechnet wird er mit `eigenlag`
 (Howard, `eigenlag/maxplus.py`), nicht von Hand.
+
+**Ehrlich benannt: was λ hier ist.** Auf diesem Graphen, ein Knoten mit Selbst-Kante, ist der
+Max-Plus-Eigenwert per Definition das Kantengewicht. Kondensation, Karp und Howard sind hier
+eine Identitätsfunktion: λ = 3598,4 s heißt, die mittlere Laufdauer beträgt 3598,4 s. Der Fall
+validiert deshalb nicht die Eigenwert-Maschinerie, er belegt die These (ADR-017). Das macht ihn
+nicht schwächer, es ordnet ihn ein: dass die Taktgrenze mit der Laufdauer zusammenfällt, ist
+eine Eigenschaft dieses Falltyps, dessen einzige bindende Kante den ganzen Lauf umspannt
+(Signal G). Der Analyzer verdient sein Geld erst dort, wo der Kreis ein Teilpfad ist und λ
+unter dem Makespan liegen kann.
 
 Warum nur DAG-Ebene: die Task-Dauern gibt die Metrik nicht her. Für den Spark-Task und den
 Abschluss-Task existiert **keine** Dauer-Metrik, `airflow_task_duration` trägt weder `dag_id`
@@ -139,8 +168,11 @@ Aufteilung der 62 Minuten auf die Tasks wäre geraten, und geraten wird nicht.
 
 Für die Frage, ob die Verspätung unbegrenzt wächst, zählt der **Mittelwert**: bei zufälligen
 Laufzeiten ist das mittlere Kreisgewicht die Rate, mit der die Verspätung pro Lauf zunimmt
-(`wiki/math.md`, Abschnitt 7). Er liegt 1,6 Sekunden **unter** dem Takt. Der DAG ist stabil,
-aber die Reserve beträgt 0,04 Prozent.
+(`wiki/math.md`, Abschnitt 7). Dass er fast exakt auf dem Takt liegt, ist keine knappe Marge
+und kein Zufall, sondern der Fixpunkt eines rückgekoppelten Systems: je später ein Lauf
+startet, desto kürzer läuft er (Korrelation −0,504, Abschnitt 4), also pendelt sich das System
+genau dort ein, wo die mittlere Dauer ≈ T ist. Die gemessenen Dauern sind bereits das Ergebnis
+dieses eingeschwungenen Zustands.
 
 Der beobachtete Takt bestätigt es unabhängig: die Läufe enden im Schnitt alle **3599,5 s**
 auseinander. Der DAG liefert exakt einen Lauf pro Stunde, mehr geht nicht, und mehr ist auch
