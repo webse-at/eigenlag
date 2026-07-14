@@ -42,6 +42,14 @@ Kernthese: Cross-Run-Abhängigkeiten (`depends_on_past`, `wait_for_downstream`, 
        das nicht schon getan hat
 ```
 
+## Plan vor Code, aber verhältnismäßig
+
+Eine Session, deren Spec die erwarteten Werte bereits nennt, braucht kein Plan-Dokument, das die Spec paraphrasiert. Sie braucht **die Tests zuerst**: Erwartung hinschreiben, rot sehen, implementieren, grün sehen.
+
+Ein Plan ist dann gefragt, wenn die Spec eine Entscheidung offen lässt (Datenstruktur, Algorithmus-Wahl, Grenzfall-Semantik). Dann gilt: die offene Entscheidung benennen, einen Vorschlag mit Begründung machen, kurz OK abwarten. Kein Optionen-Katalog, keine drei Phasen, wo eine reicht.
+
+Wo die Spec keine Entscheidung offen lässt, wird sie ausgeführt, nicht neu verhandelt.
+
 ## Verifikation
 
 **Grün heißt gemessen, nicht geglaubt.** Für jede Behauptung der passende Beleg:

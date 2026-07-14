@@ -8,6 +8,12 @@
 - `wiki/maxplus_pipeline.py` — die Referenz. Vorher einmal ausführen, Ausgabe ansehen.
 - `wiki/decisions.md` ADR-001, ADR-002, ADR-003
 
+## Arbeitsweise für diese Session
+
+**Tests zuerst, kein Plan-Dokument.** Alle erwarteten Werte stehen unten in der Tabelle, sie sind aus dem Prototyp verifiziert. Damit sind die Tests vollständig schreibbar, bevor eine Zeile Implementierung existiert. Also: Tests schreiben, rot sehen, implementieren, grün sehen. Ein Plan, der die Spec paraphrasiert, bringt hier nichts.
+
+**Die eine offene Entscheidung**, die vor dem Code kurz zu benennen ist: **wie `periods` ins Zyklusmittel eingeht.** Der Prototyp kennt den Versatz nicht, hier gibt es also keine Vorlage. Schreib in zwei, drei Sätzen hin, wie du das Zyklusmittel definierst und warum, bevor du Karp und Howard anfasst. Alles andere in dieser Session ist Portierung und braucht keine Rückfrage.
+
 ## Auftrag
 
 Baue `eigenlag/model.py` und `eigenlag/maxplus.py` plus Tests. **Kein Parser, keine CLI, keine DB.** Der Kern kennt weder Airflow noch dbt.
