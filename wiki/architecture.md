@@ -25,10 +25,10 @@ eigenlag/
 │   ├── clone.py                 Shallow-Clones mit Disk-Cache
 │   ├── wrappers.py              DAG-Konstruktoren, die das Repo selbst definiert (ADR-015)
 │   ├── analyze.py               AST-Analyse je Repo, DAG-scoped, plus Factories
-│   ├── schedule.py              Cron, Preset, timedelta, Dataset: sub-täglich oder nicht,
-│   │                            plus period_seconds: der Takt T als Zahl
 │   ├── analyze_dbt.py           Signal E: incremental UND is_incremental()
 │   ├── report.py                CSV plus report.md
+│   ├── parse_corpus.py          Korpus-Validierung des Parsers (Session 007), Artefakte in scan/007_parse/
+│   ├── parse_consistency_test.py  Parser und Scanner müssen je DAG dieselben Signal-Arten finden
 │   ├── fixtures/                Nachgebaute Repos als Testdaten, kein Code (aus Lint/Typing raus)
 │   └── *_test.py
 ├── wikimedia/                   Der erste echte Fall, eigenständig (Session 005)
@@ -38,11 +38,13 @@ eigenlag/
 │   ├── case.md                  Der Fall, mit PromQL und Permalink zu jeder Zahl
 │   └── wikimedia_dags.csv       453 Zeilen, je DAG und Airflow-Instanz
 └── eigenlag/                    Phase 2, das Package
-    ├── model.py                 Task, Edge, Pipeline, CrossRunEdge (Datentypen)
+    ├── model.py                 Task, Edge, Pipeline, CrossEdge (Datentypen)
     ├── maxplus.py               Kondensation, Karp, Howard, Drift
+    ├── schedule.py              Cron, Preset, timedelta, Dataset: sub-täglich oder nicht,
+    │                            plus period_seconds: der Takt T als Zahl (aus scanner/ umgezogen, 007)
+    ├── parse_airflow.py         AST-Parser: DAG-Files → ParsedDag; to_pipeline heiratet Struktur mit Dauern
     ├── montecarlo.py            Lognormal-Fits, λ_p50, λ_p95
     ├── whatif.py                What-if-Szenarien und Ranking
-    ├── parse_airflow.py         AST-Parser für DAG-Files
     ├── parse_dbt.py             manifest.json
     ├── durations.py             Airflow-Metadaten-DB, REST, --assume-duration
     ├── gate.py                  CI-Gate, λ vor/nach Diff
@@ -50,6 +52,8 @@ eigenlag/
     ├── cli.py                   Argument-Parsing, Subcommands
     └── *_test.py
 ```
+
+Die Abhängigkeits-Richtung ist Produkt ← Scanner: der Scanner importiert aus dem Package (`eigenlag.schedule`, in Tests auch `eigenlag.parse_airflow`), nie umgekehrt. Der Scanner ist Wegwerf-Code, das Package nicht.
 
 Tests liegen neben dem Source-File, nicht in einer Sammelhalde. `karp.py` und `karp_test.py` sind Nachbarn.
 

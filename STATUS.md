@@ -2,76 +2,69 @@
 
 > Wird am Ende jeder Session überschrieben. Schnelle Orientierung für die nächste Session.
 
-## Stand: Session 006 — Re-Scan mit Zwei-Klassen-Risiko, Fall-Korrektur (2026-07-14)
+## Stand: Session 007 — Airflow-Parser: vom DAG-File zur Pipeline (2026-07-14)
 
-**Die Korpus-Zahlen sind neu erhoben und damit wieder behauptbar. `scan/v2/` ist der
-zitierfähige Stand.** Voller Lauf über die 1692 gecachten Clones (1193 s, kein Neu-Klonen,
-kein GitHub-Request), unter der Definition nach ADR-015/016, mit Signal G als eigener Klasse
-(ADR-018).
+**Der Parser-Layer steht.** `eigenlag/parse_airflow.py` übersetzt DAG-Files per AST in
+`ParsedDag` (Tasks, Intra-Kanten, Cross-Kanten mit Herkunft Datei:Zeile:Signal, Warnungen)
+und `to_pipeline(dags, durations=1.0)` heiratet die Struktur mit Dauern. Leitregel
+durchgezogen: nicht statisch Auflösbares wird Warnung, nie Kante — λ bleibt Untergrenze.
+`scanner/schedule.py` ist nach `eigenlag/schedule.py` umgezogen (Abhängigkeit Produkt ← Scanner).
 
-### Die Zahlen
+### Die Zahlen (alle aus `scan/007_parse/`, Lauf 288 s über den Clone-Cache)
 
-| Größe | 003 | 006 | Einordnung |
-|---|---|---|---|
-| DAGs gefunden | 51.426 | 51.789 | +363 durch ADR-015, fast alle ohne `dag_id` und signalfrei |
-| Cross-Run (A–F) | 1.303 | 1.303 | mengen-identisch, nicht nur zahlengleich |
-| **Risiko-Kandidaten (Kern)** | 176 | **176** | dieselben Zeilen; das bleibt die Launch-Zahl |
-| Risiko-Kandidaten (nur G) | — | **473** | neue Klasse, 159 Repos; λ = Makespan, dort reicht Laufzeit-Monitoring |
-| DAGs ohne `dag_id` | 4.587 | 4.952 | geflaggt, nicht geraten |
-| dbt-Models mit Selbst-Kante | 3.369 | 3.369 | byte-identisch übernommen |
+| Größe | Wert |
+|---|---|
+| Kandidaten-Files geparst (Kern 176 + G-only 473 aus `scan/v2/`) | 626 von 626, **0 Syntax-Fehler** |
+| DAGs gefunden / mit statischer `dag_id` | 4892 / 3583 (73,2 %) |
+| Kandidaten-Zeilen wiedergefunden | 646 von 649; die 3 fehlenden = `dag_not_airflow` (belegt korrekt) |
+| Konsistenz Parser ↔ Scanner | 3 Abweichungen, alle = dokumentierte Import-Beleg-Differenz |
+| **Karp = Howard** (offener Punkt aus Abnahme 004) | **auf allen 4836 kondensierten Graphen**, 4827 zusätzlich per Brute-Force, 0 Abweichungen |
+| Statisch modellierbare Sensor-Kanten (C) im Korpus | **0** — 34 Fälle, jeder mit konkretem Grund in `warnings.jsonl` |
+| **Teilpfad-Fälle (λ < Critical Path, uniforme Dauern)** | **129 Kern-Kandidaten-DAGs in 77 Repos** (`teilpfad.csv`, je mit Permalink) |
 
-**Der überraschende Befund:** Die 005-Hypothese "die Marktzahl steigt deutlich" ist gemessen
-widerlegt. Der öffentliche Korpus kapselt seine DAG-Erzeugung kaum; ADR-015 wirkt fast nur bei
-professionellen Umgebungen (Wikimedia: 71 → 345 DAGs), und genau die sind in der
-Code-Search-Stichprobe unterrepräsentiert. Details und Stichproben:
-`scan/v2/sample_verification.md` (3 × 10 Stichproben, 0 Falsch-Positive, 0 Falsch-Negative).
+**Der Produkt-Fall existiert in öffentlichem Code** (Auflage aus ADR-019 erfüllt).
+Durchgerechnet im Log: `udac_example_dag` (Udacity-Sparkify), `wait_for_downstream` in
+`default_args` → Kreis aus 2 Tasks, λ = 2,0 gegen Critical Path 6,0. Ein Dashboard sieht 6,
+die Taktgrenze ist 2. Alles Struktur-Aussagen (Dauer 1.0 je Task), keine Zeit-Aussagen.
 
 ### Was sonst passiert ist
 
-- **ADR-018** (zwei Risiko-Klassen) in `wiki/decisions.md`; `signals.md` entsprechend
-  korrigiert. Wäre G still ins STRONG-Set gewandert, wäre die Quote 176 → 649 gesprungen —
-  mit Kandidaten, die jedes Dashboard findet. Die Trennung ist die Verteidigung der Zahl.
-- **`wikimedia/case.md` nach ADR-017 korrigiert:** Sweep als Überschrift (30 über Takt, 29
-  driften nicht), "1,6 Sekunden Reserve" gestrichen (Fixpunkt statt Marge), λ = Laufdauer auf
-  DAG-Ebene explizit, wcqs-Ausreißer-Absatz. Messwerte unverändert.
-- **`report.py`:** `sig_g_max_active_runs`, `risk_candidate_g_only`, `dag_id_missing`,
-  Vorher/Nachher-Tabelle, Offenlegung der Definitionsänderung. Permalinks jetzt URL-encodiert
-  (Dateien mit `#` im Namen waren nicht nachschlagbar, Regel-6-Fund aus der Stichprobe).
+- **ADR-020**: F zählt für die Marktzahl, erzeugt aber keine λ-Kante (Template rendert,
+  wartet nicht). Divergenz gehört in den Report-Text von Session 009.
+- `wiki/signals.md` hat jetzt die λ-Übersetzungstabelle; `architecture.md` und `roadmap.md`
+  nachgezogen.
+- Import-Beleg im Parser von Tag eins: `DAG` ohne airflow-Import → nicht geparst
+  (verhindert den 330-Zeilen-Fehler aus 006 im Produkt).
+- Konsistenz-Test `scanner/parse_consistency_test.py` pinnt Signal-Arten-Gleichheit
+  Parser ↔ Scanner dauerhaft auf den Fixtures.
 
 ### Verifiziert
 
-- `pytest`: **214 passed.** `ruff check`, `ruff format --check`, `mypy` (29 Files) grün.
-- Gegenprobe Definitionsgleichheit: neues `report.py` auf dem **003-State** reproduziert
-  exakt 51.426 / 1.303 / 176 / 0 G-only.
-- `scan/v2/scan_dbt.csv` per `diff` byte-identisch mit `scan/scan_dbt.csv`.
-- Lauf-Beleg: `data/scan_run_v2.log` ("Fertig: 1692 Repos in 1193s").
+- `pytest`: **256 passed** (42 neue). Übersetzungstabelle als Tests **vor** dem Modul
+  (rot → grün im Log belegt), zwei Korpus-Funde ebenfalls erst rot fixiert (ClassDef-Walk,
+  A+B-Doppelsignal).
+- `ruff check`, `ruff format --check`, `mypy` (33 Files) grün. Kern weiter ohne
+  Laufzeit-Dependencies.
 
 ## Hinweise für nächste Session
 
-- **Phase 1 ist damit abgeschlossen** (Akzeptanz laut `wiki/roadmap.md`: Launch-Zahlen aus
-  `scan/v2/`, mit Nenner, Permalink und offengelegter Definitionsänderung). Nächste Session
-  laut Roadmap: **007, Airflow-Parser** (Phase 2). Ein Spec-Entwurf liegt als
-  `cc-sessions/007_offen-airflow-parser.md`; er stammt aus der Implementer-Session 006 und
-  paraphrasiert nur Roadmap und offene Abnahme-Punkte — der Orchestrator sollte ihn vor
-  Start schärfen oder ersetzen.
-- **ADR-Kandidat aus der Stichprobe (keine Regel-Änderung in 006, Spec-Grenze):** Die
-  repo-weite Namensauflösung von ADR-015 übertreibt bei generischen Methodennamen. 330 der
-  422 neuen DAG-Zeilen stammen aus einem generierten OpenAPI-Client, dessen Modellklasse
-  `DAG` heißt (`mik-laj/airflow-api-clients`, Methode `make_instance`). Signalfrei, keine
-  Quote berührt, aber der Nenner dieses Repos ist aufgebläht. Import-genaue Auflösung wäre
-  die Fortsetzung.
-- **Weiter offen aus 005:** DAG-Generatoren mit Literal-Argumenten an der Aufrufstelle
-  auflösen (90 Wikimedia-DAGs ohne `dag_id`); die zehn Wikimedia-DAGs mit unplausiblen
-  Gauge-Wertwechseln (kein λ gerechnet); Task-Ebene braucht die Airflow-Metadaten-DB, also
-  einen Kunden.
-- Die beiden ADR-017-Einträge in `wiki/decisions.md` tragen dieselbe Nummer (Gauge-Rekonstruktion
-  und Fall-These, beide aus 005). Nicht umnummeriert, weil Querverweise auf "ADR-017" in
-  mehreren Dokumenten stehen; bei Gelegenheit vom Orchestrator zu bereinigen.
+- **Roadmap: 008 (dbt-Parser + Dauern-Schicht)** ist der nächste Schritt. `to_pipeline`
+  nimmt bereits ein Dauern-Mapping (Knoten namespaced `dag_id.task_id`), die Dauern-Schicht
+  muss es nur füllen.
+- **Für den Orchestrator zu prüfen:** (1) Der Teilpfad-Befund ist fast ausschließlich λ = 1
+  (131 von 135 Zeilen; einzelne `depends_on_past`-Selbstkante). Trägt der Fall-Katalog für
+  den Launch, oder braucht es die λ=2-Fälle als Aushängeschild? (2) Die C-Kanten-Null:
+  Vorbehalt ist der Parse-Satz (nur Kandidaten-Files, nicht ganze Repos) — ein Lauf mit
+  ganzen Repos als Parse-Satz würde die "Ziel nicht im Parse-Satz"-Fälle (14 von 34)
+  auflösen, kostet aber deutlich mehr Zeit. Lohnt das vor 009?
+- **Offen aus 006a (unverändert):** Import-genauer DAG-Check im **Scanner** (der Parser hat
+  ihn schon), DAG-Generatoren mit Literal-Argumenten, ADR-017-Doppelnummer ist seit 006a
+  bereinigt (ADR-019).
+- Vendorte Airflow-Kopien im Kandidaten-Korpus (mehrere `apache/airflow`-Forks) verzerren
+  File-Statistiken; `scan/007_parse/` ist ein Technik-Artefakt, für Marktzahlen bleibt
+  `scan/v2/` maßgeblich.
 
 ## Was David entscheiden muss
 
-1. **Launch-Zeitpunkt.** Die Marktzahl (176 Kern-Kandidaten, 0,3 %, dazu 1.303 Kreise ohne
-   bekannte Taktgrenze) und der Wikimedia-Fall sind jetzt konsistent, belegt und zitierfähig.
-   Nichts davon ist veröffentlicht, nichts nach außen gegangen. Ob und wann, entscheidet David.
-2. **Session 007 (Parser) starten** oder vorher etwas anderes priorisieren. Der Spec-Entwurf
-   liegt, die Roadmap sieht 007 als nächsten Schritt.
+1. Nichts Blockierendes. Launch-Frage aus 006 steht weiter offen (Zahlen unverändert
+   zitierfähig); Session 008 kann ohne Entscheidung starten.

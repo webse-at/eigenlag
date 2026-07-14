@@ -4,6 +4,17 @@ Feature-Historie. Ein Eintrag pro abgeschlossenem Feature, nicht pro Commit.
 
 ## Unreleased
 
+### Session 007 — Airflow-Parser (2026-07-14)
+
+- `eigenlag/parse_airflow.py`: AST-Parser DAG-File → `ParsedDag` (Tasks, Intra-Kanten, Cross-Kanten mit Herkunft, Warnungen). Task-Erkennung: Operatoren mit statischem `task_id`, `@task`/`@task.*`, `.partial().expand()` (eine Task, Warnung `task_mapping`); Kanten: `>>`/`<<` gekettet und mit Listen, `set_upstream`/`set_downstream`, `chain(...)`, TaskGroups mit Prefix-Namespace. Nicht statisch Auflösbares wird Warnung mit Datei und Zeile, nie geraten
+- Übersetzungstabelle Signal → λ-Kante komplett als Tests zuerst (rot → grün im Log belegt): A Selbstkante (default_args vererbt, Operator überschreibt), B zusätzlich direkte Downstreams, C nur bei Ziel im Parse-Satz + gleichem T + ganzzahligem `delta/T` (einzige Kante mit `periods > 1`), D/F ohne Kante als Befund (F: ADR-020), G Senke×Quelle
+- Import-Beleg: Files, deren `DAG` nicht aus `airflow` importiert ist, werden nicht geparst (`dag_not_airflow`) — verhindert den 330-Zeilen-Fehler aus 006 im Produkt
+- `to_pipeline(dags, durations=1.0)`: Struktur + Dauern → `Pipeline`, Knoten namespaced `dag_id.task_id`; Dauern kommen in Session 008
+- `eigenlag/schedule.py` (Umzug aus `scanner/`), Scanner importiert aus dem Package; `scanner/parse_consistency_test.py` pinnt Signal-Arten-Gleichheit Parser ↔ Scanner auf den Fixtures
+- Korpus-Validierung (`scanner/parse_corpus.py`, `scan/007_parse/`): 626 Kandidaten-Files, 4892 DAGs, 0 Syntax-Fehler; Karp = Howard auf allen 4836 kondensierten Graphen, 4827 zusätzlich per Brute-Force; 3 Konsistenz-Abweichungen (alle = dokumentierte Import-Beleg-Differenz); keine statisch modellierbare C-Kante im Korpus (34 Fälle, jede mit Grund)
+- Teilpfad-Jagd (ADR-019): 129 Kern-Kandidaten-DAGs in 77 Repos mit λ < Critical Path bei uniformen Dauern; durchgerechneter Fall `udac_example_dag` (λ = 2 vs. CP = 6, `wait_for_downstream` in default_args) im Log
+- ADR-020 (F: Marktzahl ja, λ-Kante nein), λ-Übersetzungstabelle in `signals.md`. 42 neue Tests (256 im Repo), Kern weiter ohne Laufzeit-Dependencies
+
 ### Session 006 — Re-Scan mit Zwei-Klassen-Risiko, Fall-Korrektur (2026-07-14)
 
 - Voller Re-Scan über die 1692 gecachten Clones (1193 s, kein Neu-Klonen, State versioniert unter `data/scan_state_v2/`), Artefakte unter `scan/v2/`, die 003-Artefakte bleiben unverändert liegen

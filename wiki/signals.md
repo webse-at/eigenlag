@@ -78,6 +78,23 @@ Dieses Signal stand bis Session 005 in der Tabelle darunter, also unter "kein Cr
 
 **Nur die explizite `1` zählt.** Airflows Default ist größer und lässt Läufe nebeneinander laufen. Ein Ausdruck, der statisch nicht auflösbar ist, zählt nicht.
 
+## Übersetzung in λ-Kanten (Parser, Phase 2)
+
+Seit Session 007 übersetzt `eigenlag/parse_airflow.py` die Signale in Kanten des Max-Plus-Graphen. Die Leitregel: der Parser darf weniger wissen, als im File steht, aber nie mehr. Was nicht statisch auflösbar ist, wird Warnung mit Datei und Zeile, nicht Kante — Weglassen ist die sichere Richtung, λ bleibt eine gültige Untergrenze (math.md, Abschnitt 8).
+
+| Signal | λ-Kante | Begründung |
+|---|---|---|
+| A an Task t | `CrossEdge(t, t, 1)` | Task wartet auf die eigene Vorgänger-Instanz |
+| A in `default_args` | Selbst-Kante für jede Task; Operator-Ebene überschreibt | Airflow-Vererbungssemantik |
+| B an Task t | zusätzlich zu A: `CrossEdge(d, t, 1)` für jeden **direkten** Downstream d | t(k) wartet auf t(k−1) und dessen direkte Nachfolger; nur direkte, so ist Airflow definiert |
+| C mit `execution_delta`, Ziel im Parse-Satz, gleiches T, `delta/T` ganzzahlig ≥ 1 | `CrossEdge(ziel, sensor, delta/T)`, Ziel namespaced `dag_id.task_id` | die einzige Kante mit `periods > 1` (ADR-006) |
+| C sonst (Ziel fehlt, T verschieden, Verhältnis nicht ganzzahlig, Versatz nicht auflösbar) | keine Kante, Warnung `sensor_not_modeled` mit konkretem Grund | verschiedene Takte sind im Ein-Perioden-Modell nicht darstellbar; lieber Untergrenze als erfundene Kante |
+| C mit `execution_date_fn` | keine Kante, Warnung `sensor_dynamic_offset` | Rückgabewert statisch nicht bestimmbar |
+| D | keine Kante, Warnung `include_prior_dates` | "irgendein früherer Lauf reicht" ist schwächer als "der vorige muss fertig sein"; eine Kante würde λ fälschlich heben |
+| E | Selbst-Kante `model(k-1) → model(k)` | dbt-Parser, Session 008 |
+| F | **keine Kante**, Befund `prev_run_success` / `prev_run_date` | das Template rendert und wartet nicht; Marktzahl und λ-Modell messen zwei verschiedene Dinge (ADR-020) |
+| G | `CrossEdge(s, q, 1)` für jede Senke s und jede Quelle q | Lauf k startet erst, wenn Lauf k−1 komplett fertig ist; λ = Makespan, konsistent mit ADR-019 |
+
 ## Was ausdrücklich kein Cross-Run-Signal ist
 
 | Konstrukt | Warum nicht |

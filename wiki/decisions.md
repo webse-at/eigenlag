@@ -329,3 +329,19 @@ Ein DAG mit A–F-Signal **und** G zählt in die Kern-Klasse; G wird als Spalte 
 **Begründung:** Die Zwei-Klassen-Lösung erlaubt beides zugleich: die Kern-Quote bleibt definitionsgleich und damit über die Scans hinweg vergleichbar, und die neue Kante steht daneben, mit gemessener Begründung statt versteckt. Der Report legt die Definitionsänderung offen, statt sie in eine gewachsene Zahl einzubacken. Für die Produkt-Aussage ist die Trennung ohnehin die ehrlichere: der Analyzer verdient sein Geld dort, wo der Kreis ein Teilpfad ist, nicht dort, wo ein Dashboard reicht.
 
 **Umsetzung:** `report.py` — `STRONG` bleibt unverändert (A, B, C, D, F-stark), neue Menge für G, neue Spalten `sig_g_max_active_runs` und `risk_candidate_g_only` in `scan_results.csv`, eigene Zeile im Report. `scanner/analyze.py` bleibt unberührt: dessen `STRONG_KINDS` (mit G) speist nur die Lauf-Konsole, die Klassifikation für die Marktzahl passiert in `report.py`.
+
+---
+
+## ADR-020 — Signal F zählt für die Marktzahl, erzeugt aber keine λ-Kante
+
+**Status:** entschieden, 2026-07-14 (Session 007)
+
+**Kontext:** Signal F in der `*_success`-Variante ist seit ADR-011 ein starkes Signal und zählt in die Risiko-Kandidaten-Quote. Beim Übersetzen der Signale in Kanten (Spec 007) stellte sich die Frage, welche λ-Kante `{{ prev_start_date_success }}` erzeugt.
+
+**Entscheidung:** Keine. Der Parser meldet F als Befund ("Datenabhängigkeit ohne Wartesemantik", Warnung `prev_run_success` bzw. `prev_run_date`), erzeugt aber keine Cross-Run-Kante.
+
+**Begründung:** Das Template rendert einen Zeitstempel zur Laufzeit und **wartet nicht**. Ein Task mit `prev_start_date_success` startet pünktlich, auch wenn der Vorlauf noch läuft — er liest dann schlimmstenfalls veraltete Daten. Das ist ein Korrektheits-, kein Durchsatz-Problem: es gibt keine Scheduling-Abhängigkeit, die den Takt begrenzt, also keine Kante, die λ heben darf. Eine erfundene Kante würde λ fälschlich erhöhen und die Untergrenzen-Eigenschaft (math.md, Abschnitt 8) zwar behalten, aber die Schärfe der Zahl mit einer Behauptung erkaufen, die Airflows Semantik nicht hergibt.
+
+**Die Divergenz ist gewollt und muss offen bleiben:** Marktzahl und λ-Modell messen zwei verschiedene Dinge. Die Marktzahl zählt Strukturen, in denen ein Lauf den vorigen *liest* — dafür ist F ein starkes Signal (ADR-011, unverändert). Das λ-Modell zählt Kanten, auf die ein Lauf *wartet* — dafür ist F keines. Wer die beiden Zahlen nebeneinander sieht, muss diese Erklärung finden können; sie gehört in den Report-Text (Session 009), sonst wirft uns die Differenz später jemand als Inkonsistenz vor.
+
+**Umsetzung:** `eigenlag/parse_airflow.py` erzeugt für F Warnungen statt Kanten; die Konsistenz mit dem Scanner (der F weiterhin als Signal-Art zählt) sichert `scanner/parse_consistency_test.py` über die Abbildung Warnung → Signal-Art.
