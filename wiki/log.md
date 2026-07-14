@@ -59,3 +59,72 @@ Die im Auftrag genannten "30 req/min" gelten nur für den klassischen `/search/c
 **Remote:** `github.com/webse-at/eigenlag` angelegt, `main` gepusht.
 
 **Nächste Session:** 004 (Mathe-Kern). Begründung: der einzige Teil mit verifizierter Referenz, hängt an nichts, und er ist der eigentliche Produktwert. Der Scanner liefert Marketing-Zahlen; stimmt der Kern nicht, sind die Zahlen wertlos.
+
+---
+
+## 004 — Mathe-Kern: model.py, maxplus.py (2026-07-14)
+
+**Gemacht:** `eigenlag/model.py` (Pipeline, CrossEdge, Toposort mit Zyklus-Erkennung), `eigenlag/maxplus.py` (Kondensation, Karp, Howard, Drift, Simulation, Critical Path), Tests daneben, `pyproject.toml` mit ruff/mypy/pytest-Konfiguration. Kein Parser, keine CLI, keine DB. Der Kern kennt weder Airflow noch dbt.
+
+**Die eine offene Entscheidung** aus der Spec, `periods` im Zyklusmittel: `Summe der Gewichte / Summe der periods`, hergeleitet über die Zustandserweiterung. Steht als ADR-006 im Wiki.
+
+**Gemessen — Kern gegen Prototyp, dieselbe Demo-Pipeline:**
+
+```
+===== PROTOTYP (wiki/maxplus_pipeline.py) =====
+Critical Path eines Laufs (Latenz): 5.5 h
+Nachhaltige Zykluszeit: lambda = 4.40 h
+Kritischer Kreis (kondensiert): monitor -> monitor
+  Segment monitor(k-1) -> monitor(k) via: core -> features -> retrain -> score -> monitor
+Drift/Lauf (letzte 5): 1.40 h/Lauf; Theorie lambda - T = 1.40 h/Lauf
+(a) Retrain halbieren:      lambda = 3.60 h
+(b) Quality-Gate asynchron: lambda = 2.50 h
+(c) Core-Job optimieren:    lambda = 3.85 h
+
+===== KERN (eigenlag/) =====
+Critical Path eines Laufs: 5.5 h  (ingest -> dq -> core -> features -> retrain -> score -> reports)
+lambda (Karp)   = 4.40 h
+lambda (Howard) = 4.40 h
+Kritischer Kreis (kondensiert): monitor -> monitor
+  Segment monitor(k-1) -> monitor(k) via: core -> features -> retrain -> score -> monitor
+Drift/Lauf (letzte 5): 1.40 h/Lauf; Theorie lambda - T = 1.40 h/Lauf
+```
+
+Die drei What-if-Werte sind als Tests gepinnt und grün (3.60 / 2.50 / 3.85).
+
+**Gemessen — Test-Suite, Lint, Typen:**
+
+```
+$ .venv/bin/python -m pytest -q
+...................................                                      [100%]
+35 passed in 0.03s
+
+$ .venv/bin/ruff check . && .venv/bin/ruff format --check .
+All checks passed!
+5 files already formatted
+
+$ .venv/bin/mypy eigenlag/
+Success: no issues found in 5 source files
+```
+
+**Gemessen — Mutations-Test für `periods`.** Die 35 Tests waren beim ersten Lauf grün, was für sich genommen kein Beleg ist. Also gegengeprüft: in einer Kopie des Pakets `periods` in beiden Verfahren auf 1 gezwungen (Expansion abgeschaltet, `η · periods` durch `η` ersetzt). Ergebnis:
+
+```
+FAILED test_karp_and_howard_agree[mixed_periods]
+FAILED test_karp_and_howard_agree[two_periods]
+FAILED test_two_period_self_loop_halves_lambda
+FAILED test_mixed_periods_cycle_mean_divides_by_the_sum_of_periods
+4 failed, 31 passed
+```
+
+Genau die vier Perioden-Tests fallen und kein anderer. Damit ist die Frage aus STATUS ("wurde `periods` nur im Datentyp geführt?") beantwortet: nein, der Versatz kommt in der Rechnung an.
+
+**Was überrascht hat:**
+
+1. **Kein Kreis ist nicht dasselbe wie keine Cross-Kante.** Die Spec behandelt nur `cross == []`. Es gibt aber einen zweiten Fall: eine Cross-Kante `a(k-1) → b(k)`, bei der b nie wieder auf a zurückwirkt. Der kondensierte Graph hat dann Knoten, aber keinen Kreis, und λ ist genauso wenig definiert. Deshalb geben Karp und Howard `float | None` zurück statt `float` (ADR-007), und die Sonderbehandlung sitzt nicht im Aufrufer, wo sie jemand vergessen kann.
+
+2. **Karp braucht keine starke Zusammenhangskomponente.** Karps Satz ist für stark zusammenhängende Graphen formuliert. Der Prototyp initialisiert `D[0][v] = 0` für **alle** v, was einer virtuellen Quelle mit Null-Kanten in jeden Knoten entspricht. Die erzeugt keinen Kreis, macht aber jeden Knoten erreichbar, und damit gilt die Formel auch für zerfallende Graphen. Der Test mit zwei disjunkten Kreisen (λ = max der beiden) belegt das, er wäre sonst der erste Kandidat für einen stillen Fehler gewesen.
+
+3. **Parallele Cross-Kanten mit verschiedenem Versatz dürfen nicht zusammengefasst werden.** Bei der Kondensation liegt es nahe, pro Knotenpaar nur das maximale Gewicht zu behalten. Das ist falsch, sobald der Versatz unterschiedlich ist: Gewicht 6 bei Versatz 2 (Mittel 3) ist schlechter als Gewicht 4 bei Versatz 1 (Mittel 4), keine Kante dominiert die andere. Die kondensierte Matrix ist deshalb nach `(quelle, ziel, periods)` geschlüsselt, nicht nach `(quelle, ziel)`.
+
+4. **`numpy` wurde nicht gebraucht.** Der Kern rechnet auf der kondensierten Matrix mit einstelliger Knotenzahl, Karp läuft in Millisekunden. Das Package hat damit **null** Laufzeit-Dependencies. Wenn Monte Carlo in Session 006 kommt, wird `numpy` wieder aktuell.

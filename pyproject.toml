@@ -1,0 +1,34 @@
+[project]
+name = "eigenlag"
+version = "0.1.0"
+description = "Rekurrenz-Analyzer für Daten-Pipelines: berechnet die nachhaltige minimale Taktzeit (Max-Plus-Eigenwert λ)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "mypy"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["eigenlag"]
+
+[tool.pytest.ini_options]
+python_files = ["*_test.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Der Referenz-Prototyp bleibt unveraendert liegen (ADR-001), er ist Fixture, nicht Quellcode.
+exclude = ["wiki/maxplus_pipeline.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["eigenlag"]

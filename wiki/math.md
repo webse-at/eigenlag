@@ -35,6 +35,14 @@ Der zentrale Satz (Cuninghame-Green): **λ ist gleich dem maximalen Zyklusmittel
 
 Der Kreis, der dieses Maximum realisiert, ist der **kritische Kreis**. Er ist der Engpass. Jede Verkürzung einer Task, die nicht auf dem kritischen Kreis liegt, ändert λ um exakt null.
 
+Die Formel oben gilt so, solange jede Cross-Run-Kante genau eine Periode zurückgreift. Eine Kante mit Versatz *n* (`execution_delta = n · Periode`) zählt als *n* Kanten, der Nenner ist also allgemein die Summe der Versätze:
+
+```
+λ = max über alle Kreise C:  ( Summe der Kantengewichte in C ) / ( Summe der periods in C )
+```
+
+Herleitung und Konsequenz für die Implementierung in [decisions.md](decisions.md), ADR-006.
+
 ## 3. Konsequenz für den Schedule
 
 Läuft die Pipeline mit Schedule-Periode T:

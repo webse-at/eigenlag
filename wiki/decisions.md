@@ -61,3 +61,31 @@ Die Geltung endet aber an der Grenze dessen, was der Prototyp wirklich tut:
 **Entscheidung:** Die `*_success`-Varianten zählen als starkes Signal. `prev_ds`, `prev_execution_date` und Verwandte werden erfasst, getrennt ausgewiesen und **nicht** in die Risiko-Kandidaten-Quote eingerechnet.
 
 **Begründung:** `prev_ds` ist Datums-Arithmetik. Es zeigt an, dass ein Task Daten des Vorlaufs liest, erzwingt aber keine Wartesemantik und damit keine Kante, die λ hebt. Wer es mitzählt, bekommt eine größere Zahl für den Launch und einen angreifbaren Report. Die kleinere, verteidigbare Zahl ist mehr wert.
+
+---
+
+## ADR-006 — Der Perioden-Versatz ist die Kantenlänge im Zyklusmittel
+
+**Status:** entschieden, 2026-07-14 (Session 004)
+**Kontext:** Der Prototyp kennt keinen Versatz, jede Cross-Kante zeigt implizit auf den Vorlauf. Für `execution_delta = 2 * Periode` braucht `CrossEdge` ein `periods`-Feld, und die Spec verlangt vor dem Code eine Definition, wie es ins Zyklusmittel eingeht. Eine Vorlage gibt es dafür nicht.
+
+**Entscheidung:**
+
+```
+Zyklusmittel = Summe der Kantengewichte / Summe der periods
+```
+
+**Begründung:** Eine Cross-Kante mit Versatz *n* ist im Max-Plus-System eine Verzögerung um *n* Perioden, das System ist damit nicht mehr erster Ordnung. Die übliche Zustandserweiterung führt es auf erste Ordnung zurück: die Kante wird durch eine Kette aus *n* Kanten der Länge 1 ersetzt, von denen die erste das Gewicht trägt und die restlichen null. Der Eigenwert des erweiterten Systems ist das maximale Zyklusmittel dieses Graphen, und das ist genau der Quotient oben. Für `periods == 1` überall fällt er auf `Summe / Kantenzahl` zurück.
+
+**Konsequenz für die Implementierung:** Karp rechnet auf genau dieser Expansion (`_expand`), Howard rechnet das Verhältnis nativ (`w - η · periods`). Die beiden Verfahren teilen sich damit **keinen** Code für die Perioden-Behandlung und bleiben unabhängige Zweitmeinungen im Sinn von ADR-003. Ein Mutations-Test belegt das: zwingt man `periods` in beiden Verfahren auf 1, fallen genau die vier Perioden-Tests, sonst keiner.
+
+---
+
+## ADR-007 — Kein Kreis heißt `None`, und das steht im Rückgabetyp
+
+**Status:** entschieden, 2026-07-14 (Session 004)
+**Kontext:** `wiki/math.md`, Abschnitt 8 verlangt, dass eine Pipeline ohne Cross-Run-Kante kein λ = 0 bekommt, sondern "nicht anwendbar". Die Spec 004 schreibt die Signaturen aber als `karp(matrix) -> float` und `howard(matrix) -> tuple[float, list[Node]]`.
+
+**Entscheidung:** Beide Funktionen geben `... | None` zurück. `None` heißt: der kondensierte Graph enthält keinen Kreis, λ ist nicht definiert.
+
+**Begründung:** Der Fall tritt nicht nur bei `cross == []` auf, sondern auch bei Cross-Kanten ohne Rückweg (`a(k-1) → b(k)`, ohne dass b jemals wieder auf a wirkt). Das ist ein Graph mit Knoten, aber ohne Kreis, und keine Rekurrenz. Wäre die Sonderbehandlung nur ein `if pipeline.cross: ...` in der aufrufenden Schicht, würde dieser Fall stillschweigend eine falsche Zahl produzieren. Der Optional-Rückgabetyp erzwingt die Behandlung im Aufrufer und wird von mypy geprüft.

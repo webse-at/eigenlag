@@ -72,13 +72,21 @@ Die gesamte Schnittstelle zwischen Parser-Schicht und Mathe-Schicht ist eine ein
 
 ```python
 @dataclass(frozen=True)
+class CrossEdge:
+    src: str                                 # Task im Lauf k - periods
+    dst: str                                 # Task im Lauf k
+    periods: int = 1
+
+@dataclass(frozen=True)
 class Pipeline:
     durations: dict[str, float]              # Task-Name → Dauer
     intra: list[tuple[str, str]]             # (von, nach) im selben Lauf
-    cross: list[tuple[str, str, int]]        # (von, nach, Perioden-Versatz)
+    cross: list[CrossEdge]
 ```
 
-Der dritte Eintrag der Cross-Kante ist der Versatz in Schedule-Perioden. Der Prototyp kennt ihn nicht, er nimmt implizit immer 1 an. Für `execution_delta = 2 * Periode` braucht es ihn, und er verändert die Mathematik: eine Kante mit Versatz n zählt im Zyklusmittel als n Kanten, halbiert bei n = 2 also den Beitrag des Kreises. Das ist der Grund, warum dieser Fall als eigene Test-Fixture in der Spec steht.
+`periods` ist der Versatz in Schedule-Perioden. Der Prototyp kennt ihn nicht, er nimmt implizit immer 1 an. Für `execution_delta = 2 * Periode` braucht es ihn, und er verändert die Mathematik: eine Kante mit Versatz n zählt im Zyklusmittel als n Kanten, halbiert bei n = 2 also den Beitrag des Kreises. Herleitung in [decisions.md](decisions.md), ADR-006.
+
+Die Validierung sitzt im `__post_init__` von `Pipeline` und ist damit die Systemgrenze zwischen Parser-Schicht und Mathe-Schicht: unbekannter Task-Name in einer Kante, negative Dauer, `periods < 1` und ein zyklischer Intra-Run-Graph werfen sofort. Innerhalb des Kerns wird nicht mehr geprüft.
 
 ## Was der Scanner nicht ist
 
