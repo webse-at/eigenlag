@@ -23,8 +23,11 @@ eigenlag/
 ├── scanner/                     Phase 1, eigenständig
 │   ├── harvest.py               GitHub Code-Search, Repo-Kandidaten, Filter
 │   ├── clone.py                 Shallow-Clones mit Disk-Cache
-│   ├── analyze.py               AST-Analyse je Repo, DAG-scoped
+│   ├── analyze.py               AST-Analyse je Repo, DAG-scoped, plus Factories
+│   ├── schedule.py              Cron, Preset, timedelta, Dataset: sub-täglich oder nicht
+│   ├── analyze_dbt.py           Signal E: incremental UND is_incremental()
 │   ├── report.py                CSV plus report.md
+│   ├── fixtures/                Nachgebaute Repos als Testdaten, kein Code (aus Lint/Typing raus)
 │   └── *_test.py
 └── eigenlag/                    Phase 2, das Package
     ├── model.py                 Task, Edge, Pipeline, CrossRunEdge (Datentypen)

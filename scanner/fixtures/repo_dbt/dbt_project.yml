@@ -1,0 +1,12 @@
+name: acme
+version: "1.0.0"
+profile: acme
+
+model-paths: ["models"]
+
+models:
+  acme:
+    marts:
+      +materialized: incremental
+    staging:
+      +materialized: view

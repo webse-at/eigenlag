@@ -8,6 +8,9 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "mypy"]
+# Nur der Scanner (Phase 1) braucht YAML: dbt_project.yml und die schema.yml neben den Models.
+# Der eigenlag-Kern bleibt abhaengigkeitsfrei.
+scanner = ["pyyaml", "types-PyYAML"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -18,12 +21,18 @@ packages = ["eigenlag"]
 
 [tool.pytest.ini_options]
 python_files = ["*_test.py"]
+# data/ ist der Clone-Cache: fremde Repos bringen eigene Testfiles mit, die pytest sonst
+# einsammelt und beim Import sprengt. scanner/fixtures ist Testdaten, nicht Testcode.
+testpaths = ["eigenlag", "scanner"]
+norecursedirs = ["data", "scanner/fixtures", ".venv"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
 # Der Referenz-Prototyp bleibt unveraendert liegen (ADR-001), er ist Fixture, nicht Quellcode.
-exclude = ["wiki/maxplus_pipeline.py"]
+# scanner/fixtures ist ebenfalls Fixture: die Files bilden fremde Repos nach, samt kaputtem
+# Python (dags/broken.py), toten Importen und Kommentar-Fallen. Sie sind Testdaten, kein Code.
+exclude = ["wiki/maxplus_pipeline.py", "scanner/fixtures"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
@@ -32,3 +41,4 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 python_version = "3.12"
 strict = true
 files = ["eigenlag", "scanner"]
+exclude = "scanner/fixtures"

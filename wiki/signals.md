@@ -67,7 +67,9 @@ Jinja-Referenzen auf den vorigen Lauf in Templates, Operator-Argumenten oder SQL
 
 ## Schedule-Klassifikation
 
-Ein Signal allein ist harmlos. Gefährlich wird es erst, wenn der Schedule schneller taktet, als der Kreis erlaubt. **Risiko-Kandidat** ist deshalb definiert als: mindestens ein starkes Signal (A, B, C, D, E) **und** sub-täglicher Schedule **im selben DAG**.
+Ein Signal allein ist harmlos. Gefährlich wird es erst, wenn der Schedule schneller taktet, als der Kreis erlaubt. **Risiko-Kandidat** ist deshalb definiert als: mindestens ein starkes Signal **und** sub-täglicher Schedule **im selben DAG**.
+
+Stark sind A, B, C, D, E und F in den `*_success`-Varianten. Schwach sind `prev_ds`, `prev_ds_nodash` und `prev_execution_date`; sie werden getrennt gezählt und begründen für sich genommen keinen Risiko-Kandidaten (ADR-005, ADR-011).
 
 Sub-täglich heißt: Periode kürzer als 24 Stunden.
 
@@ -76,6 +78,7 @@ Sub-täglich heißt: Periode kürzer als 24 Stunden.
 | Preset | `@hourly` | ja |
 | Preset | `@daily`, `@weekly`, `@monthly` | nein |
 | Preset | `@once`, `None` | nein, kein Schedule |
+| Preset | `@continuous` | ja, die Periode liegt per Definition unter einem Tag |
 | Cron, Minuten-Feld mit Schritt | `*/15 * * * *` | ja |
 | Cron, Stunden-Feld mit Schritt | `0 */6 * * *` | ja |
 | Cron, Stunden-Feld als Liste | `0 6,18 * * *` | ja |
@@ -84,4 +87,4 @@ Sub-täglich heißt: Periode kürzer als 24 Stunden.
 | `timedelta` | `timedelta(days=1)` | nein |
 | Dataset- oder Asset-getriggert | `schedule=[Dataset(...)]` | unbekannt, eigene Kategorie |
 
-Cron-Ausdrücke werden nicht per Heuristik am String klassifiziert, sondern über die berechnete kleinste Distanz zwischen zwei aufeinanderfolgenden Feuerzeitpunkten über ein Jahr. Das ist die einzige Methode, die bei Listen, Schritten und Kombinationen zuverlässig bleibt, und sie ist mit einer Tabelle aus Beispielen testbar.
+Cron-Ausdrücke werden nicht per Heuristik am String klassifiziert, sondern über die berechnete kleinste Distanz zwischen zwei aufeinanderfolgenden Feuerzeitpunkten. Das ist die einzige Methode, die bei Listen, Schritten und Kombinationen zuverlässig bleibt, und sie ist mit einer Tabelle aus Beispielen testbar. Implementiert in `scanner/schedule.py`, gerechnet über ein Fenster von fünf Jahren, ohne Cron-Bibliothek (ADR-010). Ein Ausdruck, der in diesem Fenster nie feuert, ist `unknown` und wird nicht geraten.

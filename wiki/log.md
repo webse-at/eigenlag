@@ -248,3 +248,57 @@ Der Befund der Session hält: rohe Code-Search-Treffer sind zur Hälfte keine Si
 2. **Die Belege im Session-Log sind gekürzt und damit nicht auflösbar.** Dort steht `dags/tutorial.py:35`, der echte Pfad ist `docker/sandbox/ubuntu-airflow/airflow/dags/tutorial.py`. Auch die Repo-Namen sind mit `...` abgeschnitten. Beim Nachprüfen liefen die ersten sechs `curl`-Aufrufe deshalb ins Leere, und ich musste zurück in `hits.jsonl`. Genau das verbietet Regel 6: ein Treffer, der sich nicht in dreißig Sekunden nachschlagen lässt, zählt nicht. In `scan_results.csv` und in `report.md` ist das kein Schönheitsfehler mehr, sondern ein Substanzfehler, weil der Beleg dort das Produkt ist. Spec 002 hält das jetzt fest.
 
 **Übernommen für Session 003:** der 1000er-Deckel der Code-Search (vier von sechs Queries laufen hinein, `depends_on_past` meldet `total_count` 2284), die null Treffer der Filter `fork` und `archived`, und die zwölf Prozent Blocklist-Quote. Alle drei gehören in den Abschnitt "Was diese Zahlen nicht sagen".
+
+---
+
+## 002 — Scanner: AST-Analyse (2026-07-14)
+
+**Gebaut:** `scanner/clone.py` (flache Clones mit Disk-Cache, 120 s Timeout, Fehler strukturiert protokolliert), `scanner/schedule.py` (Schedule-Klassifikation), `scanner/analyze.py` (DAG-Erkennung, DAG-Scoping, Signale A bis D und F, Task-Factories nach ADR-009), `scanner/analyze_dbt.py` (Signal E), dazu `scanner/fixtures/` mit zwei nachgebauten Repos, die jede Falle enthalten.
+
+**Tests grün** (`pytest`, ganzes Repo):
+
+```
+.....................................................................    [100%]
+141 passed in 0.21s
+```
+
+Davon 105 im Scanner (26 aus Session 001, 79 neu). `ruff check` und `ruff format --check` grün, `mypy` grün über 17 Files.
+
+**Rauchtest über echte Repos.** Die Spec verlangt den großen Lauf erst in 003, aber eine Analyse, die nur gegen selbstgebaute Fixtures grün ist, beweist wenig. Deshalb 40 Kandidaten aus `candidates.jsonl` geklont und analysiert:
+
+```
+Repos:             40 (Clone-Fehler: 0)
+DAGs:              352
+Risiko-Kandidaten: 4 in 1 Repo
+SyntaxError:       3
+Schedules:         {'daily_or_slower': 217, 'none': 62, 'subdaily': 59, 'unknown': 14}
+Signale:           {'external_task_sensor': 27, 'depends_on_past': 8}
+Analyse-Fehler:    {'unresolved_default_args': 8, 'syntax_error': 3}
+```
+
+Belege der vier Risiko-Kandidaten, je von Hand im Clone nachgeschlagen:
+
+```
+DmitriiDenisov/airflow-lab | test_1_new      | timedelta(minutes=6)  | dags_examples/dag_bash_operator.py:8    'depends_on_past': True,
+DmitriiDenisov/airflow-lab | long_bash       | timedelta(minutes=30) | dags_examples/dag_bash_operator_long.py:8
+DmitriiDenisov/airflow-lab | branch_list_ex  | timedelta(minutes=2)  | dags_examples/branch_list_ex.py:33      'depends_on_past': True,
+DmitriiDenisov/airflow-lab | example_branch… | timedelta(minutes=2)  | dags_examples/branch_operator_ex_3.py:33
+```
+
+Alle vier sind `depends_on_past: True` in einem `default_args`-Dict, das als Modul-Literal danebensteht und aufgelöst wird. Echte Treffer, keine Regex-Artefakte.
+
+**Der ADR-009-Fall reproduziert sich exakt.** `navikt/team_familie_airflow_dags` (nicht in den ersten 40, separat geprüft) meldet zwei Factory-Signale, `operators/kafka_operators.py:32` und `:33` — genau die Zeilen, die die Abnahme von 001 von Hand gefunden hat. Das Repo hat 33 DAGs und **null** DAG-scoped Signale: ohne ADR-009 hätte der Scanner es als signalfrei gemeldet.
+
+**Was überrascht hat:**
+
+1. **`croniter` wird nicht gebraucht.** Die Spec hatte die Dependency erlaubt. Beim Hinschreiben der Herleitung fiel auf, dass die Klassifikation aus den expandierten Feldern direkt folgt: feuert ein Ausdruck mehr als einmal an einem Tag, liegt der kleinste Abstand zwangsläufig innerhalb des Tages, also unter 24 Stunden; feuert er höchstens einmal, ist der Abstand ein Vielfaches von 24 Stunden. Rund achtzig Zeilen stdlib statt einer Dependency, gegen die Tabelle aus `signals.md` getestet (ADR-010). Dafür kam `pyyaml` neu dazu, aber nur im Scanner-Extra: `dbt_project.yml` ist verschachteltes YAML mit `+`-Präfixen, das von Hand zu lesen wäre die falsche Sparsamkeit. Der Kern bleibt bei `dependencies = []`.
+
+2. **`signals.md` widersprach sich selbst, und zwar an der Stelle, die die Marktzahl definiert.** Die Risiko-Definition zählte "A, B, C, D, E" auf, die Abstufung von Signal F nannte die `*_success`-Varianten aber ausdrücklich "harte Kanten" und schloss nur `prev_ds` und `prev_execution_date` aus. Ein Task, der auf `{{ prev_start_date_success }}` zugreift, wartet auf den erfolgreichen Vorlauf — das ist genau die Kante, die λ erzeugt. Die Aufzählung war die Verkürzung, die Abstufung die begründete Aussage. Wiki korrigiert, ADR-011.
+
+3. **Zwei Fälle, in denen Auflösen erlaubt ist und Raten verboten bleibt.** Die Spec regelt `default_args` aus einem Modul-Dict-Literal. Im echten Lauf tauchte dasselbe Muster bei der `dag_id` auf: `mozilla/telemetry-airflow` schreibt `with models.DAG(dag_name, ...)` und setzt `dag_name = "copy_deduplicate"` drei Zeilen darüber. Ohne Auflösung steht in `scan_results.csv` eine leere `dag_id`, und ein Beleg ohne Namen ist ein halber Beleg (Regel 6). Modul-Ebene plus String-Literal wird deshalb aufgelöst, genau wie beim Dict. Eine `dag_id` aus einem f-String oder einer Schleifenvariable bleibt leer — dort wird nicht geraten.
+
+4. **Der Clone-Cache hat die Test-Suite gesprengt, bevor er ihr geholfen hat.** `pytest` hat die Testfiles der geklonten Fremd-Repos eingesammelt und ist beim Import gestorben (fünf Collection-Fehler). `testpaths` und `norecursedirs` in `pyproject.toml` gepinnt. Derselbe Reflex hätte auch `ruff` getroffen, das respektiert aber `.gitignore` und hat `data/` von selbst ausgelassen.
+
+5. **Ein Verzeichnis, das aussieht wie eine Datei.** `Swagatd/gcphandson` hat unter `target/compiled/` ein *Verzeichnis* namens `_analytics_models.yml`. `rglob("*.yml")` liefert es, `read_bytes()` wirft `IsADirectoryError`, der Lauf über 40 Repos stirbt bei Repo 6. Das ist die Sorte Fund, für die die Regel "fremde Repos sind Systemgrenze" existiert, und die keine noch so gute Fixture-Sammlung vorwegnimmt: sie fällt nur im echten Lauf an. Behoben, Regressionstest steht.
+
+**Ambiguität wird protokolliert, nicht geraten.** Ein Operator ohne DAG-Bezug in einem File mit mehreren DAGs landet als `ambiguous_task` in den Fehlern, verankert am Operator-Aufruf (nicht am Signal-Keyword: ambig ist der Task, nicht das Argument). In einem File mit genau einem DAG wird er diesem zugeordnet und trägt `inferred=True`, damit die Konfidenz im Report trennbar bleibt.

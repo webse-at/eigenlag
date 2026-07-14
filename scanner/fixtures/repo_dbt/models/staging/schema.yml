@@ -1,0 +1,9 @@
+version: 2
+
+models:
+  - name: sessions
+    description: Sessions, inkrementell trotz staging-Default aus dbt_project.yml
+    config:
+      materialized: incremental
+  - name: stg_users
+    description: Volles Neuschreiben

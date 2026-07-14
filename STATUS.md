@@ -2,53 +2,47 @@
 
 > Wird am Ende jeder Session überschrieben. Schnelle Orientierung für die nächste Session.
 
-## Stand: Session 001 — Scanner-Harvest (2026-07-14)
+## Stand: Session 002 — Scanner: AST-Analyse (2026-07-14)
 
-**Die Kandidatenliste steht.** 1692 Repos, belegt und gefiltert, mit protokolliertem Grund für jedes verworfene Repo. Der Mathe-Kern aus Session 004 ist unangetastet.
+**Die Analyse-Schicht steht und trägt auf echtem Code.** Sie klont, parst, ordnet Signale dem richtigen DAG zu und protokolliert alles, was sie nicht sicher entscheiden kann, statt es zu raten. Der große Lauf, das CSV und `report.md` sind Session 003.
 
 ### Was liegt
 
-- `scanner/harvest.py` — sechs Code-Search-Queries gegen `/search/code`, Drosselung beider Kontingente (`search` 30/min, `core` 5000/h), Filter, Resume.
-- `scanner/harvest_test.py` — 26 Tests: Filter-Tabelle, Dedup, Seiten-Fortschaltung, Query-Liste.
-- `data/` (nicht im Repo, per `.gitignore`): `candidates.jsonl` (1692), `rejected.jsonl` (403), `hits.jsonl` (5520 Rohtreffer), `harvest_state.json`, `scan_errors.jsonl`.
-- `pyproject.toml` — `mypy` prüft jetzt `eigenlag` **und** `scanner`.
+- `scanner/clone.py` — `git clone --depth 1 --single-branch` in `data/repos/<org>__<repo>/`, 120 s Timeout, vorhandene Clones werden nicht neu gezogen, Fehler gehen strukturiert an den Aufrufer.
+- `scanner/schedule.py` — `subdaily` / `daily_or_slower` / `none` / `dataset_triggered` / `unknown`. Cron wird gerechnet (kleinste Distanz zweier Feuerzeitpunkte über fünf Jahre), nicht am String geraten. Ohne `croniter` (ADR-010).
+- `scanner/analyze.py` — DAG-Erkennung (`DAG(...)`, `with DAG(...) as x`, `@dag`), DAG-Scoping über Block, Variable und `dag=`-Argument, `default_args`-Auflösung aus Modul-Dict-Literalen, Signale A bis D und F, Task-Factories nach ADR-009 getrennt gezählt.
+- `scanner/analyze_dbt.py` — Signal E, nur wenn `materialized='incremental'` **und** `is_incremental()` im kommentarfreien SQL. Materialisierung aus `{{ config() }}`, `schema.yml` oder `dbt_project.yml`, in dieser Reihenfolge.
+- `scanner/fixtures/` — zwei nachgebaute Repos: zwei DAGs in einem File, `depends_on_past=False`, Signal im Kommentar und im Docstring, Sensor mit und ohne `execution_delta`, `default_args` aufgelöst und unauflösbar, `@dag`, ambiger Task, `SyntaxError`, Factory-Modul, dbt-Models mit allen vier Kombinationen.
+- `pyproject.toml` — `pyyaml` als Scanner-Extra, Fixtures aus `ruff` und `mypy` genommen, `testpaths` gegen den Clone-Cache gepinnt.
 
 ### Was verifiziert wurde
 
-- **Echter Lauf:** 2095 Repos bewertet, **1692 Kandidaten** (1328 Airflow, 364 dbt), 403 verworfen (251 Blocklist, 152 Größe). Akzeptanzschwelle der Spec (250 / 120) deutlich übertroffen, ohne einen Filter aufzuweichen.
-- **Resume:** Lauf nach der ersten Query abgebrochen (1000 Zeilen in `hits.jsonl`), Neustart meldet `[fertig] depends_on_past ... (aus vorigem Lauf)` und zieht die 1000 Treffer nicht erneut.
-- **Drosselung:** `search`-Kontingent dreimal erschöpft, jedes Mal bis zum Reset gewartet und weitergelaufen. Ein 502 strukturiert in `scan_errors.jsonl`, vom Folgelauf automatisch nachgeholt.
-- **Stichprobe:** 10 Kandidaten zufällig gezogen, alle auf Datei und Zeile aufgelöst. Belege im Log, Eintrag 001.
-- `pytest` 62 passed, `ruff check`, `ruff format --check`, `mypy` grün.
+- `pytest`: **141 passed** (105 im Scanner, 79 davon neu). `ruff check`, `ruff format --check`, `mypy` grün.
+- **Rauchtest über 40 echte Kandidaten:** 352 DAGs, 4 Risiko-Kandidaten in einem Repo, 3 `SyntaxError` sauber protokolliert, 8 `unresolved_default_args`, 0 Abstürze, 0 Clone-Fehler. Alle vier Risiko-Belege von Hand im Clone nachgeschlagen, alle echt (`'depends_on_past': True` in `default_args`).
+- **ADR-009 reproduziert:** `navikt/team_familie_airflow_dags` meldet Factory-Signale in `operators/kafka_operators.py:32` und `:33` — dieselben Zeilen wie die Handprüfung bei der Abnahme von 001. Das Repo hat 33 DAGs und null DAG-scoped Signale; ohne die Factory-Regel wäre es als signalfrei durchgelaufen.
 
 ### Nächster Schritt
 
-**002 — Scanner: AST-Analyse.** Die Spec liegt unter `cc-sessions/002_offen-scanner-ast.md`. Sie kann direkt auf `data/candidates.jsonl` aufsetzen.
+**003 — Scan-Lauf und Report.** Spec liegt unter `cc-sessions/003_offen-scan-run-report.md`. Sie kann `clone.ensure_clone`, `analyze.analyze_repo` und `analyze_dbt.analyze_dbt_repo` direkt über `data/candidates.jsonl` laufen lassen.
 
 ## Hinweise für nächste Session
 
-### Neue Entscheidung
+### Neue Entscheidungen
 
-- **ADR-008** — Der Harvest ist zweistufig. Stufe 1 schreibt Rohtreffer nach `hits.jsonl`, Stufe 2 holt Metadaten und filtert. Die Resume-Grenze liegt zwischen beiden, damit ein Abbruch das knappe `search`-Kontingent schützt und nicht das reichliche `core`-Kontingent.
+- **ADR-010** — Cron wird ohne `croniter` gerechnet. Dafür `pyyaml` als Scanner-Extra (dbt-YAML). Der `eigenlag`-Kern bleibt bei `dependencies = []`. Die seit Session 000 offene Dependency-Frage ist damit geschlossen.
+- **ADR-011** — Signal F zählt in den `*_success`-Varianten als **starkes** Signal und damit in die Risiko-Quote. `signals.md` widersprach sich an dieser Stelle selbst und ist korrigiert.
 
-### Vom Orchestrator geprüft (2026-07-14) — Session 001 abgenommen, mit zwei Korrekturen
+### Was der Orchestrator prüfen soll
 
-Zahlen direkt aus `data/` nachgerechnet, deckungsgleich. Sechs der zehn Stichproben-Belege selbst per `raw.githubusercontent.com` aufgelöst, alle stehen genau dort, wo die Session sie verortet. Der Kernbefund hält: rohe Code-Search-Treffer sind zur Hälfte keine Signale, ADR-004 ist damit gemessen.
-
-1. **Korrektur — der `navikt`-Fall ist kein Falsch-Positiv, sondern ein Falsch-Negativ mit Ansage.** Die Session hat ihn als "nur eine Funktionssignatur" abgetan. Es ist eine **Task-Factory**: `depends_on_past: bool = True` und `wait_for_downstream: bool = True` als Defaults, `return KubernetesPodOperator(...)`. Jeder Task daraus trägt beide starken Signale. Spec 002 hätte das Repo als signalfrei gemeldet, weil das Signal in einem Helper-Modul steht, das kein DAG instanziiert. → **ADR-009**, Spec 002 Abschnitt 4b: Factories erkennen, **getrennt** zählen, nicht in die Hauptquote mischen. Die Hauptquote ist damit ausdrücklich eine **Untergrenze**, und das gehört in `report.md`.
-2. **Korrektur — die Belege im Log sind gekürzt und damit nicht auflösbar.** Dort steht `dags/tutorial.py:35`, echt ist `docker/sandbox/ubuntu-airflow/airflow/dags/tutorial.py`. Beim Nachprüfen liefen sechs `curl`-Aufrufe ins Leere. Regel 6 verlangt Auflösbarkeit in dreißig Sekunden. Im Log ist das ein Schönheitsfehler, in `scan_results.csv` und `report.md` wäre es ein Substanzfehler, weil der Beleg dort das Produkt ist. In Spec 002 festgehalten.
-
-### Was der Orchestrator für 003 übernimmt
-2. **Vier der sechs Queries laufen in den 1000er-Deckel** der Code-Search (`depends_on_past` meldet `total_count` 2284, geholt: 1000). Die Stichprobe ist nach oben abgeschnitten und nicht repräsentativ für "alle Airflow-Repos". Der Einschränkungssatz aus Spec 001 muss in `report.md` wirklich stehen.
-3. **`fork` und `archived` haben null Mal gegriffen.** Nachgeprüft an 20 zufälligen Kandidaten: alle `fork=false archived=false`. Die klassische Code-Search liefert offenbar weder Forks noch archivierte Repos. Kein Filter-Fehler, aber im Report zu erwähnen, sonst liest es sich wie einer.
-4. **Blocklist frisst 12 Prozent** (251 von 2095). Anfechtbar über `rejected.jsonl`, jede Zeile mit `reason` und `description`.
+1. **Die Risiko-Quote der Stichprobe ist niedrig: 4 von 352 DAGs (1,1 %), 1 von 40 Repos.** Das ist die Zahl, an der Phase 1 hängt. Zwei Erklärungen sind noch nicht getrennt: (a) Cross-Run-Signale sitzen tatsächlich fast immer in täglichen DAGs, dann ist die These "Schedule zu schnell für den Kreis" seltener als gedacht; (b) die ersten 40 Zeilen von `candidates.jsonl` sind die Treffer der ersten Query und damit nicht repräsentativ. Session 003 löst das über den vollen Lauf. **Der Report muss die Quote unabhängig davon aushalten, auch wenn sie klein bleibt** — die Alternative wäre, die Definition zu lockern, und genau das verbietet ADR-005.
+2. **`unresolved_default_args` läuft mit 8 Fällen auf 40 Repos.** Wenn diese Quote im vollen Lauf hoch bleibt, ist sie eine ausweisbare Untergrenze mehr, neben den Factories. Sie gehört als Zahl in `report.md`, nicht in eine Fußnote.
+3. **Sub-tägliche DAGs sind mit 59 von 352 (17 %) häufiger als erwartet.** Die Signale sitzen nur woanders. Das ist ein Befund, kein Fehler, aber er verdient im Report einen Satz.
 
 ### Offene Entscheidungen
 
-1. **`croniter` als Scanner-Dependency** (aus Session 000 offen, in 002 zu entscheiden). Spec 002 erlaubt sie im Scanner, nicht im `eigenlag`-Package.
-2. **`pipx` ist nicht installiert.** Wird für Session 009 gebraucht.
-3. **`numpy` wird im Kern nicht gebraucht**, erst bei Monte Carlo (Session 006).
+1. **`pipx` ist nicht installiert.** Wird für Session 009 gebraucht.
+2. **`numpy` wird im Kern weiterhin nicht gebraucht**, erst bei Monte Carlo (Session 006).
 
 ### Ungelöste Fragen
 
-- Unverändert: was passiert, wenn die Risiko-Quote nach der AST-Analyse klein ausfällt. Session 002 liefert die Zahl, die das entscheidet.
+- Was passiert, wenn die Risiko-Quote nach dem vollen Lauf klein bleibt. Die Stichprobe deutet in diese Richtung. Der Marktbeweis müsste dann anders formuliert werden: nicht "so viele Pipelines sind gefährdet", sondern "so viele Pipelines haben einen Kreis, den niemand kennt, und für keinen einzigen ist λ bekannt". Das ist die ehrlichere und vermutlich auch die stärkere Aussage, aber sie ist eine andere.

@@ -132,3 +132,31 @@ Erkennungsregel, bewusst schlicht: eine Funktion, die einen Operator instanziier
 **Was bewusst NICHT gemacht wird:** eine interprozedurale Analyse, die Aufrufstellen zurückverfolgt und die Factory-Tasks den aufrufenden DAGs zuordnet. Das ist ein statisches Auflösungsproblem mit `**kwargs`, dynamischen Imports und Schleifen, und es ist für eine Marktzahl unverhältnismäßig.
 
 **Konsequenz für den Report (Session 003):** Die Risiko-Quote bleibt auf die DAG-scoped Treffer bezogen und ist damit eine **Untergrenze**. Der Report muss das benennen: Repos mit Task-Factories werden mit ihrer Zahl separat ausgewiesen, mit dem Satz, dass die Hauptquote sie nicht enthält. Die Richtung des Fehlers ist die verteidigbare: wir unterschätzen, statt aufzublähen. Eine kleinere Zahl, die hält, ist mehr wert als eine größere, die kippt (vgl. ADR-005).
+
+---
+
+## ADR-010 — Cron wird gerechnet, nicht geraten, und `croniter` bleibt draußen
+
+**Status:** entschieden, 2026-07-14 (Session 002). Schließt die seit Session 000 offene Dependency-Frage.
+**Kontext:** Spec 002 erlaubt `croniter` als einzige Zusatz-Dependency des Scanners, um die kleinste Distanz zwischen zwei Feuerzeitpunkten zu bestimmen. Beim Implementieren zeigte sich, dass die Bibliothek dafür nicht gebraucht wird.
+
+**Entscheidung:** `scanner/schedule.py` expandiert die fünf Cron-Felder selbst (Listen, Schritte, Bereiche, Monats- und Wochentagsnamen, die ODER-Semantik von Tag-des-Monats und Wochentag) und rechnet die kleinste Distanz über ein Referenzfenster von fünf Jahren aus. Ist sie kürzer als 24 Stunden, ist der Schedule sub-täglich.
+
+**Begründung:** Die Herleitung ist trivial, sobald die Felder expandiert sind. Feuert ein Ausdruck an einem Tag mehr als einmal, liegt der kleinste Abstand zwangsläufig innerhalb des Tages und damit unter 24 Stunden. Feuert er höchstens einmal am Tag, ist der kleinste Abstand ein Vielfaches von 24 Stunden. Das Fenster von fünf Jahren ist nötig, damit ein jährlicher Ausdruck überhaupt zwei Feuerzeitpunkte hat und der 29. Februar zweimal vorkommt. Ausdrücke, die im Fenster nie feuern (`0 12 30 2 *`), sind `unknown`, nicht "täglich" — geraten wird nicht.
+
+Die Alternative wäre eine Dependency für eine Funktion von rund achtzig Zeilen gewesen, deren Korrektheit ohnehin gegen die Tabelle aus `signals.md` getestet werden muss (Regel 10: keine schweren Dependencies). Der Zusatznutzen von `croniter` — echte Zeitpunkte statt nur Distanzen — wird an keiner Stelle gebraucht: der Scanner klassifiziert, er plant nicht.
+
+**Was stattdessen hinzukam:** `pyyaml` als **Scanner**-Dependency (Extra `scanner` in `pyproject.toml`). `dbt_project.yml` und die `schema.yml` neben den Models sind verschachteltes YAML mit `+`-Präfixen; das von Hand zu parsen wäre die falsche Sparsamkeit. Der `eigenlag`-Kern bleibt abhängigkeitsfrei, `dependencies = []` steht unverändert.
+
+---
+
+## ADR-011 — Signal F zählt in der `*_success`-Variante als starkes Signal
+
+**Status:** entschieden, 2026-07-14 (Session 002)
+**Kontext:** `signals.md` definierte den Risiko-Kandidaten als "mindestens ein starkes Signal (A, B, C, D, E) und sub-täglicher Schedule". Derselbe Text sagt bei Signal F, die `*_success`-Varianten seien "harte Kanten" und nur `prev_ds` und `prev_execution_date` seien schwach und blieben aus der Quote heraus (ADR-005). Beides zusammen ist widersprüchlich: die Aufzählung schließt F ganz aus, die Abstufung schließt nur die schwache Hälfte aus.
+
+**Entscheidung:** Stark sind A, B, C, D, E **und** F in den `*_success`-Varianten (`prev_start_date_success`, `prev_data_interval_start_success`, `prev_data_interval_end_success`). Schwach bleiben `prev_ds`, `prev_ds_nodash` und `prev_execution_date`; sie werden getrennt gezählt und begründen keinen Risiko-Kandidaten.
+
+**Begründung:** Ein Task, der auf `{{ prev_start_date_success }}` zugreift, wartet per Definition auf den erfolgreichen Vorlauf. Das ist genau die Kante, die λ erzeugt. Die Aufzählung "A bis E" war eine Verkürzung aus der Zeit vor der Abstufung, kein eigener Beschluss. Die Abstufung ist die begründete Aussage, sie gewinnt.
+
+**Konsequenz:** `signals.md` ist korrigiert. `STRONG_KINDS` in `scanner/analyze.py` enthält `prev_run_success`, nicht `prev_run_date`.
