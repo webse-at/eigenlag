@@ -1,0 +1,5 @@
+repo,file,lineno,signal,permalink
+navikt/team_familie_airflow_dags,operators/kafka_operators.py,32,depends_on_past,https://github.com/navikt/team_familie_airflow_dags/blob/dfbd857b04f257ffe76f15e42efdce34ae1db992/operators/kafka_operators.py#L32
+navikt/team_familie_airflow_dags,operators/kafka_operators.py,33,wait_for_downstream,https://github.com/navikt/team_familie_airflow_dags/blob/dfbd857b04f257ffe76f15e42efdce34ae1db992/operators/kafka_operators.py#L33
+shrestic/top_states_ecommerce_etl,plugins/etl/transform/transform.py,41,depends_on_past,https://github.com/shrestic/top_states_ecommerce_etl/blob/0587ba53fd592b4b595fa89d3a512b391c146117/plugins/etl/transform/transform.py#L41
+shrestic/top_states_ecommerce_etl,plugins/etl/transform/transform.py,55,depends_on_past,https://github.com/shrestic/top_states_ecommerce_etl/blob/0587ba53fd592b4b595fa89d3a512b391c146117/plugins/etl/transform/transform.py#L55

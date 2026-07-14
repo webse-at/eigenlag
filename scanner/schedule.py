@@ -134,7 +134,7 @@ def classify_cron(expr: str) -> ScheduleClass:
     return "subdaily" if gap < MINUTES_PER_DAY else "daily_or_slower"
 
 
-def _timedelta_seconds(call: ast.Call) -> float | None:
+def timedelta_seconds(call: ast.Call) -> float | None:
     parts: dict[str, float] = {}
     for i, arg in enumerate(call.args):
         if i >= len(TIMEDELTA_ARGS) or not isinstance(arg, ast.Constant):
@@ -192,7 +192,7 @@ def classify_node(node: ast.expr | None) -> tuple[ScheduleClass, str | None]:
         if name in DATASET_CALLS:
             return "dataset_triggered", raw
         if name == "timedelta":
-            seconds = _timedelta_seconds(node)
+            seconds = timedelta_seconds(node)
             if seconds is None or seconds <= 0:
                 return "unknown", raw
             return ("subdaily" if seconds < 24 * 3600 else "daily_or_slower"), raw

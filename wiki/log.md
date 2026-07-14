@@ -302,3 +302,43 @@ Alle vier sind `depends_on_past: True` in einem `default_args`-Dict, das als Mod
 5. **Ein Verzeichnis, das aussieht wie eine Datei.** `Swagatd/gcphandson` hat unter `target/compiled/` ein *Verzeichnis* namens `_analytics_models.yml`. `rglob("*.yml")` liefert es, `read_bytes()` wirft `IsADirectoryError`, der Lauf über 40 Repos stirbt bei Repo 6. Das ist die Sorte Fund, für die die Regel "fremde Repos sind Systemgrenze" existiert, und die keine noch so gute Fixture-Sammlung vorwegnimmt: sie fällt nur im echten Lauf an. Behoben, Regressionstest steht.
 
 **Ambiguität wird protokolliert, nicht geraten.** Ein Operator ohne DAG-Bezug in einem File mit mehreren DAGs landet als `ambiguous_task` in den Fehlern, verankert am Operator-Aufruf (nicht am Signal-Keyword: ambig ist der Task, nicht das Argument). In einem File mit genau einem DAG wird er diesem zugeordnet und trägt `inferred=True`, damit die Konfidenz im Report trennbar bleibt.
+
+## 003 — Scanner: Lauf, CSV, Report (2026-07-14)
+
+**Gemacht:** `scanner/run.py` (resume-fähiger Lauf über die 1692 Kandidaten, Clone-SHA für die
+Permalinks, Fehler nach `data/scan_errors.jsonl`), `scanner/report.py` (`scan_results.csv`,
+`scan_factories.csv`, `scan_dbt.csv`, `report.md`), `task_count` pro DAG in `analyze.py`, beide
+Stichproben nach `scan/sample_verification.md`. Artefakte liegen unter `scan/`, weil `data/`
+ungetrackt ist.
+
+**Gemessen (finaler Lauf, Lauf 3):** 1692 Repos, 1671 geklont, 21 Clone-Fehler (davon 20
+Timeouts, die im zweiten Anlauf durchkamen). 317.706 Python-Files geparst, 7590 `SyntaxError`
+protokolliert, kein Abbruch. **51.426 DAGs.** 1303 mit Cross-Run-Kante (2,5 %), 2543 sub-täglich
+(4,9 %), **176 Risiko-Kandidaten (0,3 %) in 100 Repos.** dbt getrennt: 496 Repos mit
+`dbt_project.yml`, 37.109 Models, davon 3369 mit echter Selbst-Kante (9,1 %).
+
+**Was überrascht hat, und es ist der wichtigste Befund der Session:** 38.575 der 51.426 DAGs
+(75 %) liegen in Beispiel-, Test- oder Doku-Pfaden, und unter den Risiko-Kandidaten sind es 138
+von 176 (78 %). Airflows eigener Demo-DAG `example_branch_dop_operator_v3` trägt
+`depends_on_past=True` bei `*/1 * * * *` und wird in jedes zweite Lern-Repo kopiert, ebenso
+`test_dag.py` aus der Docker-Doku (`*/10 * * * *`). Die Risiko-Quote misst damit vor allem, wie
+oft Airflow-Beispiele geforkt werden. Öffentliche Repos sind für diese Frage der falsche
+Beweisort: dort liegt Lernmaterial, und Laufzeiten liegen dort ohnehin nicht.
+
+**Drei Läufe, weil zwei Korrekturen nötig waren.** Lauf 1 (1840 s inkl. Klonen, 74 GB) diente
+als Basis. Die Negativ-Suche deckte zwei Erkennungslücken bei Signal F auf (ADR-013), die
+Positiv-Stichprobe einen echten Falsch-Positiv (`execution_delta=timedelta(hours=0)`, ADR-014).
+Beide korrigiert, Lauf jeweils wiederholt (615 s ohne Klonen). Wirkung der Korrekturen:
+Cross-Run 1335 → 1303, Risiko 182 → 176. Die alten Stände liegen als `data/scan_state_run1`
+und `_run2`, nichts wurde überschrieben.
+
+**Stichproben:** 10 Risiko-Kandidaten gegen den Quelltext geprüft, 0 Falsch-Positive. 10
+signalfreie Kandidaten-Repos geprüft, 0 unbekannte Muster (alle schweigen wegen
+`depends_on_past: False` oder auskommentiertem Code, wo ein Regex zehnmal angeschlagen hätte).
+
+**`include_prior_dates` steht bei null DAGs, und das ist richtig.** Der Begriff kommt hunderte
+Male vor, aber praktisch nur als `xcom_pull`-Parameter oder im Airflow-Quelltext. An einem
+`ExternalTaskSensor` steht er in keinem einzigen der geklonten Repos. Signal D ist in freier
+Wildbahn faktisch tot.
+
+**Tests:** 140 passed, `ruff` und `mypy` grün.

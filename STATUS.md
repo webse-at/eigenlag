@@ -2,47 +2,70 @@
 
 > Wird am Ende jeder Session überschrieben. Schnelle Orientierung für die nächste Session.
 
-## Stand: Session 002 — Scanner: AST-Analyse (2026-07-14)
+## Stand: Session 003 — Scanner: Lauf, CSV, Report (2026-07-14)
 
-**Die Analyse-Schicht steht und trägt auf echtem Code.** Sie klont, parst, ordnet Signale dem richtigen DAG zu und protokolliert alles, was sie nicht sicher entscheiden kann, statt es zu raten. Der große Lauf, das CSV und `report.md` sind Session 003.
+**Phase 1 ist technisch abgeschlossen und inhaltlich negativ ausgegangen.** Der Scanner läuft
+über die volle Kandidatenliste, jede Zahl hat einen Nenner, jeder Treffer einen Permalink auf
+den Commit-SHA. Der Marktbeweis, den Phase 1 erbringen sollte, ist damit **nicht** erbracht.
 
 ### Was liegt
 
-- `scanner/clone.py` — `git clone --depth 1 --single-branch` in `data/repos/<org>__<repo>/`, 120 s Timeout, vorhandene Clones werden nicht neu gezogen, Fehler gehen strukturiert an den Aufrufer.
-- `scanner/schedule.py` — `subdaily` / `daily_or_slower` / `none` / `dataset_triggered` / `unknown`. Cron wird gerechnet (kleinste Distanz zweier Feuerzeitpunkte über fünf Jahre), nicht am String geraten. Ohne `croniter` (ADR-010).
-- `scanner/analyze.py` — DAG-Erkennung (`DAG(...)`, `with DAG(...) as x`, `@dag`), DAG-Scoping über Block, Variable und `dag=`-Argument, `default_args`-Auflösung aus Modul-Dict-Literalen, Signale A bis D und F, Task-Factories nach ADR-009 getrennt gezählt.
-- `scanner/analyze_dbt.py` — Signal E, nur wenn `materialized='incremental'` **und** `is_incremental()` im kommentarfreien SQL. Materialisierung aus `{{ config() }}`, `schema.yml` oder `dbt_project.yml`, in dieser Reihenfolge.
-- `scanner/fixtures/` — zwei nachgebaute Repos: zwei DAGs in einem File, `depends_on_past=False`, Signal im Kommentar und im Docstring, Sensor mit und ohne `execution_delta`, `default_args` aufgelöst und unauflösbar, `@dag`, ambiger Task, `SyntaxError`, Factory-Modul, dbt-Models mit allen vier Kombinationen.
-- `pyproject.toml` — `pyyaml` als Scanner-Extra, Fixtures aus `ruff` und `mypy` genommen, `testpaths` gegen den Clone-Cache gepinnt.
+- `scanner/run.py` — Lauf über `data/candidates.jsonl`, resume-fähig (State-File je Repo unter
+  `data/scan_state/`), Clone-SHA für die Permalinks, Fehler nach `data/scan_errors.jsonl`.
+- `scanner/report.py` — `scan/scan_results.csv` (eine Zeile je DAG), `scan/scan_factories.csv`,
+  `scan/scan_dbt.csv`, `scan/report.md`. Airflow und dbt mit getrennten Nennern (ADR-012).
+- `scan/sample_verification.md` — beide Stichproben, je 10 Zeilen, mit Urteil.
+- `scanner/analyze.py` — zusätzlich `task_count` je DAG, Signal F an drei Fundorten (ADR-013),
+  `execution_delta=0` ist kein Signal (ADR-014).
 
 ### Was verifiziert wurde
 
-- `pytest`: **141 passed** (105 im Scanner, 79 davon neu). `ruff check`, `ruff format --check`, `mypy` grün.
-- **Rauchtest über 40 echte Kandidaten:** 352 DAGs, 4 Risiko-Kandidaten in einem Repo, 3 `SyntaxError` sauber protokolliert, 8 `unresolved_default_args`, 0 Abstürze, 0 Clone-Fehler. Alle vier Risiko-Belege von Hand im Clone nachgeschlagen, alle echt (`'depends_on_past': True` in `default_args`).
-- **ADR-009 reproduziert:** `navikt/team_familie_airflow_dags` meldet Factory-Signale in `operators/kafka_operators.py:32` und `:33` — dieselben Zeilen wie die Handprüfung bei der Abnahme von 001. Das Repo hat 33 DAGs und null DAG-scoped Signale; ohne die Factory-Regel wäre es als signalfrei durchgelaufen.
+- `pytest`: **140 passed**, `ruff check`, `ruff format --check`, `mypy` grün.
+- **Voller Lauf (Lauf 3, final):** 1692 Repos, 1671 geklont, 21 Clone-Fehler, 317.706 Files
+  geparst, 7590 `SyntaxError` protokolliert, kein Abbruch. **51.426 DAGs, 1303 mit Cross-Run
+  (2,5 %), 2543 sub-täglich (4,9 %), 176 Risiko-Kandidaten (0,3 %) in 100 Repos.** dbt: 496
+  Repos mit `dbt_project.yml`, 37.109 Models, 3369 mit echter Selbst-Kante (9,1 %).
+- **Stichprobe 8a:** 10 Risiko-Kandidaten gegen den Quelltext geprüft, **0 Falsch-Positive**.
+- **Stichprobe 8b:** 10 signalfreie Kandidaten-Repos geprüft, **0 unbekannte Muster**.
 
-### Nächster Schritt
+### Der Befund, an dem alles hängt
 
-**003 — Scan-Lauf und Report.** Spec liegt unter `cc-sessions/003_offen-scan-run-report.md`. Sie kann `clone.ensure_clone`, `analyze.analyze_repo` und `analyze_dbt.analyze_dbt_repo` direkt über `data/candidates.jsonl` laufen lassen.
+**138 der 176 Risiko-Kandidaten (78 %) sind Beispiel-, Test- oder Doku-Code**, ebenso 75 % aller
+gefundenen DAGs. Airflows eigener Demo-DAG `example_branch_dop_operator_v3` trägt
+`depends_on_past=True` bei `*/1 * * * *` und wird massenhaft geforkt. Die Risiko-Quote misst
+damit vor allem die Kopierfreude von Lernenden. Öffentliche Repos sind für diese Frage der
+falsche Beweisort: dort liegt Lernmaterial, und Laufzeiten liegen dort ohnehin nicht.
+
+Die Definition wurde **nicht** gelockert (ADR-005 und Spec 003, Abschnitt 7). Die Aussage, die
+hält, steht im Report: 1303 Airflow-DAGs und 3369 dbt-Models haben einen Kreis über die
+Zeitachse, und für keinen einzigen ist bekannt, wo seine Taktgrenze liegt.
 
 ## Hinweise für nächste Session
 
 ### Neue Entscheidungen
 
-- **ADR-010** — Cron wird ohne `croniter` gerechnet. Dafür `pyyaml` als Scanner-Extra (dbt-YAML). Der `eigenlag`-Kern bleibt bei `dependencies = []`. Die seit Session 000 offene Dependency-Frage ist damit geschlossen.
-- **ADR-011** — Signal F zählt in den `*_success`-Varianten als **starkes** Signal und damit in die Risiko-Quote. `signals.md` widersprach sich an dieser Stelle selbst und ist korrigiert.
+- **ADR-013** — Signal F wird auch als Parametername einer Callable und als Template in einer
+  Modul-Variablen erkannt. Gefunden über die Negativ-Suche, nicht über die Stichprobe.
+- **ADR-014** — `execution_delta=timedelta(hours=0)` ist kein Cross-Run-Signal. Gefunden als
+  Falsch-Positiv in der Stichprobe, Ursache behoben, Lauf wiederholt.
 
-### Was der Orchestrator prüfen soll
+### Was David und der Orchestrator entscheiden müssen
 
-1. **Die Risiko-Quote der Stichprobe ist niedrig: 4 von 352 DAGs (1,1 %), 1 von 40 Repos.** Das ist die Zahl, an der Phase 1 hängt. Zwei Erklärungen sind noch nicht getrennt: (a) Cross-Run-Signale sitzen tatsächlich fast immer in täglichen DAGs, dann ist die These "Schedule zu schnell für den Kreis" seltener als gedacht; (b) die ersten 40 Zeilen von `candidates.jsonl` sind die Treffer der ersten Query und damit nicht repräsentativ. Session 003 löst das über den vollen Lauf. **Der Report muss die Quote unabhängig davon aushalten, auch wenn sie klein bleibt** — die Alternative wäre, die Definition zu lockern, und genau das verbietet ADR-005.
-2. **`unresolved_default_args` läuft mit 8 Fällen auf 40 Repos.** Wenn diese Quote im vollen Lauf hoch bleibt, ist sie eine ausweisbare Untergrenze mehr, neben den Factories. Sie gehört als Zahl in `report.md`, nicht in eine Fußnote.
-3. **Sub-tägliche DAGs sind mit 59 von 352 (17 %) häufiger als erwartet.** Die Signale sitzen nur woanders. Das ist ein Befund, kein Fehler, aber er verdient im Report einen Satz.
+1. **Phase 2 startet nicht blind.** Der Marktbeweis über öffentlichen Code ist gescheitert, und
+   zwar nicht am Scanner, sondern an der Grundgesamtheit. Vor weiterem Produktbau braucht es
+   einen Beleg aus einer Quelle, die Laufzeiten kennt.
+2. **Drei Quellen, die ohne eigenes Netzwerk erreichbar sind** (im Chat besprochen, nicht
+   geprüft): dbt-Artefakte (`run_results.json` enthält die Ausführungszeit je Model,
+   `manifest.json` den Graphen), die Suche nach dem Schmerz statt nach der Struktur
+   (GitHub-Issues, Stack Overflow, r/dataengineering: "dag runs piling up",
+   "scheduler falling behind"), und ein Tauschangebot in denselben Communities (anonymisierter
+   Export aus der Airflow-Metadaten-DB gegen kostenlose λ-Rechnung).
+3. **Der Scan taugt als Build-in-Public-Content**, gerade weil die Zahl klein ist. Nicht für die
+   Agentur-Kanäle.
 
-### Offene Entscheidungen
+### Offene Punkte aus früheren Sessions
 
-1. **`pipx` ist nicht installiert.** Wird für Session 009 gebraucht.
-2. **`numpy` wird im Kern weiterhin nicht gebraucht**, erst bei Monte Carlo (Session 006).
-
-### Ungelöste Fragen
-
-- Was passiert, wenn die Risiko-Quote nach dem vollen Lauf klein bleibt. Die Stichprobe deutet in diese Richtung. Der Marktbeweis müsste dann anders formuliert werden: nicht "so viele Pipelines sind gefährdet", sondern "so viele Pipelines haben einen Kreis, den niemand kennt, und für keinen einzigen ist λ bekannt". Das ist die ehrlichere und vermutlich auch die stärkere Aussage, aber sie ist eine andere.
+- `pipx` ist nicht installiert, wird für Session 009 gebraucht.
+- `numpy` wird im Kern erst bei Monte Carlo (Session 006) gebraucht.
+- Der Clone-Cache liegt mit 74 GB unter `data/repos/`, die Stände der Läufe 1 und 2 unter
+  `data/scan_state_run1` und `_run2`. Nichts davon ist getrackt, nichts wurde überschrieben.

@@ -16,12 +16,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from scanner.schedule import ScheduleClass, call_name, classify_node
+from scanner.schedule import ScheduleClass, call_name, classify_node, timedelta_seconds
 
 Json = dict[str, Any]  # Fehler-Records gehen als JSONL nach aussen, kein festes Schema.
 
 DAG_NAMES = {"DAG"}
 DECORATOR_NAMES = {"dag"}
+TASK_DECORATOR = "task"
+TASK_CALL_SUFFIXES = ("Operator", "Sensor")
 BOOL_SIGNALS = {"depends_on_past", "wait_for_downstream"}
 OFFSET_KWARGS = {"execution_delta", "execution_date_fn"}
 SCHEDULE_KWARGS = ["schedule", "schedule_interval", "timetable"]
@@ -33,6 +35,15 @@ PREV_SUCCESS = re.compile(
 )
 # Signal F, schwache Variante: reine Datums-Arithmetik, keine Wartesemantik.
 PREV_DATE = re.compile(r"\{\{[^{}]*\bprev_(ds|ds_nodash|execution_date)\b")
+
+# Airflow injiziert denselben Kontext ueber den Parameternamen einer Callable (ADR-013).
+# `def f(prev_start_date_success, **kwargs)` wartet genauso auf den Vorlauf wie das Template.
+PREV_SUCCESS_PARAMS = {
+    "prev_start_date_success",
+    "prev_data_interval_start_success",
+    "prev_data_interval_end_success",
+}
+PREV_DATE_PARAMS = {"prev_ds", "prev_ds_nodash", "prev_execution_date"}
 
 STRONG_KINDS = {
     "depends_on_past",
@@ -61,6 +72,7 @@ class DagFinding:
     lineno: int
     schedule: ScheduleClass
     schedule_expr: str | None
+    task_count: int = 0
     signals: list[Signal] = field(default_factory=list)
 
     @property
@@ -248,6 +260,18 @@ def _name_of(node: ast.expr) -> str:
     return ""
 
 
+def _decorator_root(node: ast.expr) -> str:
+    """Wurzel eines Dekorators: `task`, `task.bash`, `task(retries=1)` ergeben alle `task`."""
+    current = node.func if isinstance(node, ast.Call) else node
+    while isinstance(current, ast.Attribute):
+        current = current.value
+    return current.id if isinstance(current, ast.Name) else ""
+
+
+def _is_task_call(call: ast.Call) -> bool:
+    return call_name(call).endswith(TASK_CALL_SUFFIXES)
+
+
 def _scope(
     call: ast.Call,
     tree: ast.Module,
@@ -274,16 +298,32 @@ def _scope(
     )
 
 
+def _owner_of_line(lineno: int, scopes: list[_Scope]) -> _Scope | None:
+    lexical = [s for s in scopes if s.span and s.span[0] <= lineno <= s.span[1]]
+    if not lexical:
+        return None
+    return max(lexical, key=lambda s: s.span[0])  # type: ignore[index]  # span geprueft
+
+
 def _owner(call: ast.Call, scopes: list[_Scope]) -> _Scope | None:
-    lexical = [s for s in scopes if s.span and s.span[0] <= call.lineno <= s.span[1]]
+    lexical = _owner_of_line(call.lineno, scopes)
     if lexical:
-        return max(lexical, key=lambda s: s.span[0])  # type: ignore[index]  # span geprueft
+        return lexical
     bound = _kwarg(call, "dag")
     if isinstance(bound, ast.Name):
         for scope in scopes:
             if scope.var == bound.id:
                 return scope
     return None
+
+
+def _is_zero_offset(node: ast.expr) -> bool:
+    """`execution_delta=None` oder ein Versatz von null zeigt auf denselben Logical Date."""
+    if isinstance(node, ast.Constant) and node.value is None:
+        return True
+    if isinstance(node, ast.Call) and call_name(node) == "timedelta":
+        return timedelta_seconds(node) == 0
+    return False
 
 
 def _call_signals(call: ast.Call, path: str) -> list[Signal]:
@@ -299,7 +339,7 @@ def _call_signals(call: ast.Call, path: str) -> list[Signal]:
     if is_sensor:
         for kwarg in sorted(OFFSET_KWARGS):
             node = _kwarg_node(call, kwarg)
-            if node and not (isinstance(node.value, ast.Constant) and node.value.value is None):
+            if node and not _is_zero_offset(node.value):
                 signals.append(
                     Signal(
                         kind="external_task_sensor",
@@ -354,6 +394,44 @@ def _template_signals(call: ast.Call, path: str) -> list[Signal]:
                 signals.append(
                     Signal(kind="prev_run_date", file=path, lineno=node.lineno, source="template")
                 )
+    return signals
+
+
+def _context_param_signals(
+    node: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda, path: str
+) -> list[Signal]:
+    args = node.args
+    names = [*args.posonlyargs, *args.args, *args.kwonlyargs]
+    signals: list[Signal] = []
+    for arg in names:
+        if arg.arg in PREV_SUCCESS_PARAMS:
+            kind = "prev_run_success"
+        elif arg.arg in PREV_DATE_PARAMS:
+            kind = "prev_run_date"
+        else:
+            continue
+        signals.append(Signal(kind=kind, file=path, lineno=arg.lineno, source="context_param"))
+    return signals
+
+
+def _module_template_signals(tree: ast.Module, path: str) -> list[Signal]:
+    """Template in einer Modul-Variablen statt im Operator-Argument (ADR-013)."""
+    signals: list[Signal] = []
+    for stmt in tree.body:
+        if not isinstance(stmt, ast.Assign) or not isinstance(stmt.value, ast.Constant):
+            continue
+        value = stmt.value.value
+        if not isinstance(value, str):
+            continue
+        if PREV_SUCCESS.search(value):
+            kind = "prev_run_success"
+        elif PREV_DATE.search(value):
+            kind = "prev_run_date"
+        else:
+            continue
+        signals.append(
+            Signal(kind=kind, file=path, lineno=stmt.value.lineno, source="module_template")
+        )
     return signals
 
 
@@ -425,13 +503,11 @@ def analyze_source(source: str, path: str) -> FileAnalysis:
     dag_call_lines = {scope.finding.lineno for scope in scopes}
 
     single = scopes[0] if len(scopes) == 1 else None
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or node.lineno in dag_call_lines:
-            continue
-        signals = _call_signals(node, path)
+
+    def attach(signals: list[Signal], owner: _Scope | None, anchor: int) -> None:
+        """Signale dem DAG zuordnen. Ohne Zuordnung wird nicht geraten, sondern protokolliert."""
         if not signals:
-            continue
-        owner = _owner(node, scopes)
+            return
         inferred = False
         if owner is None:
             if single is None:
@@ -439,11 +515,11 @@ def analyze_source(source: str, path: str) -> FileAnalysis:
                     {
                         "kind": "ambiguous_task",
                         "file": path,
-                        "lineno": node.lineno,
+                        "lineno": anchor,
                         "signals": sorted({s.kind for s in signals}),
                     }
                 )
-                continue
+                return
             owner = single
             inferred = True
         for signal in signals:
@@ -456,6 +532,31 @@ def analyze_source(source: str, path: str) -> FileAnalysis:
                     inferred=inferred,
                 )
             )
+
+    for signal in _module_template_signals(tree, path):
+        attach([signal], _owner_of_line(signal.lineno, scopes), signal.lineno)
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and any(
+                _decorator_root(deco) == TASK_DECORATOR for deco in node.decorator_list
+            ):
+                task_owner = _owner_of_line(node.lineno, scopes) or single
+                if task_owner:
+                    task_owner.finding.task_count += 1
+            attach(
+                _context_param_signals(node, path),
+                _owner_of_line(node.lineno, scopes),
+                node.lineno,
+            )
+            continue
+        if not isinstance(node, ast.Call) or node.lineno in dag_call_lines:
+            continue
+        if _is_task_call(node):
+            owner = _owner(node, scopes) or single
+            if owner:
+                owner.finding.task_count += 1
+        attach(_call_signals(node, path), _owner(node, scopes), node.lineno)
 
     for scope in scopes:
         scope.finding.signals = list(dict.fromkeys(scope.finding.signals))

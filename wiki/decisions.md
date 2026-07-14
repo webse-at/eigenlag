@@ -173,3 +173,38 @@ Die Alternative wäre eine Dependency für eine Funktion von rund achtzig Zeilen
 **Begründung:** Ein dbt-Repo kann die Risiko-Bedingung konstruktionsbedingt nie erfüllen. Mischt man die 364 dbt-Repos in den Nenner, verdünnt sich die Quote um einen Faktor, der nichts mit der Wirklichkeit zu tun hat. Mischt man sie in den Zähler, behauptet man ein Risiko, das man nicht belegen kann, weil der Takt unbekannt ist. Beides wäre eine Zahl, die niemand verteidigen kann.
 
 **Der positive Dreh:** Bei dbt kennen wir den Kreis, aber nicht den Takt. Das ist kein Mangel des Scanners, sondern genau die Lücke, die das Produkt schließt. Ein inkrementelles Model mit `is_incremental()` hat eine Selbst-Kante, und ob sein Takt darunter liegt, weiß heute niemand, weil Kreis und Takt in getrennten Systemen stehen. Der Report soll das so sagen.
+
+---
+
+## ADR-013 — Signal F wird an zwei weiteren Fundorten erkannt: Callable-Parameter und Modul-Variable
+
+**Status:** entschieden, 2026-07-14 (Session 003)
+**Kontext:** Der erste volle Lauf meldete nur 2 DAGs mit `prev_*_success`, obwohl die Code-Search 154 Repos für `prev_start_date_success` geliefert hatte. Die Nachsuche im Clone-Cache zeigte, warum: `scanner/analyze.py` suchte das Template ausschließlich in String-Literalen, die als Argument eines Aufrufs stehen. In echtem Code steht dieselbe Semantik an zwei anderen Stellen.
+
+1. **Als Parametername einer Callable.** Airflow injiziert den Task-Kontext über den Parameternamen. `def get_last_execution_date(prev_start_date_success, **kwargs)` (`V-Dang/covid_pipeline`, `archive.py:3`) und `lambda prev_start_date_success: prev_start_date_success is not None` (`oxylabs/building-scraping-pipeline-apache-airflow`, `DAG/scrape.py:26`) warten genauso auf den erfolgreichen Vorlauf wie `{{ prev_start_date_success }}` im Template.
+2. **Als Template in einer Modul-Variablen.** `date_last_success = '{{ prev_start_date_success }}'` (`abdurahim-dag/portfolio`, `exchange rate/solution/dags/init.py:42`), später in ein Operator-Argument interpoliert.
+
+**Entscheidung:** Beide Fundorte zählen als Signal F, mit derselben Abstufung wie bisher (`*_success` stark, `prev_ds` und Verwandte schwach, ADR-005 und ADR-011). Die Zuordnung bleibt DAG-scoped: lexikalischer Scope, sonst der einzige DAG des Files, sonst `ambiguous_task` im Fehler-Log. Ein Helfer-Modul ohne DAG (wie `V-Dang/covid_pipeline`, `archive.py`) erzeugt kein Signal, weil es keinem DAG zuzuordnen ist.
+
+**Begründung:** Die Semantik ist identisch, nur die Schreibweise ist eine andere. Wer nur die eine Schreibweise erkennt, misst die Verbreitung der Schreibweise und nicht die des Signals. Spec 003, Abschnitt 8b, benennt genau diesen Fall: ein Muster, das der Scanner nicht kennt, ist kein legitimer Grund für ein fehlendes Signal.
+
+**Wirkung im vollen Lauf:** 5 zusätzliche Fundstellen in 5 Repos, davon 3 starke. Die Zahl ist klein, die Richtung ist der Punkt: der Scanner unterzählt, und diese Lücke ist jetzt geschlossen.
+
+---
+
+## ADR-014 — Ein `execution_delta` von null ist kein Cross-Run-Signal
+
+**Status:** entschieden, 2026-07-14 (Session 003, aus der Stichprobe)
+**Kontext:** Die Falsch-Positiv-Stichprobe auf Lauf 2 enthielt `Dat-Al/Fidai`, `airflow/dags/predict_hourly_dag.py:37`:
+
+```python
+execution_delta=timedelta(hours=0),  # Regarde la même heure d'exécution
+```
+
+Der Scanner zählte jedes gesetzte `execution_delta`, das nicht `None` war, als Signal C. Ein Versatz von null zeigt aber auf denselben Logical Date. Das ist eine Intra-Run-Kante zwischen zwei DAGs, genau der Fall, den `signals.md` ausdrücklich ausschließt, und der Autor des Codes schreibt es sogar in den Kommentar.
+
+**Entscheidung:** `execution_delta` zählt nur, wenn der Versatz nicht null ist. Ein `timedelta(...)`-Literal wird ausgerechnet (`scanner.schedule.timedelta_seconds`); ergibt es 0, ist es kein Signal. Ein Versatz, der statisch nicht auflösbar ist (Variable, Funktionsaufruf), zählt weiterhin, weil sein einziger Zweck der Zeitversatz ist und `signals.md` diesen Fall bereits als "Cross-Run erkannt, Versatz unbekannt" führt.
+
+**Begründung:** Ein Falsch-Positiv in einer Zahl, die öffentlich behauptet wird, kostet mehr als jede Untererfassung. Die Stichprobe hat genau dafür existiert, und die Spec verlangt bei einem Fund: Ursache beheben, Lauf wiederholen, nicht die Stichprobe nachziehen.
+
+**Wirkung im vollen Lauf:** Cross-Run-DAGs 1335 → 1303, Risiko-Kandidaten 182 → 176.

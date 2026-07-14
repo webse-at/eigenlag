@@ -28,6 +28,8 @@ Sensor wartet auf eine Task in einem **anderen** DAG.
 
 **Nur dann Cross-Run, wenn** `execution_delta` oder `execution_date_fn` gesetzt ist. Ohne beides zeigt der Sensor auf denselben Logical Date, das ist eine Intra-Run-Kante zwischen zwei DAGs und **kein** Signal.
 
+**Ebenfalls kein Signal: ein Versatz von null.** `execution_delta=timedelta(hours=0)` ist gesetzt, zeigt aber auf denselben Logical Date und ist damit dieselbe Intra-Run-Kante wie ein fehlender Versatz. Ein `timedelta`-Literal wird deshalb ausgerechnet, statt nur auf Anwesenheit geprüft zu werden (ADR-014, gefunden in der Stichprobe zu Session 003). Ein Versatz, der statisch nicht auflösbar ist, zählt weiterhin.
+
 **Graph-Wirkung:** Kante vom Ziel-Task des fremden DAG bei Logical Date `t - execution_delta` auf den Sensor bei `t`. Wenn `execution_delta` ein Vielfaches der Schedule-Periode ist, spannt das einen Kreis über mehrere Perioden. Ein `execution_delta` von zwei Perioden erzeugt einen Kreis mit zwei Kanten, was das Zyklusmittel halbiert. Genau dieser Fall gehört als Test-Fixture in Phase 2.
 
 **Grenze:** `execution_date_fn` ist eine beliebige Python-Funktion. Statisch ist ihr Rückgabewert im Allgemeinen nicht bestimmbar. Wir zählen sie als Cross-Run-Signal (der Zeitversatz ist ihr einziger Zweck), können aber das Gewicht nicht ableiten. Der Parser muss das als "Cross-Run erkannt, Versatz unbekannt" melden und darf nicht raten.
@@ -49,6 +51,16 @@ Ein dbt-Model mit `materialized='incremental'`, dessen SQL `is_incremental()` au
 ### F — Prior-Run-Templates
 
 Jinja-Referenzen auf den vorigen Lauf in Templates, Operator-Argumenten oder SQL: `prev_ds`, `prev_execution_date`, `prev_start_date_success`, `prev_data_interval_start_success`, `prev_data_interval_end_success`.
+
+**Drei Fundorte, dieselbe Semantik** (ADR-013, aus der Negativ-Suche in Session 003):
+
+| Fundort | Beispiel | Herkunft |
+|---|---|---|
+| String-Literal im Operator-Argument | `bash_command="load --since {{ prev_start_date_success }}"` | der Regelfall |
+| Parametername der Callable | `def load(prev_start_date_success, **kwargs)`, `lambda prev_start_date_success: ...` | Airflow injiziert den Kontext über den Parameternamen (`oxylabs/building-scraping-pipeline-apache-airflow`, `DAG/scrape.py:26`) |
+| Template in einer Modul-Variablen | `date_last_success = '{{ prev_start_date_success }}'` | später ins Operator-Argument interpoliert (`abdurahim-dag/portfolio`, `.../dags/init.py:42`) |
+
+Wer nur den ersten Fundort erkennt, misst die Verbreitung einer Schreibweise, nicht die des Signals.
 
 **Graph-Wirkung:** Der Task liest Daten, die durch den vorigen Lauf definiert sind. Das ist eine echte Datenabhängigkeit über die Laufgrenze.
 

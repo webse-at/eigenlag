@@ -207,6 +207,177 @@ with DAG(f"etl_{env}", schedule="@hourly") as dag:
     assert analysis.dags[0].dag_id is None
 
 
+def test_tasks_are_counted_per_dag(result: RepoAnalysis) -> None:
+    counts = {d.dag_id: d.task_count for d in result.dags}
+    assert counts == {
+        "alpha": 1,  # extract, ueber dag= gebunden
+        "beta": 1,  # load, ueber dag= gebunden
+        "gamma": 1,
+        "delta": 1,  # @task-Funktion, kein Operator-Aufruf
+        "epsilon": 2,
+        "zeta": 1,
+        "eta": 4,
+        "theta": 1,
+        "iota": 2,
+    }
+
+
+def test_an_unassignable_task_is_not_counted_for_any_dag(result: RepoAnalysis) -> None:
+    # `orphan` in dags/two_dags.py:28 haengt an keinem der beiden DAGs. Geraten wird nicht.
+    assert dag(result, "alpha").task_count + dag(result, "beta").task_count == 2
+
+
+def test_factory_operators_are_not_counted_as_tasks(result: RepoAnalysis) -> None:
+    assert all(finding.file != "plugins/kafka_factory.py" for finding in result.dags)
+
+
+def test_taskflow_decorator_variants_count(result: RepoAnalysis) -> None:
+    source = """
+from airflow.decorators import dag, task
+
+@dag(dag_id="omega", schedule="@hourly")
+def pipeline():
+    @task
+    def a():
+        return 1
+
+    @task.bash
+    def b():
+        return "echo 1"
+
+    a() >> b()
+"""
+    analysis = analyze_source(source, "dags/omega.py")
+    assert analysis.dags[0].task_count == 2
+
+
+def test_execution_delta_of_zero_is_no_cross_run_signal() -> None:
+    # Gefunden in der Stichprobe zu Session 003: Dat-Al/Fidai,
+    # airflow/dags/predict_hourly_dag.py:37, `execution_delta=timedelta(hours=0)`, im Code
+    # kommentiert mit "regarde la meme heure d'execution". Nullversatz zeigt auf denselben
+    # Logical Date, das ist eine Intra-Run-Kante (wiki/signals.md, Signal C).
+    source = """
+from datetime import timedelta
+
+from airflow import DAG
+from airflow.sensors.external_task import ExternalTaskSensor
+
+with DAG(dag_id="zero_delta", schedule="0 * * * *") as dag:
+    ExternalTaskSensor(
+        task_id="wait",
+        external_dag_id="upstream",
+        execution_delta=timedelta(hours=0),
+    )
+"""
+    analysis = analyze_source(source, "dags/zero_delta.py")
+    assert analysis.dags[0].signals == []
+    assert analysis.dags[0].is_risk_candidate is False
+
+
+def test_execution_delta_that_cannot_be_resolved_still_counts() -> None:
+    # Ein Versatz aus einer Variablen ist statisch nicht bestimmbar. Sein einziger Zweck ist
+    # der Zeitversatz, deshalb zaehlt er weiter (wiki/signals.md, Signal C, "Grenze").
+    source = """
+from airflow import DAG
+from airflow.sensors.external_task import ExternalTaskSensor
+
+with DAG(dag_id="var_delta", schedule="0 * * * *") as dag:
+    ExternalTaskSensor(task_id="wait", external_dag_id="up", execution_delta=OFFSET)
+"""
+    analysis = analyze_source(source, "dags/var_delta.py")
+    assert kinds(analysis.dags[0]) == {"external_task_sensor"}
+
+
+def test_context_parameter_of_a_callable_is_signal_f() -> None:
+    # Muster aus V-Dang/covid_pipeline und ZinyProxy/Product: Airflow injiziert den Kontext
+    # ueber den Parameternamen. Das ist dieselbe Wartesemantik wie das Template.
+    source = """
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+
+
+def last_success(prev_start_date_success, **kwargs):
+    return prev_start_date_success
+
+
+with DAG(dag_id="ctx", schedule="@hourly") as dag:
+    PythonOperator(task_id="t", python_callable=last_success)
+    PythonOperator(
+        task_id="check",
+        python_callable=lambda prev_start_date_success: prev_start_date_success is not None,
+    )
+"""
+    analysis = analyze_source(source, "dags/ctx.py")
+    signals = analysis.dags[0].signals
+    assert {s.kind for s in signals} == {"prev_run_success"}
+    assert {s.source for s in signals} == {"context_param"}
+    assert analysis.dags[0].is_risk_candidate is True
+
+
+def test_weak_context_parameter_stays_weak() -> None:
+    source = """
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+
+
+def partition(prev_ds, **kwargs):
+    return prev_ds
+
+
+with DAG(dag_id="weak_ctx", schedule="@hourly") as dag:
+    PythonOperator(task_id="t", python_callable=partition)
+"""
+    analysis = analyze_source(source, "dags/weak_ctx.py")
+    assert kinds(analysis.dags[0]) == {"prev_run_date"}
+    assert analysis.dags[0].is_risk_candidate is False
+
+
+def test_template_in_a_module_variable_is_signal_f() -> None:
+    # Muster aus abdurahim-dag/portfolio: das Template steht in einer Modul-Variablen,
+    # nicht im Operator-Argument.
+    source = """
+from airflow import DAG
+from airflow.operators.bash import BashOperator
+
+date_last_success = '{{ prev_start_date_success }}'
+
+with DAG(dag_id="modvar", schedule="@hourly") as dag:
+    BashOperator(task_id="t", bash_command=f"load --since {date_last_success}")
+"""
+    analysis = analyze_source(source, "dags/modvar.py")
+    signal = analysis.dags[0].signals[0]
+    assert (signal.kind, signal.source, signal.lineno) == ("prev_run_success", "module_template", 5)
+
+
+def test_context_parameter_without_a_dag_in_the_file_is_no_signal() -> None:
+    # Muster aus V-Dang/covid_pipeline, archive.py: Helfer ohne DAG im File. Ohne DAG-Scope
+    # wird nichts geraten (Regel 5).
+    source = """
+def get_last_execution_date(prev_start_date_success, **kwargs):
+    return prev_start_date_success
+"""
+    analysis = analyze_source(source, "utils/archive.py")
+    assert analysis.dags == []
+    assert analysis.factories == []
+
+
+def test_context_parameter_in_a_multi_dag_file_is_not_guessed() -> None:
+    source = """
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+
+dag_a = DAG(dag_id="a", schedule="@hourly")
+dag_b = DAG(dag_id="b", schedule="@hourly")
+
+
+def last_success(prev_start_date_success, **kwargs):
+    return prev_start_date_success
+"""
+    analysis = analyze_source(source, "dags/two.py")
+    assert all(not d.signals for d in analysis.dags)
+    assert [e["kind"] for e in analysis.errors] == ["ambiguous_task"]
+
+
 def test_paths_are_never_truncated(result: RepoAnalysis) -> None:
     for finding in result.dags:
         for signal in finding.signals:
