@@ -49,17 +49,30 @@ Zeitachse, und für keinen einzigen ist bekannt, wo seine Taktgrenze liegt.
 - **ADR-014** — `execution_delta=timedelta(hours=0)` ist kein Cross-Run-Signal. Gefunden als
   Falsch-Positiv in der Stichprobe, Ursache behoben, Lauf wiederholt.
 
+### Nächster Schritt: Session 005 — der Wikimedia-Fall
+
+Spec liegt unter `cc-sessions/005_offen-wikimedia-case.md`. Die Recherche nach einem Beweisort
+mit echten Laufzeiten ist gelaufen (`wiki/log.md`, Eintrag 003a): dbt-Artefakte auf GitHub sind
+Compile-Läufe ohne Ausführung, GitHub-Issues und Stack Overflow sind dünn, **Wikimedia trägt**.
+Neun Airflow-Instanzen in Produktion, Grafana anonym abfragbar, DAG-Code offen auf GitLab.
+
+Der Fall: `search/dags/rdf_streaming_updater_reconcile.py:110`, stündlicher Takt,
+`depends_on_past: True`, `max_active_runs=1`, gemessene mittlere Laufdauer 60 bis 109 Minuten.
+Takt kürzer als die Laufzeit, Kreis über die Zeitachse. Zu belegen ist die Gauge-Semantik der
+Metrik, bevor eine Zahl behauptet wird.
+
+**Zweiter Befund, der in 005 mitläuft:** Der Scanner sieht in Wikimedias Repo 71 von 325 DAGs
+und null Signale, weil dort DAGs über die eigene Wrapper-Funktion `create_easy_dag()` entstehen.
+Professionelle Umgebungen kapseln, und genau die sind für uns blind. Vorschlag ADR-015, die
+Entscheidung gehört in den Plan von 005.
+
 ### Was David und der Orchestrator entscheiden müssen
 
 1. **Phase 2 startet nicht blind.** Der Marktbeweis über öffentlichen Code ist gescheitert, und
    zwar nicht am Scanner, sondern an der Grundgesamtheit. Vor weiterem Produktbau braucht es
    einen Beleg aus einer Quelle, die Laufzeiten kennt.
-2. **Drei Quellen, die ohne eigenes Netzwerk erreichbar sind** (im Chat besprochen, nicht
-   geprüft): dbt-Artefakte (`run_results.json` enthält die Ausführungszeit je Model,
-   `manifest.json` den Graphen), die Suche nach dem Schmerz statt nach der Struktur
-   (GitHub-Issues, Stack Overflow, r/dataengineering: "dag runs piling up",
-   "scheduler falling behind"), und ein Tauschangebot in denselben Communities (anonymisierter
-   Export aus der Airflow-Metadaten-DB gegen kostenlose λ-Rechnung).
+2. **Der Beweisort ist gefunden und geprüft: Wikimedia.** Die beiden anderen Spuren sind tot
+   (siehe `wiki/log.md`, 003a). Ein Tauschangebot in Communities scheidet auf Davids Wunsch aus.
 3. **Der Scan taugt als Build-in-Public-Content**, gerade weil die Zahl klein ist. Nicht für die
    Agentur-Kanäle.
 

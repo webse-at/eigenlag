@@ -342,3 +342,39 @@ Male vor, aber praktisch nur als `xcom_pull`-Parameter oder im Airflow-Quelltext
 Wildbahn faktisch tot.
 
 **Tests:** 140 passed, `ruff` und `mypy` grün.
+
+## 003a — Recherche nach einem Beweisort mit echten Laufzeiten (2026-07-14)
+
+Nach dem negativen Ausgang von Phase 1 die Frage: Wo gibt es Airflow-Laufzeiten, ohne eigenes
+Netzwerk und ohne Tauschangebot? Drei Spuren geprüft, zwei tot, eine trägt.
+
+**dbt-Artefakte auf GitHub: taugen nicht.** 1764 Repos haben ein `run_results.json` committet,
+aber fast alle stammen aus `dbt docs generate`, also aus einem Compile-Lauf ohne Ausführung
+(`coderxio/sagerx`: 166 Knoten, 0,6 s Gesamtzeit). Die wenigen echten Läufe unter `target/` sind
+Spielzeugprojekte (`pietheinstrengholt/dbt-databricks-adventureworks`: 4 Knoten, 10 s). Dieselbe
+Demo-Falle wie beim Code-Scan.
+
+**GitHub-Issues und Stack Overflow: dünn.** `apache/airflow` hat 16 Issues zu
+`depends_on_past` plus stuck/deadlock, das lauteste ist #29524 (Deadlock bei `max_active_runs`
+plus `depends_on_past`). Stack Overflow liefert zu den naheliegenden Formulierungen fast nichts.
+Der Schmerz ist nicht laut. Das ist selbst ein Befund.
+
+**Wikimedia trägt.** Sie betreiben neun Airflow-Instanzen in Produktion, ihr Grafana ist anonym
+abfragbar (Prometheus-Datenquelle `000000026`), und ihr DAG-Repo liegt offen auf
+`gitlab.wikimedia.org`. 325 DAGs mit `dag_id`-Label, 43 davon stündlich.
+
+**Der Fall:** `search/dags/rdf_streaming_updater_reconcile.py:110` erzeugt stündliche DAGs mit
+`default_args={'depends_on_past': True}`, `max_active_runs=1`, `catchup=True`. Gemessene
+mittlere Laufdauer über 14 Tage: `wdqs_streaming_updater_reconcile_hourly` 60 bis 109 Minuten,
+`wcqs_streaming_updater_reconcile_hourly` 60 bis 106 Minuten. Stundentakt, Kreis über die
+Zeitachse, Läufe im Mittel länger als eine Stunde. Genau die Konstellation der Kernthese, zum
+ersten Mal an echten Zahlen. Noch erhoben, nicht belegt: die Gauge-Semantik von
+`airflow_dagrun_duration` ist ungeklärt, das ist Auftrag von Session 005.
+
+**Der unangenehme Nebenbefund, und er ist der wichtigere:** Unser Scanner findet in Wikimedias
+Repo **71 von 325 DAGs und null Cross-Run-Signale**, obwohl `depends_on_past=True` dort mehrfach
+im Klartext steht. Wikimedia erzeugt DAGs über eine eigene Wrapper-Funktion `create_easy_dag()`,
+und `analyze.py` kennt nur `DAG(...)` und `@dag`. Professionelle Umgebungen kapseln ihre
+DAG-Erzeugung, und genau die sind für uns unsichtbar. Das erklärt die Demo-Lastigkeit der
+Marktzahl aus Session 003 besser als jede andere Vermutung, und es entwertet die 0,3 Prozent ein
+zweites Mal, diesmal von der anderen Seite.
