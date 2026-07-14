@@ -29,12 +29,16 @@ Der Auftrag sagt "Phase 1 zuerst komplett". Das bleibt die Vorgabe, solange Davi
 
 ## Hinweise für nächste Session
 
+### Erledigt seit Session 000
+
+- **Remote:** `https://github.com/webse-at/eigenlag`, `main` gepusht.
+- **GitHub-Token geklärt.** Kein neuer Token nötig: `gh` ist als `webse-at` eingeloggt (`repo`, `read:org`, `workflow`). Spec 001 nimmt `GITHUB_TOKEN`, sonst `gh auth token`. Die API ist kostenlos, der Token hebt nur die Limits.
+
 ### Offene Entscheidungen
 
-1. **`GITHUB_TOKEN` ist nicht gesetzt.** Das `gh`-CLI ist als `webse-at` eingeloggt (Scopes `repo`, `read:org`, `workflow`), also kann Spec 001 per `gh auth token` arbeiten. Falls David einen dedizierten Token für den Scanner will, muss er ihn anlegen, sonst läuft der Scanner unter seinem persönlichen Rate-Limit.
-2. **Kein git-Remote.** Regel 9 sagt "direkt auf main", aber es gibt noch kein GitHub-Repo. Muss angelegt werden, bevor gepusht werden kann.
-3. **`croniter` als Scanner-Dependency.** Spec 002 erlaubt sie für die Schedule-Klassifikation, aber nur im Scanner, nicht im `eigenlag`-Package. Die Alternative wäre eine eigene Cron-Implementierung, die niemand braucht. Der Implementer entscheidet und begründet im Log.
-4. **`pipx` ist nicht installiert.** Wird erst für Session 009 gebraucht, dann mit installieren.
+1. **`croniter` als Scanner-Dependency.** Spec 002 erlaubt sie für die Schedule-Klassifikation, aber nur im Scanner, nicht im `eigenlag`-Package. Die Alternative wäre eine eigene Cron-Implementierung, die niemand braucht. Der Implementer entscheidet und begründet im Log.
+2. **`pipx` ist nicht installiert.** Wird erst für Session 009 gebraucht, dann mit installieren.
+3. **Eigener Scan-Token (optional).** Scanner und Davids normale `gh`-Nutzung teilen sich dieselben 30 Suchen pro Minute. Ein separater fine-grained PAT (nur "Public repositories, read-only") würde das trennen. Komfort, kein Kostenthema.
 
 ### Was der Orchestrator prüfen soll
 

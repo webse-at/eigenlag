@@ -47,7 +47,19 @@ Jeder Filter-Grund wird **mitgeschrieben**, nicht stillschweigend angewandt. Ein
 
 ### 4. Rate-Limits und Fehler
 
-- Code-Search mit Token: 30 Requests pro Minute. Halte dich daran, proaktiv drosseln, nicht ins 403 laufen.
+**Den richtigen Endpunkt nehmen.** GitHub hat zwei Code-Such-Kontingente mit stark unterschiedlichen Limits. Gemessen am 2026-07-14 über `gh api rate_limit` mit Davids Token:
+
+| Kontingent | Endpunkt | Limit |
+|---|---|---|
+| `search` | `/search/code` (klassisch) | **30 pro Minute** |
+| `code_search` | neuer Endpunkt | 10 pro Minute |
+| `core` | `/repos/...` (Metadaten) | 5000 pro Stunde |
+
+Der Scanner nutzt **`/search/code`**. Der neue Endpunkt ist dreimal langsamer und bringt uns nichts. Wer aus Versehen dort landet, drosselt den Lauf ohne Grund.
+
+Die Repo-Metadaten (Größe, Fork, Archiviert, Stars) kommen aus dem `core`-Kontingent. Bei rund 350 Repos ist das unkritisch, aber es ist ein **eigenes** Kontingent und muss getrennt beobachtet werden.
+
+- Proaktiv drosseln, nicht ins 403 laufen. Vor jedem Request `x-ratelimit-remaining` auswerten.
 - Bei `403` mit `x-ratelimit-remaining: 0`: bis `x-ratelimit-reset` schlafen, dann weiter.
 - Bei `secondary rate limit`: exponentieller Backoff, Start 2 s, Faktor 2, Deckel 60 s, maximal 5 Versuche.
 - Jeder Fehler strukturiert nach `data/scan_errors.jsonl`: Zeitstempel, Query oder Repo, HTTP-Status, Message. Der Lauf bricht **nicht** ab.

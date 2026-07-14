@@ -39,3 +39,23 @@ Drift/Lauf (letzte 5): 1.40 h/Lauf; Theorie lambda - T = 1.40 h/Lauf
 2. **Der Prototyp kondensiert nicht wirklich.** `build_Abar` spannt die Matrix über alle acht Jobs auf, nicht nur über die drei Cross-Run-Quellen (`core`, `retrain`, `monitor`). Das Ergebnis stimmt trotzdem, weil Knoten ohne ausgehende Cross-Kante auf keinem Kreis liegen können und deshalb nichts beitragen. Für den Produktions-Code ist die echte Kondensation auf die Cross-Run-Knoten trotzdem richtig, weil Karp mit `O(V·E)` skaliert und V sonst unnötig die Task-Anzahl statt der Cross-Run-Knoten-Anzahl ist.
 
 3. **Der Prototyp kennt keinen Perioden-Versatz.** `CROSS` ist eine Liste von Paaren, der Versatz ist implizit immer 1. Der im Auftrag geforderte Test-Case "Zwei-Perioden-Kreis via `execution_delta = 2 * Periode`" lässt sich mit dieser Datenstruktur nicht ausdrücken. Der Produktions-Datentyp braucht ein Tripel `(von, nach, versatz)`, und der Versatz muss ins Zyklusmittel eingehen (eine Kante mit Versatz n zählt als n Kanten). Das ist die erste echte Erweiterung über den Prototyp hinaus und steht so in Spec 004.
+
+---
+
+## 000a — Remote, GitHub-Limits gemessen (2026-07-14)
+
+**Gemessen:** `gh api rate_limit` mit Davids Token. GitHub führt **zwei** Code-Such-Kontingente:
+
+```
+search      (/search/code, klassisch) : 30 req/min
+code_search (neuer Endpunkt)          : 10 req/min
+core        (/repos/..., Metadaten)   : 5000 req/h
+```
+
+Die im Auftrag genannten "30 req/min" gelten nur für den klassischen `/search/code`. Der neue `code_search`-Endpunkt liegt bei 10 und würde den Scan ohne Not verdreifachen. Spec 001 schreibt den Endpunkt jetzt explizit vor.
+
+**Kosten:** keine. Die API ist für öffentliche Repos kostenlos, der Token authentifiziert nur und hebt die Limits (ohne Token: 60 req/h und gar keine Code-Search).
+
+**Remote:** `github.com/webse-at/eigenlag` angelegt, `main` gepusht.
+
+**Nächste Session:** 004 (Mathe-Kern). Begründung: der einzige Teil mit verifizierter Referenz, hängt an nichts, und er ist der eigentliche Produktwert. Der Scanner liefert Marketing-Zahlen; stimmt der Kern nicht, sind die Zahlen wertlos.
