@@ -861,3 +861,138 @@ Kern weiterhin ohne Pflicht-Dependencies (`dependencies = []` unverändert, Akze
 **Sonst bestätigt:** Postgres-Punkt aus 008 geschlossen (percentile_cont = Python auf denselben Fixtures), ADR-021 umgesetzt mit Neu-Lauf des Graph-Checks (4836/4836, einzige Änderung die erwartete OmniRoute-Kante), Demo-Pins durch die neue Maschinerie, MC in stdlib bei 0,05 s je 1000 Samples — Faktor 100 unter dem Messvorbehalt, `dependencies = []` hält seit Session 004.
 
 **Damit ist der Feedback-Meilenstein erreicht.** Das Tool ist installierbar, läuft gegen echte Metadaten-DBs und erklärt sich selbst. Die nächste Entscheidung ist keine technische: an welche 2–3 Teams geht es zuerst. Kriterien für ein gutes Erst-Team: sub-täglicher Takt im Einsatz, `depends_on_past`/`wait_for_downstream` oder Sensor-Ketten in den DAGs, Zugriff auf die eigene Metadaten-DB, und jemand, der einen deutschen Report liest (sonst zieht i18n vor den Feedback-Termin). Davids Entscheidung.
+
+---
+
+## Session 010 — CI-Gate `eigenlag check --against REF` (2026-07-15)
+
+**Was gemacht wurde.** Zuerst die beiden Report-Korrekturen aus der Abnahme 009a (eigener Commit), dann das Gate: `eigenlag/gate.py` (Worktree-Mechanik, Kanten-Vergleich je DAG, compose_check/render_check aus einer Quelle wie in 009), CLI-Befehl `check` in `cli.py`, 26 neue Gate-Tests plus 8 neue Report-Tests (alle zuerst rot gesehen: Gate-Tests fielen mit Collection-Error, solange `gate.py` fehlte; Report-Tests fielen auf dem alten Renderer), ADR-022, `docs/ci-gate.md` mit GitHub-Actions-Beispiel (nicht ausgefuehrt — kein Netz, kein Posten).
+
+### Report-Korrekturen 009a, am Flaggschiff sichtbar
+
+Derselbe Aufruf wie 009a Lauf 4 (`eigenlag analyze . --dag-id load_data_wikiviews --assume-duration 300` im Clone `Gleb01548__russian_wiki_view_db`), Kopf byte-identisch zur 009a-Fassung, What-if vorher 15 Rauschzeilen, nachher:
+
+    What-if
+    -------
+    Basis: Lambda = 600 s (10 min). Sortiert nach neuem Lambda.
+      15 weitere Szenarien aendern Lambda nicht: 3 Kreis-Gleichstaende, 12 Kanten ausserhalb des kritischen Kreises.
+    Eine Optimierung, die nicht auf dem kritischen Kreis liegt, aendert Lambda um exakt null. Das Ranking rechnet deshalb die Kreis-Tasks und alle Cross-Kanten durch; was Lambda nicht aendert, ist fuer die Taktgrenze wirkungslos, so nuetzlich es fuer die Latenz eines Einzellaufs sein mag.
+
+Voller Report in `scan/010_gate/lauf0_wikiviews_report_v2.txt`, direkt neben der 009a-Fassung (`scan/009_cli/lauf4_wikiviews_report.txt`). Die 3 Kreis-Gleichstaende sind von Hand nachvollziehbar: die zwei Halbierungen der Kreis-Tasks (`сheck_data`, `load_data`) plus die Kreis-Kante `load_data -> сheck_data`; die uebrigen 12 Cross-Kanten liegen nicht auf dem kritischen Kreis.
+
+**Implementer-Entscheidungen dabei (je eine Zeile Begruendung):**
+
+- **Schlusssatz an das Verhalten angepasst, nicht umgekehrt:** die `--json`-Vollstaendigkeit aller Szenarien ist die Schnittstelle, auf der das Gate aufsetzt, und das Rausch-Problem im Text loest die Sammelzeile — das Verhalten zu beschneiden haette Information gekostet, der Satz war schlicht falsch.
+- **Angefragte Szenarien (`--what-if`) werden nie kompaktiert:** wer explizit fragt, bekommt die Zeile, auch bei +0.
+
+### Das Gate: Verifikation end-to-end ueber die pipx-Installation
+
+`pipx install --force .` (eigenlag 0.1.0, Python 3.14.4), dann alle Laeufe ueber den Entry-Point. Fixture-Repo mit echter Git-Historie (drei Commits, Tags v1/v2/v3; v1 ohne Cross-Run-Kante, v2 mit `wait_for_downstream` in `default_args` wie im Flaggschiff, v3 wieder ohne), gebaut im Scratchpad aus den Test-Fixtures.
+
+**Lauf 1 — v2 gegen v1 (Struktur-Modus, Default-Regel): Exit 3.** Kommentar vollstaendig:
+
+    **eigenlag check: ausgeloest** — load_data_wikiviews: neue Cross-Run-Kante schliesst einen Kreis ueber die Zeitachse bei sub-taeglichem Takt (T = 3600 s (60 min)).
+
+    Struktur-Vergleich: Lambda in Task-Einheiten (uniforme Dauer 1.0 je Task, keine Dauern-Quelle angegeben). Fuer Lambda in Sekunden gegen den Takt: --db oder --assume-duration.
+
+    ### load_data_wikiviews
+
+    - Lambda: kein Kreis -> 2 Task-Einheiten (vorher -> nachher)
+    - Takt T: 3600 s (60 min), Quelle: Schedule '@hourly'
+    - Neue Cross-Run-Kanten (5):
+      - `load_data_wikiviews.check_data -> load_data_wikiviews.check_data` (wait_for_downstream, pipeline.py:10, 1 Periode zurueck)
+      - `load_data_wikiviews.load_data -> load_data_wikiviews.check_data` (wait_for_downstream, pipeline.py:10, 1 Periode zurueck)
+      - `load_data_wikiviews.load_data -> load_data_wikiviews.load_data` (wait_for_downstream, pipeline.py:10, 1 Periode zurueck)
+      - `load_data_wikiviews.create_success_file -> load_data_wikiviews.load_data` (wait_for_downstream, pipeline.py:10, 1 Periode zurueck)
+      - `load_data_wikiviews.create_success_file -> load_data_wikiviews.create_success_file` (wait_for_downstream, pipeline.py:10, 1 Periode zurueck)
+    - **Ausgeloest:** neue Cross-Run-Kante schliesst einen Kreis ueber die Zeitachse bei sub-taeglichem Takt (T = 3600 s (60 min))
+    - **Ausloesende Kante:** `load_data_wikiviews.create_success_file -> load_data_wikiviews.load_data` (wait_for_downstream, pipeline.py:10)
+    - Kritischer Kreis, kondensiert: `load_data_wikiviews.create_success_file -> load_data_wikiviews.create_success_file`, Gewicht 2 Task-Einheiten, 1 Periode zurueck [wait_for_downstream, pipeline.py:10]
+    - Aufgeloest: load_data_wikiviews.load_data -> load_data_wikiviews.create_success_file
+    - Behebung: Die ausloesende Kante zu entfernen behebt den Fail. Eine Zeit-Aussage (Lambda gegen T in Sekunden) braucht eine Dauern-Quelle: --db oder --assume-duration.
+
+    ---
+    _Lambda ist eine Untergrenze der realen Taktzeit: unbegrenzte Parallelitaet ist angenommen. Retries, Sensor-Poking und Pool-Limits sind nicht modelliert; sie koennen die reale Taktzeit nur erhoehen, nie senken._
+
+**Lauf 2 — v3 gegen v2 (Kante wieder entfernt): Exit 0.** Kommentar vollstaendig:
+
+    **eigenlag check: bestanden.** Keine Aenderung hebt Lambda ueber den Takt (`/tmp/claude-1000/-mnt-data-projects-eigenlag/43709c11-0215-4778-b8c2-393860dac021/scratchpad/fixture-repo/repo/dags` gegen `v2`).
+
+    Struktur-Vergleich: Lambda in Task-Einheiten (uniforme Dauer 1.0 je Task, keine Dauern-Quelle angegeben). Fuer Lambda in Sekunden gegen den Takt: --db oder --assume-duration.
+
+    ### load_data_wikiviews
+
+    - Lambda: 2 Task-Einheiten -> kein Kreis (vorher -> nachher)
+    - Takt T: 3600 s (60 min), Quelle: Schedule '@hourly'
+    - Entfallene Cross-Run-Kanten: `load_data_wikiviews.check_data -> load_data_wikiviews.check_data`, `load_data_wikiviews.create_success_file -> load_data_wikiviews.create_success_file`, `load_data_wikiviews.create_success_file -> load_data_wikiviews.load_data`, `load_data_wikiviews.load_data -> load_data_wikiviews.check_data`, `load_data_wikiviews.load_data -> load_data_wikiviews.load_data`
+
+    ---
+    _Lambda ist eine Untergrenze der realen Taktzeit: unbegrenzte Parallelitaet ist angenommen. Retries, Sensor-Poking und Pool-Limits sind nicht modelliert; sie koennen die reale Taktzeit nur erhoehen, nie senken._
+
+**Lauf 3 — unveraenderter Stand (v3 gegen v3): Exit 0.** Kommentar vollstaendig:
+
+    **eigenlag check: bestanden.** Keine Aenderung hebt Lambda ueber den Takt (`/tmp/claude-1000/-mnt-data-projects-eigenlag/43709c11-0215-4778-b8c2-393860dac021/scratchpad/fixture-repo/repo/dags` gegen `v3`).
+
+    Struktur-Vergleich: Lambda in Task-Einheiten (uniforme Dauer 1.0 je Task, keine Dauern-Quelle angegeben). Fuer Lambda in Sekunden gegen den Takt: --db oder --assume-duration.
+
+    1 DAG(s) ohne Aenderung an Cross-Run-Kanten oder Lambda.
+
+    ---
+    _Lambda ist eine Untergrenze der realen Taktzeit: unbegrenzte Parallelitaet ist angenommen. Retries, Sensor-Poking und Pool-Limits sind nicht modelliert; sie koennen die reale Taktzeit nur erhoehen, nie senken._
+
+**Lauf 4 — Sekunden-Modus (`--assume-duration 2500`): Exit 3, Auftrags-Regel woertlich.** Lambda = 5000 s ueber T = 3600 s, Behebungs-Hinweis nennt ehrlich, dass keine einzelne Standard-Aenderung reicht (mehrere Kreise mit gleichem Zyklusmittel bei uniformen Dauern — derselbe Gleichstand-Befund wie in 009a). Kommentar vollstaendig:
+
+    **eigenlag check: ausgeloest** — load_data_wikiviews: neue Cross-Run-Kante und Lambda = 5000 s (83,33 min) ueber dem Takt T = 3600 s (60 min).
+
+    ### load_data_wikiviews
+
+    - Lambda: kein Kreis -> 5000 s (83,33 min) (vorher -> nachher)
+    - Takt T: 3600 s (60 min), Quelle: Schedule '@hourly'
+    - Neue Cross-Run-Kanten (5):
+      - `load_data_wikiviews.check_data -> load_data_wikiviews.check_data` (wait_for_downstream, pipeline.py:10, 1 Periode zurueck)
+      - `load_data_wikiviews.load_data -> load_data_wikiviews.check_data` (wait_for_downstream, pipeline.py:10, 1 Periode zurueck)
+      - `load_data_wikiviews.load_data -> load_data_wikiviews.load_data` (wait_for_downstream, pipeline.py:10, 1 Periode zurueck)
+      - `load_data_wikiviews.create_success_file -> load_data_wikiviews.load_data` (wait_for_downstream, pipeline.py:10, 1 Periode zurueck)
+      - `load_data_wikiviews.create_success_file -> load_data_wikiviews.create_success_file` (wait_for_downstream, pipeline.py:10, 1 Periode zurueck)
+    - **Ausgeloest:** neue Cross-Run-Kante und Lambda = 5000 s (83,33 min) ueber dem Takt T = 3600 s (60 min)
+    - **Ausloesende Kante:** `load_data_wikiviews.create_success_file -> load_data_wikiviews.load_data` (wait_for_downstream, pipeline.py:10)
+    - Kritischer Kreis, kondensiert: `load_data_wikiviews.create_success_file -> load_data_wikiviews.create_success_file`, Gewicht 5000 s (83,33 min), 1 Periode zurueck [wait_for_downstream, pipeline.py:10]
+    - Aufgeloest: load_data_wikiviews.load_data -> load_data_wikiviews.create_success_file
+    - Behebung: Keine einzelne Standard-Aenderung (Kreis-Task halbiert, Cross-Kante entfernt) bringt Lambda unter T; der Kreis traegt an mehreren Stellen dasselbe Zyklusmittel.
+
+    ---
+    _Lambda ist eine Untergrenze der realen Taktzeit: unbegrenzte Parallelitaet ist angenommen. Retries, Sensor-Poking und Pool-Limits sind nicht modelliert; sie koennen die reale Taktzeit nur erhoehen, nie senken._
+
+**Lauf 5 — Selbst-Anwendung als Negativ-Probe: Exit 0 mit Hinweis, kein Absturz.** `eigenlag check eigenlag --against HEAD` in diesem Repo (das Package-Verzeichnis enthaelt keine DAGs; das Repo-Root waere keine Negativ-Probe, `scanner/fixtures/` und `data/repos/` enthalten absichtlich DAG-Files):
+
+    **eigenlag check: bestanden.** Keine Aenderung hebt Lambda ueber den Takt (`eigenlag` gegen `HEAD`).
+
+    Keine DAGs in beiden Staenden — nichts zu pruefen.
+
+    ---
+    _Lambda ist eine Untergrenze der realen Taktzeit: unbegrenzte Parallelitaet ist angenommen. Retries, Sensor-Poking und Pool-Limits sind nicht modelliert; sie koennen die reale Taktzeit nur erhoehen, nie senken._
+
+`git status --porcelain` und `git worktree list` vor und nach den Laeufen identisch — das Nutzer-Repo bleibt unangetastet; derselbe Beleg ist als Test gepinnt, inklusive Exception-Fall (Worktree verschwindet auch, wenn im with-Block geworfen wird).
+
+### Implementer-Entscheidungen am Gate (je eine Zeile Begruendung)
+
+- **Struktur-Modus-Default-Regel** (Detail zu ADR-022, dort dokumentiert): „Lambda_nachher > T" ist in Task-Einheiten gegen Sekunden nicht auswertbar — woertlich implementiert waere das Default-Gate in der CI wirkungslos; stattdessen loest eine neue Kante aus, die einen Kreis schliesst, bei sub-taeglichem Takt (deckungsgleich ADR-018), und der Kommentar sagt, dass die Zeit-Aussage eine Dauern-Quelle braucht.
+- **Behebungs-Hinweis:** unter den Standard-Szenarien, die Lambda unter T bringen, gewinnt das mit dem groessten neuen Lambda — die am wenigsten invasive Aenderung, die reicht; Kreis-Aufloesungen nur, wenn kein endliches Szenario existiert; existiert gar keines, sagt das Gate das (Spec: „wenn keine existiert, das sagen").
+- **Kanten-Identitaet ohne Datei:Zeile** (`src, dst, periods, signal`, namespaced): eine verschobene Zeile ist keine neue Kante — sonst wuerde jedes Umformatieren das Gate ausloesen.
+- **DAGs ohne statische `dag_id` sind nicht vergleichbar** und werden als Hinweis benannt (mit Datei:Zeile), kein Fail: raten waere schlimmer als benennen.
+- **`--dag-id` unbekannt ist Bedienfehler (Exit 1), nicht Exit 2:** die 2 bleibt bei `analyze` reserviert, die Raeume ueberlappen nicht (Spec-Vorentscheidung 5).
+- **`--comment-file` schreibt Markdown zusaetzlich zur stdout-Ausgabe:** so traegt `--json` (stdout maschinenlesbar) plus `--comment-file` (Markdown fuers Posten) in einem Aufruf — der CI-Job braucht beide.
+- **Modul heisst `gate.py`** (CLI-Befehl bleibt `check` wie in der Spec): `wiki/architecture.md` fuehrte das Modul seit 009 unter diesem Namen, Wiki ist Wahrheit.
+
+### Gates
+
+```
+pytest: 344 passed (34 neue: 26 Gate, 8 Report-Kompaktierung; jedes Modul zuerst rot)
+ruff check: All checks passed!  |  ruff format --check: 46 files already formatted
+mypy: Success: no issues found in 22 source files (eigenlag/)
+pipx install --force . -> eigenlag 0.1.0; alle 5 Gate-Laeufe oben ueber den Entry-Point
+```
+
+Pflicht-Dependencies unveraendert null (`dependencies = []`); das Gate braucht nur `subprocess` + git, das ohnehin da ist, wo ein `--against REF` Sinn ergibt.
+
+**Was ueberrascht hat:** Die Auftrags-Regel „neue Kante und Lambda > T" ist im Struktur-Modus, dem realistischen CI-Default, gar nicht auswertbar — die Spec-Vorentscheidungen 3 und 4 standen an dieser Stelle in Spannung (Struktur-Modus als Default, aber die Fail-Bedingung braucht Sekunden). Die Aufloesung steht in ADR-022; falls der Orchestrator die Kreis-plus-sub-taeglich-Regel anders schneiden will, ist sie eine einzelne Funktion (`gate._dag_row`, Verdict-Block) mit gepinnten Tests.

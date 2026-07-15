@@ -19,6 +19,8 @@ eigenlag/
 ├── pyproject.toml
 ├── wiki/
 │   └── maxplus_pipeline.py      Referenz-Prototyp, unverändert, Fixture
+├── docs/
+│   └── ci-gate.md               Gate-Nutzung, Fail-Regeln, GitHub-Actions-Beispiel (010)
 ├── cc-sessions/                 Session-Specs
 ├── scanner/                     Phase 1, eigenständig
 │   ├── harvest.py               GitHub Code-Search, Repo-Kandidaten, Filter
@@ -50,10 +52,12 @@ eigenlag/
     │                            je Task p50/p95/mean/n/operator/is_sensor (Session 008)
     ├── analyze.py               analyze()/analyze_result(): parsen + Dauern heiraten + condense +
     │                            Howard, Pflicht-Warnung bei Sensor im kritischen Kreis (008/009)
-    ├── gate.py                  CI-Gate, λ vor/nach Diff (Session 010)
+    ├── gate.py                  CI-Gate `eigenlag check --against REF`: Worktree-Vergleich,
+    │                            Punkt-λ gegen Punkt-λ (ADR-022), PR-Kommentar (Session 010)
     ├── report.py                compose(): stabile JSON-Keys fürs Gate; render(): deutscher Text;
     │                            What-if-Szenarien und Ranking (Session 009)
-    ├── cli.py                   argparse, `eigenlag analyze`, Exit-Codes 0/1/2 (Session 009)
+    ├── cli.py                   argparse, `eigenlag analyze` und `eigenlag check`,
+    │                            Exit-Codes 0/1/2 (analyze) und 0/1/3 (check) (Sessions 009/010)
     └── *_test.py
 ```
 

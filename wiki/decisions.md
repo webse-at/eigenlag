@@ -373,3 +373,17 @@ Der Parser aus 007 behandelt `external_dag_id` als Fremd-DAG-Verweis und meldete
 **Umgesetzt am 2026-07-15 (Session 009).** Der 007-Graph-Check lief direkt danach neu: 4836/4836 Graphen Karp = Howard, einzige inhaltliche Änderung ist die jetzt modellierte OmniRoute-Kante (`DAG_Codes/dag_2.py:480`, `sensor_not_modeled` 27 → 26).
 
 **Einordnung des Fundes, ehrlich:** Das Repo sieht nach Kursarbeit aus (Projektgruppen-Name). Der Wert liegt in der Semantik-Lücke, die es aufgedeckt hat, nicht im Fall als Launch-Material.
+
+---
+
+## ADR-022 — Das CI-Gate vergleicht Punkt-λ gegen Punkt-λ, nie Monte Carlo gegen Schwellen
+
+**Status:** entschieden, 2026-07-15 (Abnahme 009a, festgeschrieben in Session 010)
+
+**Kontext:** Session 009 hat zwei λ-Schätzer etabliert: das Punkt-λ auf der gewählten Statistik (Default `mean`) und die Monte-Carlo-Verteilung (λ_p50/λ_p95 aus Lognormal-Fits je Task). Die beiden weichen systematisch ab — auf der Demo-Pipeline Punkt-λ = 4.40 gegen MC-λ_p50 = 4.45–4.51 je nach Fit-Parametern. Das Gate (Session 010) braucht genau einen Wert, der gegen Schwellen läuft.
+
+**Entscheidung:** Das Gate vergleicht Punkt-λ (vorher) gegen Punkt-λ (nachher), auf derselben Statistik für beide Stände. Monte Carlo läuft nie gegen Schwellen; das Gate zeigt MC-Werte nicht einmal an, sonst diskutiert jedes Code-Review zwei Zahlen statt einer.
+
+**Begründung (aus der Abnahme 009a übernommen):** Der MC-Bias ist systematisch und erwartbar: λ ist ein Maximum über Kreis-Summen und damit konvex in den Dauern, dazu liegt der Erwartungswert einer Lognormal über ihrem Median — MC-λ_p50 übersteigt das Punkt-λ also immer. Beim Gleiches-mit-Gleichem-Vergleich kürzt sich dieser Bias heraus: dieselbe Statistik vor und nach dem Diff ist deterministisch, bit-stabil und jede Differenz ist einer Code-Änderung zuordenbar. Ein MC-Wert gegen eine Schwelle wäre dagegen seed- und fit-abhängig — ein Gate, das je nach Zufallszahlen mal rot und mal grün ist, ist in einer CI wertlos.
+
+**Folge-Entscheidung für den Struktur-Modus (Session 010):** CI-Umgebungen haben in der Regel keine Metadaten-DB; ohne Dauern-Quelle rechnet das Gate mit uniformen Dauern 1.0 und λ steht in Task-Einheiten. Task-Einheiten sind gegen T in Sekunden nicht vergleichbar, die wörtliche Default-Regel „neue Kante und λ > T" ist dort also nicht auswertbar. Im Struktur-Modus löst deshalb eine neue Cross-Run-Kante aus, die einen Kreis über die Zeitachse schließt, bei bekanntem sub-täglichem Takt — deckungsgleich mit der Risiko-Definition aus ADR-018 (starkes Signal und sub-täglich), und der Kommentar sagt offen, dass eine Zeit-Aussage eine Dauern-Quelle braucht. Mit `--db`/`--assume-duration` gilt die Auftrags-Regel wörtlich: neue Kante **und** λ_nachher > T.

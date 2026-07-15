@@ -2,52 +2,54 @@
 
 > Wird am Ende jeder Session überschrieben. Schnelle Orientierung für die nächste Session.
 
-## Stand: Session 009 — CLI `eigenlag analyze`: der Report ist das Produkt (2026-07-15)
+## Stand: Session 010 — CI-Gate `eigenlag check --against REF` (2026-07-15)
 
-**Das Tool ist jetzt in fremde Hände gebbar.** `pipx install .` → `eigenlag analyze PFAD`
-mit `--db`/`--rest`/`--assume-duration` liefert den deutschen Report (Urteil zuerst,
-Kreis doppelt, Monte Carlo, What-if-Ranking, Pflicht-Warnblock, Modellgrenzen) und per
-`--json` dieselben Felder maschinenlesbar (stabile Keys, ab 010 vom CI-Gate gelesen).
-Exit-Codes: 0 analysiert (auch instabil), 1 Bedienfehler, 2 kein analysierbarer DAG.
+**Das Gate steht.** `eigenlag check PFAD --against REF` vergleicht je DAG Punkt-λ und
+Cross-Run-Kanten-Menge gegen einen Git-Stand (temporärer detached Worktree, Nutzer-Repo
+bleibt unangetastet) und schreibt den PR-Kommentar als Markdown auf stdout bzw.
+`--comment-file` (`--json` aus derselben Quelle). Exit-Codes 0/1/3, die 2 bleibt bei
+`analyze`. Kein GitHub-API-Call; GitHub-Actions-Beispiel in `docs/ci-gate.md`.
+Davor, als eigener Commit: die beiden Report-Korrekturen aus 009a (Null-Delta-Sammelzeile,
+Schlusssatz), am Flaggschiff belegt (15 Rauschzeilen → 1 Sammelzeile, `scan/010_gate/`).
 
-### Kern-Ergebnisse (Belege in `wiki/log.md`, Session 009; Artefakte in `scan/009_cli/`)
+### Kern-Ergebnisse (Belege in `wiki/log.md`, Session 010; Artefakte in `scan/010_gate/`)
 
 | Was | Ergebnis |
 |---|---|
-| Demo-Pipeline | Alle Prototyp-Pins über die neue Maschinerie: λ 4,40 h, Drift 1,40, What-ifs 3,60 / 2,50 / 3,85 |
-| Monte Carlo Perf | **1000 Samples in 0,05 s** (Messvorbehalt Spec 009) → `numpy` bleibt draußen, `dependencies = []` |
-| Echtes Airflow | 3.3.0, 12 Läufe, `AIRFLOW_HOME=data/airflow-home/` (liegt noch): CLI-Report aus der echten Metadaten-DB, λ = 1,19 s = mean(arbeit), deckungsgleich 008 |
-| Postgres = SQLite | `percentile_cont`-Pfad == Python-Aggregation auf denselben Fixture-Zeilen (Wegwerf-Container `postgres:16`, offener 008-Punkt geschlossen) |
-| Flaggschiff | `load_data_wikiviews --assume-duration 300`: λ = 600 s, Kreis `сheck_data → load_data`, voller Report im Log |
-| ADR-021 | Selbst-Referenz-Sensor wird Kante; 007-Graph-Check neu: **4836/4836 Karp = Howard**, OmniRoute-Kante modelliert |
-| pipx | installiert (apt, 1.8.0), Entry-Point trägt: `eigenlag --help` + `analyze` über die pipx-Installation gelaufen |
+| Fixture-Historie v1→v2→v3 | v2 gegen v1: Exit 3, Kommentar nennt Kante mit `pipeline.py:10` + Signal; v3 gegen v2: Exit 0; unverändert: Exit 0 — alle über die pipx-Installation |
+| Default-Regel wörtlich | Sekunden-Modus (`--assume-duration 2500`): λ = 5000 s > T = 3600 s → Exit 3; `--assume-duration 1500`: λ = 3000 s < T → Exit 0 trotz neuer Kante |
+| Struktur-Modus (ADR-022) | ohne Dauern-Quelle: neue Kante, die einen Kreis schließt, bei sub-täglichem Takt löst aus; @daily besteht; Kommentar sagt „Task-Einheiten" |
+| Schärfere Modi | `--fail-on-new-edge` (auch @daily → 3), `--max-increase 20` bei λ 200→300 s ohne neue Kante → 3, `--max-increase 100` → 0 |
+| Selbst-Anwendung | `eigenlag check eigenlag --against HEAD` → Exit 0, „Keine DAGs in beiden Staenden", Repo unangetastet (`git status`/`worktree list` identisch) |
+| Worktree-Hygiene | per Test gepinnt inkl. Exception-Fall: Worktree verschwindet immer |
 
 ### Verifiziert
 
-- `pytest`: **312 passed** (38 neue; jedes neue Modul zuerst rot, Beleg im Log)
-- `ruff check`, `ruff format --check` (64 Files), `mypy eigenlag/` (20 Files) grün
-- Kern ohne Pflicht-Dependencies; `psycopg2-binary` nur ad hoc in der Dev-venv (Postgres-Beleg), keine Projekt-Dependency
+- `pytest`: **344 passed** (34 neue: 26 Gate, 8 Report-Kompaktierung; zuerst rot, Beleg im Log)
+- `ruff check`, `ruff format --check` (46 Files), `mypy eigenlag/` (22 Files) grün
+- `pipx install --force .` gelaufen, alle 5 Gate-Läufe über den Entry-Point
+- Pflicht-Dependencies weiterhin null (`dependencies = []`)
 
 ## Hinweise für nächste Session
 
-- **Roadmap: 010 (CI-Gate `eigenlag check --against main`)** ist der nächste Code-Schritt —
-  aber die Roadmap setzt den **Feedback-Meilenstein vor den Polish**: das CLI an 2–3 echte
-  Teams bringen (Davids Netzwerk, Build-in-public), erst danach über Gate-Umfang, dbt und
-  Packaging-Reihenfolge entscheiden (`positioning.md`, Zwischenbewertung). Die Spec für 010
-  schreibt der Orchestrator.
-- **Für das 010-Gate festlegen:** welcher λ-Wert gegen Schwellen läuft — Punkt-λ auf der
-  gewählten Statistik oder MC-λ_p50/λ_p95. Die beiden Schätzer weichen systematisch ab
-  (Demo: 4,40 vs. 4,51; Modell-Notiz am Ende von `wiki/log.md`, Session 009).
-- **Gleichstand-Befund aus Lauf 4:** bei uniformen Assume-Dauern erreichen oft mehrere
-  Kreise dasselbe Zyklusmittel; alle Standard-What-ifs zeigen dann +0 s (korrekt, Report
-  benennt es). Fürs Feedback ggf. eine „gemeinsame Engpass-Menge"-Darstellung überlegen —
-  erst wenn echte Nutzer darüber stolpern.
-- **`data/airflow-home/`** (gitignored) enthält die Airflow-3.3.0-Test-DB der Verifikation;
-  wiederverwendbar für 010-Tests, wegwerfbar. `.venv-airflow/` liegt ebenfalls noch.
+- **Roadmap: 011 (Packaging, README, Sprachfassung)** ist der letzte Baustein vor dem
+  öffentlichen Weg (Feedback-Meilenstein, `wiki/roadmap.md`): Repo öffentlich, Wikimedia-Sweep
+  als Content, Wikimedia anschreiben. Die Zielgruppe liest englisch — README englisch, und die
+  Report-Sprachfrage (EN-Fassung oder `--lang`) entscheidet die 011-Spec; `compose()`/`render()`
+  und `compose_check`/`render_check` haben die Trennung dafür.
+- **Für den Orchestrator zu prüfen (010):** die Struktur-Modus-Default-Regel (neue Kante
+  schließt Kreis + sub-täglicher Takt statt „λ > T", das in Task-Einheiten nicht auswertbar
+  ist). Begründung und Spannungs-Befund in ADR-022 und `wiki/log.md` (Session 010, „Was
+  überrascht hat"); der Verdict-Block ist eine einzelne Stelle (`gate._dag_row`) mit
+  gepinnten Tests, falls anders geschnitten werden soll.
+- README sagt noch „Es gibt noch kein installierbares CLI" — seit 009 falsch, Korrektur ist
+  Teil des 011-Auftrags (Packaging/README ausdrücklich dorthin verschoben).
+- `data/airflow-home/` (gitignored, Airflow-3.3.0-Test-DB aus 009) und `.venv-airflow/`
+  liegen weiter; für 011 vermutlich unnötig, wegwerfbar.
 - **Offen aus 006a (unverändert):** Import-genauer DAG-Check im Scanner, DAG-Generatoren
   mit Literal-Argumenten.
 
 ## Was David entscheiden muss
 
-1. Nichts Blockierendes im Code. Die eigentliche Entscheidung ist der Feedback-Meilenstein:
-   an welche 2–3 Teams geht das CLI zuerst?
+1. Nichts Blockierendes im Code. Nach 011 steht die eigentliche Entscheidung an: wann das
+   Repo öffentlich geht und in welcher Reihenfolge Reddit-Post / Airflow-Slack / Wikimedia-Kontakt.

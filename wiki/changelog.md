@@ -4,6 +4,15 @@ Feature-Historie. Ein Eintrag pro abgeschlossenem Feature, nicht pro Commit.
 
 ## Unreleased
 
+### Session 010 — CI-Gate `eigenlag check` (2026-07-15)
+
+- `eigenlag/gate.py` + CLI-Befehl `check`: `eigenlag check PFAD --against REF` vergleicht je DAG Punkt-λ und Cross-Run-Kanten-Menge des Arbeitsstands gegen einen Git-Stand. Vergleichsstand aus temporärem detached Worktree (read-only, restlos entfernt auch bei Exceptions, kein Checkout im Nutzer-Tree). Exit-Codes 0 bestanden / 1 Bedienfehler / 3 ausgelöst; die 2 bleibt bei `analyze`
+- Default-Fail-Regel nach Auftrag: neue Cross-Run-Kante **und** λ_nachher > T (Sekunden-Modus via `--db`/`--assume-duration`); im Struktur-Modus (CI-Default, uniforme Dauern 1.0) löst eine neue Kante aus, die einen Kreis schließt, bei sub-täglichem Takt (ADR-022). Schärfere Modi: `--fail-on-new-edge`, `--max-increase PROZENT`
+- PR-Kommentar (Markdown, stdout bzw. `--comment-file`, `--json` aus derselben Quelle): Urteil zuerst, je betroffenem DAG λ vorher → nachher mit Einheit, T mit Quelle, die auslösende Kante mit Datei:Zeile und Signal-Art, Kreis kondensiert und aufgelöst (ADR-002), Behebungs-Hinweis aus dem What-if-Ranking, Modellgrenzen in zwei Sätzen. Kein GitHub-API-Call, niemals — GitHub-Actions-Beispiel in `docs/ci-gate.md`
+- Report-Korrekturen aus 009a: What-if-Zeilen mit ±0 werden zur Sammelzeile kompaktiert (Kreis-Gleichstände vs. Kanten außerhalb des kritischen Kreises; `--json` behält alle Zeilen, neues Feld `auf_kreis`), Schlusssatz beschreibt jetzt das tatsächliche Verhalten. Am Flaggschiff belegt: 15 Rauschzeilen → 1 Sammelzeile (`scan/010_gate/`)
+- ADR-022 (Punkt-λ als Gate-Metrik, Monte Carlo nie gegen Schwellen), `select_dags` nach `parse_airflow.py`, Kreis-Block als `report.cycle_report()` geteilt
+- 34 neue Tests (344 im Repo), darunter Fixture-Repos mit echter Git-Historie und parametrisierte Exit-Code-Matrix; Kern weiter ohne Laufzeit-Dependencies
+
 ### Session 009 — CLI `eigenlag analyze` (2026-07-15)
 
 - `eigenlag/cli.py`: `eigenlag analyze PFAD` (argparse, Entry-Point via `[project.scripts]`, per `pipx install .` verprobt). Quellen `--db` / `--rest --rest-token` / `--assume-duration` mischbar wie in 008; `--dag-id`, `--statistic`, `--since`, `--period`, `--samples`, `--what-if` (wiederholbar: `task=NAME:SEKUNDEN`, `drop-edge=SRC->DST`), `--json`. Exit-Codes: 0 analysiert (auch instabil), 1 Bedienfehler, 2 kein analysierbarer DAG
