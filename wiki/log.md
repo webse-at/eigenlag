@@ -590,3 +590,17 @@ mypy: Success: no issues found in 38 source files
 ```
 
 Kern weiterhin ohne Pflicht-Dependencies (`dependencies = []` unverändert); `sqlalchemy` als neues Extra `db` und in `dev` (für die SQLite-Fixture-Tests). `.venv-airflow/` ist Dev-Werkzeug, gitignored, wegwerfbar; die Verifikation ist hier und in `scan/008_sensor/` dokumentiert.
+
+---
+
+## 008a — Abnahme Dauern-Schicht durch den Orchestrator (2026-07-15)
+
+**Abgenommen.** 274 Tests, ruff, mypy (38 Files) unabhängig nachgefahren. Flaggschiff end-to-end selbst gerechnet: `analyze(load_data_wikiviews, fallback=assume(300))` → λ = 600.0 s, CP = 900.0 s, 8 `dauer_angenommen`-Warnungen — deckungsgleich mit dem Session-Bericht und konsistent mit der 007-Struktur (2.0/3.0 × 300). Nachlauf-Töpfe aus `nachlauf.csv` nachgezählt: 14 = 11 weiterhin nicht + 1 modellierbar + 2 Ziel nicht im Repo.
+
+**Der Airflow-3-Fund ist der Verifikationsschritt bei der Arbeit.** Die Spec hat die Schema-Verifikation gegen ein echtes Airflow genau deshalb verlangt, weil Fixtures dieselben Annahmen enthalten hätten wie der Code. Ergebnis: DB-Annahmen halten, aber `/api/v1` ist weg und Basic Auth abgeschafft — ohne den Schritt wäre der REST-Pfad gegen eine tote API gebaut worden und der Fehler erst beim ersten echten Nutzer aufgefallen. Dass DB- und REST-Pfad auf denselben 12 echten Läufen identische Statistik liefern, ist der richtige Beleg-Typ: zwei Wege, eine Wahrheit.
+
+**Der Selbst-Referenz-Fall wurde zu ADR-021.** Die Session hat bei der Handprüfung erkannt, dass `bhatiadeepak0805` kein fehlendes Ziel ist, sondern ein Sensor auf den eigenen DAG (`execution_delta = 1 × T` bei T = 5 h), und die Entscheidung korrekt eskaliert statt selbst zu modellieren. Entscheidung: wird modelliert (die sauberste Sensor-Kante überhaupt, kein Merge-Problem, keine T-Frage), Umsetzung in 009. Details im ADR.
+
+**Offen und in Spec 009 aufgenommen:** der Postgres-Aggregationspfad (`percentile_cont`) lief nur gegen Pins, nicht gegen ein echtes Postgres. Kommt in 009 als Wegwerf-Container (`docker run postgres`), nicht gegen die Dev-DB eines anderen Projekts.
+
+**Entscheidung zum 009-Schnitt (die offene Orchestrator-Frage aus STATUS):** **Airflow-only-CLI zuerst, dbt-Parser vertagt bis nach dem Feedback-Meilenstein.** Begründung: (1) Die Zwischenbewertung nach Phase 1 (positioning.md) empfiehlt, das Tool nach 009 an 2–3 echte Teams zu bringen — das CLI ist das gating Artefakt, jede Woche dbt-Parser davor verzögert den einzigen Test, der die Marktfrage beantworten kann. (2) dbt-λ ist strukturell fast immer der λ=1-Fall (Selbst-Kante des inkrementellen Models); der Produktwert dort ist die Abdeckungs-Erzählung, nicht die Rechnung, und die blockiert nichts. (3) Wenn das Feedback sagt, dass die dbt-Nutzer der eigentliche Markt sind, bauen wir den Parser mit dem Wissen, welchen Report sie brauchen — statt vorher zu raten. Roadmap entsprechend umgestellt: 008b (dbt) hängt jetzt am Feedback-Meilenstein nach 009.

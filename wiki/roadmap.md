@@ -23,12 +23,14 @@ Nummern verschoben, weil 005 und 006 dazwischenkamen. Inhalte unverändert.
 | 004 | Mathe-Kern: Kondensation, Karp, Howard, Drift, `periods` | ✅ done, abgenommen (Brute-Force-Kreuzvergleich) |
 | 007 | Airflow-Parser per AST: Tasks, `>>`/`<<`, `set_upstream/downstream`, Signale inkl. G, Schedule. Wiederholung des Karp/Howard/Brute-Force-Vergleichs auf echten geparsten DAGs (offen aus Abnahme 004) | ✅ done — Karp = Howard auf 4836 Korpus-Graphen, 129 Teilpfad-Fälle gefunden (ADR-019-Auflage erfüllt), ADR-020 |
 | 008 | Dauern-Schicht (Metadaten-DB, REST, `--assume-duration`), `analyze()`, Schema-Verifikation gegen echtes Airflow, Sensor-Nachlauf aus 007a. Der dbt-Parser wurde beim Spec-Schnitt herausgenommen (eigene Zeile unten) | ✅ done — erstes λ in Sekunden end-to-end; Airflow 3.3.0: `/api/v1` und Basic Auth entfernt, v2+JWT umgesetzt; Sensor-Nachlauf 1/11/2, kein `periods > 1` in freier Wildbahn |
-| 008b | dbt-Parser (`manifest.json`) — aus der ursprünglichen 008 herausgeschnitten, Spec fehlt noch (Orchestrator) | 004 |
-| 009 | CLI `eigenlag analyze`, deutscher Report (sagt, was `simulate` misst: Makespan), What-if-Ranking, Monte Carlo (λ_p50, λ_p95, `numpy` kommt hier als Dependency) | 007, 008 |
+| 008b | dbt-Parser (`manifest.json`) — **vertagt bis nach dem Feedback-Meilenstein** (Entscheidung in Abnahme 008a): dbt-λ ist strukturell fast immer der λ=1-Fall, der Produktwert dort ist die Abdeckungs-Erzählung, und das Feedback echter Teams soll erst zeigen, welchen Report dbt-Nutzer brauchen | Feedback-Meilenstein |
+| 009 | CLI `eigenlag analyze` (Airflow-only), deutscher Report (sagt, was `simulate` misst: Makespan), What-if-Ranking, Monte Carlo (λ_p50, λ_p95, `numpy` kommt hier als Dependency). Dazu: ADR-021 im Parser (Selbst-Referenz-Sensor), Postgres-Aggregationspfad gegen Wegwerf-Container verifiziert | 007, 008 |
 | 010 | CI-Gate `eigenlag check --against main`, Exit-Code, PR-Kommentar-Text | 009 |
 | 011 | Packaging, `pipx install .` verifiziert, README mit dem Bäckerei-Beispiel | 010 |
 
 **Akzeptanz Phase 2:** `pipx install .` läuft, `eigenlag analyze <pfad> --db <url>` liefert λ, kritischen Kreis und What-if-Ranking, CI-Gate-Test grün.
+
+**Feedback-Meilenstein (nach 009, vor Polish):** das CLI an 2–3 echte Teams bringen (Davids Netzwerk, Build-in-public auf Reddit) und erst danach über CI-Gate-Umfang, dbt-Parser und Packaging-Reihenfolge entscheiden. Begründung in `positioning.md`, Zwischenbewertung nach Phase 1.
 
 ## Reihenfolge
 

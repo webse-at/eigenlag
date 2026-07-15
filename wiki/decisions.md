@@ -345,3 +345,29 @@ Ein DAG mit A–F-Signal **und** G zählt in die Kern-Klasse; G wird als Spalte 
 **Die Divergenz ist gewollt und muss offen bleiben:** Marktzahl und λ-Modell messen zwei verschiedene Dinge. Die Marktzahl zählt Strukturen, in denen ein Lauf den vorigen *liest* — dafür ist F ein starkes Signal (ADR-011, unverändert). Das λ-Modell zählt Kanten, auf die ein Lauf *wartet* — dafür ist F keines. Wer die beiden Zahlen nebeneinander sieht, muss diese Erklärung finden können; sie gehört in den Report-Text (Session 009), sonst wirft uns die Differenz später jemand als Inkonsistenz vor.
 
 **Umsetzung:** `eigenlag/parse_airflow.py` erzeugt für F Warnungen statt Kanten; die Konsistenz mit dem Scanner (der F weiterhin als Signal-Art zählt) sichert `scanner/parse_consistency_test.py` über die Abbildung Warnung → Signal-Art.
+
+---
+
+## ADR-021 — Ein Selbst-Referenz-Sensor ist die sauberste Cross-Run-Kante und wird modelliert
+
+**Status:** entschieden, 2026-07-15 (Abnahme Session 008)
+**Kontext:** Der Sensor-Nachlauf aus 008 hat einen Fall umklassifiziert: `bhatiadeepak0805/OmniRoute_Project_Group_4`, `DAG_Codes/dag_2.py:480`. Ein `ExternalTaskSensor` zeigt dort auf den **eigenen** DAG:
+
+```python
+wait_for_registry_00_00 = ExternalTaskSensor(
+    task_id="wait_for_registry_00_00",
+    external_dag_id="dag2_batch_pipeline_harsh",   # == der eigene DAG
+    external_task_id="vehicle_registry_silver",
+    execution_delta=timedelta(hours=5),            # == genau eine Periode (T = 5 h)
+)
+```
+
+Der Parser aus 007 behandelt `external_dag_id` als Fremd-DAG-Verweis und meldete "Ziel nicht im Parse-Satz". Die Handprüfung der Session hat die Selbst-Referenz erkannt und die Entscheidung korrekt an den Orchestrator eskaliert.
+
+**Entscheidung:** `ExternalTaskSensor` mit `external_dag_id == eigener dag_id` und `execution_delta = n × T` (n ganzzahlig ≥ 1) wird als Cross-Run-Kante modelliert: `CrossEdge(ziel_task, sensor_task, n)`, im selben Namespace, ohne Cross-DAG-Merge.
+
+**Begründung:** Das ist semantisch die **sauberste** Sensor-Kante überhaupt: beide Enden liegen im selben DAG, das T-Gleichheits-Problem und das Merge-Problem aus Spec 007 entfallen vollständig. Lauf k wartet auf eine Task aus Lauf k−n — genau die Rekurrenz, die das Tool berechnet. Sie nicht zu modellieren wäre ein Falsch-Negativ ohne jeden technischen Grund; die 007-Beschränkungen (gleicher Takt, Ziel im Parse-Satz) sind hier per Konstruktion erfüllt.
+
+**Umsetzung:** in Session 009 (Parser-Erweiterung plus Tests: n = 1, n = 2, delta kein Vielfaches → Warnung wie gehabt). Die 007-Korpus-Artefakte sind Engineering-Artefakte, keine Launch-Zahlen (die Scanner-Zählung von Signal C ist unabhängig davon) — sie werden bei Gelegenheit, nicht zwingend sofort, neu gerechnet.
+
+**Einordnung des Fundes, ehrlich:** Das Repo sieht nach Kursarbeit aus (Projektgruppen-Name). Der Wert liegt in der Semantik-Lücke, die es aufgedeckt hat, nicht im Fall als Launch-Material.
