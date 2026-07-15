@@ -46,7 +46,10 @@ eigenlag/
     ├── montecarlo.py            Lognormal-Fits, λ_p50, λ_p95
     ├── whatif.py                What-if-Szenarien und Ranking
     ├── parse_dbt.py             manifest.json
-    ├── durations.py             Airflow-Metadaten-DB, REST, --assume-duration
+    ├── durations.py             Airflow-Metadaten-DB (Extra [db]), REST (v1/v2), --assume-duration;
+    │                            je Task p50/p95/mean/n/operator/is_sensor (Session 008)
+    ├── analyze.py               analyze(): parsen + Dauern heiraten + condense + Howard,
+    │                            Pflicht-Warnung bei Sensor im kritischen Kreis (Session 008)
     ├── gate.py                  CI-Gate, λ vor/nach Diff
     ├── report.py                Nutzer-Ausgabe (deutsch)
     ├── cli.py                   Argument-Parsing, Subcommands

@@ -1095,7 +1095,7 @@ def parse_path(root: Path, dag_names: frozenset[str] = DAG_NAMES) -> ParseResult
 # --- Struktur + Dauern = Pipeline ----------------------------------------------------
 
 
-def _node_name(dag: ParsedDag, task: str) -> str:
+def node_name(dag: ParsedDag, task: str) -> str:
     prefix = dag.dag_id if dag.dag_id is not None else f"{dag.file}:{dag.lineno}"
     return f"{prefix}.{task}"
 
@@ -1116,13 +1116,13 @@ def to_pipeline(
     cross: list[CrossEdge] = []
     for dag in dag_list:
         for task in dag.tasks:
-            node = _node_name(dag, task)
+            node = node_name(dag, task)
             if isinstance(durations, Mapping):
                 result_durations[node] = durations[node]
             else:
                 result_durations[node] = float(durations)
-        intra.extend((_node_name(dag, s), _node_name(dag, d)) for (s, d) in dag.intra)
+        intra.extend((node_name(dag, s), node_name(dag, d)) for (s, d) in dag.intra)
         for edge in dag.cross:
-            src = edge.src if edge.signal == "external_task_sensor" else _node_name(dag, edge.src)
-            cross.append(CrossEdge(src=src, dst=_node_name(dag, edge.dst), periods=edge.periods))
+            src = edge.src if edge.signal == "external_task_sensor" else node_name(dag, edge.src)
+            cross.append(CrossEdge(src=src, dst=node_name(dag, edge.dst), periods=edge.periods))
     return Pipeline(durations=result_durations, intra=intra, cross=cross)

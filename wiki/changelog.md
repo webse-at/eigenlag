@@ -4,6 +4,14 @@ Feature-Historie. Ein Eintrag pro abgeschlossenem Feature, nicht pro Commit.
 
 ## Unreleased
 
+### Session 008 — Dauern-Schicht (2026-07-15)
+
+- `eigenlag/durations.py`: drei Quellen, eine Ausgabeform (`TaskStats`: p50/p95/mean/n/operator/is_sensor) — `from_metadata_db` (sqlalchemy lazy, neues Extra `eigenlag[db]`, PostgreSQL aggregiert per `percentile_cont`, sonst Python), `from_rest` (urllib, Paginierung, max. 2 Requests/s, Seiten-Deckel mit Warnung), `assume(seconds)`. `pick`/`resolve` bauen das `durations`-Mapping für `to_pipeline`; Mischbetrieb und Mindest-Stichprobe (n < 5) fallen je Task mit Warnung auf den Assume-Wert
+- `eigenlag/analyze.py`: `analyze(path, stats, statistic, fallback)` — parsen, Dauern heiraten, kondensieren, Howard; **das erste λ in Sekunden**. Sensor auf dem kritischen Kreis erzeugt die Pflicht-Warnung `sensor_im_kritischen_kreis` (markieren statt herausrechnen, `math.md` Abschnitt 9)
+- Schema-Verifikation gegen echtes Airflow 3.3.0 standalone (`.venv-airflow`, Python 3.12.13): `task_instance`-Spalten, `duration`-Sekunden, TaskGroup-Prefix bestätigt; **Airflow 3 hat `/api/v1` und Basic Auth entfernt** → `api_version`-Parameter (Default v2 + JWT-Token, v1 für Airflow 2), DB- und REST-Pfad liefern auf denselben Läufen identische Statistik. Belege in `wiki/log.md`
+- Sensor-Nachlauf der 14 offenen 007a-Fälle über ganze Repos (`scanner/sensor_followup.py`, `scan/008_sensor/nachlauf.csv`): 1 modellierbar (periods=1, kein Kreis), 11 weiterhin nicht (mit Grund), 2 Ziel nicht im Repo — **kein `periods > 1` in freier Wildbahn**, ADR-006 bleibt test-belegt; Selbst-Referenz-Sensor als ADR-Kandidat protokolliert
+- 18 neue Tests (274 im Repo), Kern weiter ohne Laufzeit-Dependencies
+
 ### Session 007 — Airflow-Parser (2026-07-14)
 
 - `eigenlag/parse_airflow.py`: AST-Parser DAG-File → `ParsedDag` (Tasks, Intra-Kanten, Cross-Kanten mit Herkunft, Warnungen). Task-Erkennung: Operatoren mit statischem `task_id`, `@task`/`@task.*`, `.partial().expand()` (eine Task, Warnung `task_mapping`); Kanten: `>>`/`<<` gekettet und mit Listen, `set_upstream`/`set_downstream`, `chain(...)`, TaskGroups mit Prefix-Namespace. Nicht statisch Auflösbares wird Warnung mit Datei und Zeile, nie geraten

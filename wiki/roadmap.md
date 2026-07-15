@@ -22,7 +22,8 @@ Nummern verschoben, weil 005 und 006 dazwischenkamen. Inhalte unverändert.
 |---|---|---|
 | 004 | Mathe-Kern: Kondensation, Karp, Howard, Drift, `periods` | ✅ done, abgenommen (Brute-Force-Kreuzvergleich) |
 | 007 | Airflow-Parser per AST: Tasks, `>>`/`<<`, `set_upstream/downstream`, Signale inkl. G, Schedule. Wiederholung des Karp/Howard/Brute-Force-Vergleichs auf echten geparsten DAGs (offen aus Abnahme 004) | ✅ done — Karp = Howard auf 4836 Korpus-Graphen, 129 Teilpfad-Fälle gefunden (ADR-019-Auflage erfüllt), ADR-020 |
-| 008 | dbt-Parser (`manifest.json`) plus Dauern-Schicht (Metadaten-DB, REST, `--assume-duration`) | 004 |
+| 008 | Dauern-Schicht (Metadaten-DB, REST, `--assume-duration`), `analyze()`, Schema-Verifikation gegen echtes Airflow, Sensor-Nachlauf aus 007a. Der dbt-Parser wurde beim Spec-Schnitt herausgenommen (eigene Zeile unten) | ✅ done — erstes λ in Sekunden end-to-end; Airflow 3.3.0: `/api/v1` und Basic Auth entfernt, v2+JWT umgesetzt; Sensor-Nachlauf 1/11/2, kein `periods > 1` in freier Wildbahn |
+| 008b | dbt-Parser (`manifest.json`) — aus der ursprünglichen 008 herausgeschnitten, Spec fehlt noch (Orchestrator) | 004 |
 | 009 | CLI `eigenlag analyze`, deutscher Report (sagt, was `simulate` misst: Makespan), What-if-Ranking, Monte Carlo (λ_p50, λ_p95, `numpy` kommt hier als Dependency) | 007, 008 |
 | 010 | CI-Gate `eigenlag check --against main`, Exit-Code, PR-Kommentar-Text | 009 |
 | 011 | Packaging, `pipx install .` verifiziert, README mit dem Bäckerei-Beispiel | 010 |

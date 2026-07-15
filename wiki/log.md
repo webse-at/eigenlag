@@ -536,3 +536,57 @@ Deckungsgleich mit dem Session-Bericht, Zeile für Zeile. 214 Tests, ruff, mypy 
 2. **Teurerer Lauf für die 14 "Ziel nicht im Parse-Satz"-Sensorfälle?** Ja, aber gezielt: nur die betroffenen Repos als Ganzes parsen, kein Voll-Korpus-Lauf. Eine einzige echte `periods > 1`-Kante in freier Wildbahn wäre die beste Demonstration der ADR-006-Mechanik, die bisher nur durch Tests belegt ist. Das wird ein Zusatz-Abschnitt in Spec 008, keine eigene Session.
 
 **Sauber gelöst, hervorhebenswert:** Die zwei Parser-Bugs aus dem Konsistenz-Vergleich (ClassDef-Rümpfe, A+B-Gleichzeitigkeit) wurden erst als rote Tests fixiert und dann behoben — genau die Reihenfolge, die CLAUDE.md verlangt. Und die Sensor-Ernüchterung (keine einzige statisch modellierbare C-Kante im Kandidaten-Korpus, alle 34 Fälle mit konkretem Grund) wurde gemeldet statt schöngerechnet.
+
+---
+
+## Session 008 — Dauern-Schicht: aus Struktur-Aussagen werden Zeit-Aussagen (2026-07-15)
+
+**Auftrag:** `eigenlag/durations.py` (drei Quellen, eine Ausgabeform), `analyze()` als Kompositionsfunktion, Schema-Verifikation gegen ein echtes Airflow, Sensor-Nachlauf der 14 offenen Fälle aus 007a. Spec: `cc-sessions/008_offen-dauern-schicht.md`.
+
+**Was gebaut wurde:**
+
+- `eigenlag/durations.py`: `TaskStats` (p50/p95/mean/n/operator, `is_sensor` aus dem Operator-Namen — `"Sensor" in operator`, damit auch `DateTimeSensorAsync` zählt), `assume(seconds)` (n=0 sagt ehrlich: Annahme, keine Statistik), `pick(stats, statistic)` und `resolve(tasks, stats, statistic, fallback, min_n=5)`. Mischbetrieb ist der Normalfall: fehlende Tasks und Tasks unter der Mindest-Stichprobe bekommen den Assume-Wert **je Task mit Warnung** (`dauer_angenommen` bzw. `stichprobe_zu_klein`); ohne Fallback wirft `resolve` statt still 0 zu setzen. Perzentile per linearer Interpolation, identisch mit `percentile_cont` — Pins von Hand: `[10,20,30,40,50] → p50=30, p95=48`.
+- `from_metadata_db(url, dag_ids, since_days=90)`: sqlalchemy lazy importiert (Extra `eigenlag[db]`, Kern bleibt bei `dependencies = []`). Auf PostgreSQL aggregiert die DB selbst (`percentile_cont`), sonst holt die Query die Dauern und Python aggregiert (SQLite kennt kein `percentile_cont`). Zeitfenster Default 90 Tage.
+- `from_rest(base_url, auth, dag_ids, ..., api_version="v2")`: urllib, kein httpx (Vorentscheid 2). Paginierung über `total_entries`, maximal 2 Requests/s (`min_interval_s=0.5`), Abbruch nach `max_pages` je DAG mit Warnung `rest_seiten_deckel`.
+- `eigenlag/analyze.py`: `analyze(path, stats, statistic="mean", fallback=None)` — parsen, Dauern heiraten (`resolve`), kondensieren, Howard. Liegt ein Task mit `is_sensor=True` auf dem aufgelösten kritischen Kreis, trägt das Ergebnis die Pflicht-Warnung `sensor_im_kritischen_kreis` ("Kreis enthaelt Wartezeit auf externe Ereignisse; Lambda kann ueberschaetzt sein und ist keine harte Untergrenze mehr") — markieren statt herausrechnen (Vorentscheid 4, `math.md` Abschnitt 9). Nebenbei: `_node_name` im Parser ist jetzt öffentlich (`node_name`), statt die Namensbildung in `analyze` zu duplizieren.
+
+**Tests zuerst, rot gesehen:** `ModuleNotFoundError: No module named 'eigenlag.durations'` beim ersten Lauf der 13 Duration-Tests, danach grün; dasselbe für die 5 `analyze`-Tests (`No module named 'eigenlag.analyze'`). Statistik-Pins von Hand im Test-Docstring hergeleitet, TaskGroup-Namespacing DB ↔ Parser als eigener Pin-Test (`etl.grp.load` aus beiden Welten identisch).
+
+**Schema-Verifikation gegen echtes Airflow (Kern-Akzeptanz).** `uv venv .venv-airflow --python 3.12` (Python 3.12.13; Airflow trägt das 3.14 des Servers nicht), `apache-airflow==3.3.0` mit offiziellem Constraints-File. Zwei Test-DAGs (als Beleg kopiert nach `scan/008_sensor/testfall_*.py`): `testfall_gruppe` (TaskGroup `grp` mit BashOperator) und `testfall_dop_sensor` (`TimeDeltaSensor` + BashOperator mit `depends_on_past=True`). Je 6 Läufe per `airflow dags test` mit verschiedenen Logical Dates. `from_metadata_db` gegen die entstandene DB:
+
+```
+testfall_dop_sensor.arbeit          n= 6 mean=  1.186 p50=  1.181 p95=  1.199 operator=BashOperator is_sensor=False
+testfall_dop_sensor.warten          n= 6 mean=  1.791 p50=  1.788 p95=  1.823 operator=TimeDeltaSensor is_sensor=True
+testfall_gruppe.ende                n= 6 mean=  1.042 p50=  1.040 p95=  1.046 operator=BashOperator is_sensor=False
+testfall_gruppe.grp.laden           n= 6 mean=  2.045 p50=  2.046 p95=  2.048 operator=BashOperator is_sensor=False
+testfall_gruppe.start               n= 6 mean=  3.041 p50=  3.041 p95=  3.067 operator=BashOperator is_sensor=False
+```
+
+Alle Annahmen halten: Spalten `dag_id, task_id, state, duration, operator, start_date` existieren in Airflow 3.3.0, `duration` ist Sekunden (sleep 2 → 2.046), `task_id` trägt den TaskGroup-Prefix (`grp.laden`), `operator` ist der Klassenname. Zwei Befunde am Rand: (1) `start_date` liegt in SQLite als **naiver UTC-String ohne Offset** (`2026-07-15 06:45:46.635753`) — der Fenster-Vergleich bindet deshalb exakt dieses Format (Kommentar im Code). (2) Die jeweils erste Task eines Laufs trägt ~2 s Overhead in `duration` (sleep 1 → konstant 3.04) — das ist Airflows Messung, nicht unsere; für uns zählt nur: Einheit Sekunden, plausible Werte.
+
+**Airflow 3 hat die REST-Annahmen der Spec gebrochen — genau dafür war der Schritt da.** Gegen den laufenden `airflow api-server` (3.3.0): `GET /api/v1/...` → **404** (der v1-Pfad ist entfernt), Basic Auth gegen v2 → **401** (Airflow 3 verlangt JWT-Bearer-Token via `POST /auth/token`). Die Antwort-Felder von `/api/v2/dags/{dag_id}/dagRuns/~/taskInstances` sind strukturgleich mit v1 (`task_id`, `state`, `duration`, `operator`). Konsequenz umgesetzt statt geraten: `api_version`-Parameter, Default `"v2"` (Token-Auth), `"v1"` für Airflow 2 (dort auch Basic-Tupel) — beide Pfade getestet. `from_rest` live gegen das lokale API liefert **exakt dieselben fünf Zeilen** wie `from_metadata_db` oben — zwei unabhängige Quellen, gleiche Aggregation.
+
+**End-to-End, zweimal:**
+
+1. *Echte Dauern:* `analyze(testfall_dop_sensor.py, stats=DB)` → **λ = 1,186 s** (Selbstkante `arbeit → arbeit`, das ist exakt `mean(arbeit)`), Critical Path 2,977 s (`warten → arbeit`). Ein Teilpfad-Fall in Sekunden, aus einer echten Metadaten-DB, durch die komplette Kette. Der Sensor liegt nicht auf dem Kreis → korrekt keine Warnung; der Fixture-Fall mit Sensor **auf** dem Kreis (Pflicht-Warnung) ist `eigenlag/analyze_test.py`.
+2. *Flaggschiff mit Assume:* `analyze(load_data_wikiviews, assume(300))` → **λ = 600 s** gegen Critical Path 900 s, kritischer Kreis kondensiert `load_data → load_data`, aufgelöst `сheck_data → load_data`, 8 Warnungen `dauer_angenommen` (eine je Task, wie gefordert). Das ist die 007a-Struktur-Aussage (λ = 2, CP = 3) × 300 s — kein Zeit-Beweis (wir haben keine echten Dauern dieses Systems), aber der Beleg, dass die Kette steht.
+
+**Sensor-Nachlauf (die 14 Fälle aus 007a, ganze Repos als Parse-Satz).** `scanner/sensor_followup.py`, Artefakt `scan/008_sensor/nachlauf.csv`, jede Zeile mit Permalink. Ergebnis der drei Töpfe: **1 modellierbar geworden, 11 weiterhin nicht (mit Grund), 2 Ziel existiert nicht im Repo.**
+
+- *Modellierbar:* `IanRJ19/PEDE5_Airflow` — `ets_master` (`* * * * *`, T=60 s) wartet mit `execution_delta=timedelta(minutes=1)` auf `ets_slave.load` (gleicher Takt, Nachbar-File). Kante `ets_slave.load(k−1) → ets_master.sensor(k)`, periods=1 — die erste in freier Wildbahn modellierte Sensor-Kante. Durchgerechnet: sie erzeugt **keinen Kreis** (kein Rückweg von master nach slave), λ ist auf diesem Paar korrekt "nicht anwendbar" (ADR-007). Kein `periods > 1`.
+- *Weiterhin nicht (11):* 5× `delta/T` nicht ganzzahlig (Minuten-Versatz bei größerem Takt), 2× verschiedene Takte, 1× Takt nicht bestimmbar, 1× `external_task_id` nicht statisch, 1× Ziel-Task nicht im Ziel-DAG (`An4PDM`: Ziel-Task `imprime_1` existiert im Ziel-DAG nicht — erst der Ganz-Repo-Parse macht diesen präziseren Grund sichtbar), 1× **Selbst-Referenz** (unten).
+- *Ziel nicht im Repo (2):* beide `amitmentos/Big_Data_Project` — `silver_to_gold_etl` kommt im ganzen Repo nur als `external_dag_id`-Referenz und in Demo-Strings vor, kein DAG trägt diese ID (per grep belegt).
+
+**Damit gilt: kein `periods > 1`-Wildbahn-Beleg — die ADR-006-Mechanik bleibt test-belegt, und das steht dann so da** (die Spec nennt genau dieses Ergebnis als gültig).
+
+**Befund für den Orchestrator — Selbst-Referenz-Sensor:** `bhatiadeepak0805/OmniRoute_Project_Group_4`, `DAG_Codes/dag_2.py:480` — ein `ExternalTaskSensor` mit `external_dag_id` = **eigener** DAG (`dag2_batch_pipeline_harsh`, Schedule `0 0,5 * * *`), wartet auf den eigenen Task `vehicle_registry_silver` von vor 5 Stunden. Das Ziel existiert also (es ist der Quell-DAG selbst), aber der Parser modelliert nur Fremd-DAG-Sensoren (`d is not draft` in `_sensor_edges`). Semantisch ist das eine echte Selbst-Rekurrenz-Kandidatin; hier zusätzlich durch den unregelmäßigen Takt (5 h/19 h-Lücken) nicht im Ein-Perioden-Modell darstellbar. Keine neue Signal-Regel in dieser Session (Spec-Zaun) — ADR-Kandidat.
+
+**Verifiziert:**
+
+```
+pytest: 274 passed (18 neue)
+ruff check: All checks passed!  |  ruff format --check: 38 files already formatted
+mypy: Success: no issues found in 38 source files
+```
+
+Kern weiterhin ohne Pflicht-Dependencies (`dependencies = []` unverändert); `sqlalchemy` als neues Extra `db` und in `dev` (für die SQLite-Fixture-Tests). `.venv-airflow/` ist Dev-Werkzeug, gitignored, wegwerfbar; die Verifikation ist hier und in `scan/008_sensor/` dokumentiert.

@@ -7,10 +7,14 @@ requires-python = ">=3.12"
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "mypy"]
+# sqlalchemy in dev nur fuer die durations-Tests (SQLite-Fixture-DB).
+dev = ["pytest", "ruff", "mypy", "sqlalchemy"]
 # Nur der Scanner (Phase 1) braucht YAML: dbt_project.yml und die schema.yml neben den Models.
 # Der eigenlag-Kern bleibt abhaengigkeitsfrei.
 scanner = ["pyyaml", "types-PyYAML"]
+# Dauern aus der Airflow-Metadaten-DB (from_metadata_db). Import ist lazy, der Kern
+# laeuft ohne; REST (from_rest) braucht nur die stdlib.
+db = ["sqlalchemy"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -32,7 +36,9 @@ target-version = "py312"
 # Der Referenz-Prototyp bleibt unveraendert liegen (ADR-001), er ist Fixture, nicht Quellcode.
 # scanner/fixtures ist ebenfalls Fixture: die Files bilden fremde Repos nach, samt kaputtem
 # Python (dags/broken.py), toten Importen und Kommentar-Fallen. Sie sind Testdaten, kein Code.
-exclude = ["wiki/maxplus_pipeline.py", "scanner/fixtures"]
+# scan/ sind Lauf-Artefakte; die testfall_*.py dort sind der Beleg-Quelltext der
+# Airflow-Verifikation (Session 008) und bleiben exakt wie gelaufen.
+exclude = ["wiki/maxplus_pipeline.py", "scanner/fixtures", "scan"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
