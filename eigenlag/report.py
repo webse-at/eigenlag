@@ -20,7 +20,7 @@ from typing import Any
 
 from eigenlag.analyze import Analysis
 from eigenlag.durations import Statistic, TaskStats
-from eigenlag.maxplus import condense, howard
+from eigenlag.maxplus import TOL, condense, howard
 from eigenlag.model import Pipeline
 from eigenlag.montecarlo import MonteCarloResult
 from eigenlag.parse_airflow import ParsedDag, node_name
@@ -96,12 +96,25 @@ def _without_edge(pipeline: Pipeline, src: str, dst: str) -> Pipeline:
     return Pipeline(durations=pipeline.durations, intra=pipeline.intra, cross=remaining)
 
 
+def _cycle_cross_pairs(analysis: Analysis) -> set[tuple[str, str]]:
+    """(src, dst) der Cross-Kanten, die den kritischen Kreis bilden.
+
+    Jede kondensierte Kreis-Kante entstand aus genau einer Cross-Kante; deren dst
+    ist der erste Knoten des zugehoerigen Task-Pfads (siehe maxplus.condense).
+    """
+    if analysis.cycle is None:
+        return set()
+    _, paths = condense(analysis.pipeline)
+    return {(edge.src, paths[(edge.src, edge.dst, edge.periods)][0]) for edge in analysis.cycle}
+
+
 def _what_if(
     analysis: Analysis, requested: Sequence[WhatIfTask | WhatIfDropEdge]
 ) -> list[dict[str, Any]]:
     pipeline = analysis.pipeline
     base = analysis.lam
-    scenarios: list[tuple[str, Pipeline, bool]] = []
+    cycle_pairs = _cycle_cross_pairs(analysis)
+    scenarios: list[tuple[str, Pipeline, bool, bool]] = []
 
     if base is not None:
         for task in analysis.cycle_tasks:
@@ -111,6 +124,7 @@ def _what_if(
                     f"Task {task} halbiert (auf {_num(halved)} s)",
                     _with_duration(pipeline, task, halved),
                     False,
+                    True,
                 )
             )
         seen: set[tuple[str, str]] = set()
@@ -123,6 +137,7 @@ def _what_if(
                     f"Cross-Kante {edge.src} -> {edge.dst} entfernt",
                     _without_edge(pipeline, edge.src, edge.dst),
                     False,
+                    (edge.src, edge.dst) in cycle_pairs,
                 )
             )
 
@@ -134,6 +149,7 @@ def _what_if(
                     f"Task {task} = {_num(wish.seconds)} s (angefragt)",
                     _with_duration(pipeline, task, wish.seconds),
                     True,
+                    task in analysis.cycle_tasks,
                 )
             )
         else:
@@ -142,11 +158,12 @@ def _what_if(
                     f"Cross-Kante {wish.src} -> {wish.dst} entfernt (angefragt)",
                     _without_edge(pipeline, wish.src, wish.dst),
                     True,
+                    (wish.src, wish.dst) in cycle_pairs,
                 )
             )
 
     rows = []
-    for label, variant, angefragt in scenarios:
+    for label, variant, angefragt, auf_kreis in scenarios:
         lam = _lam_of(variant)
         rows.append(
             {
@@ -154,6 +171,7 @@ def _what_if(
                 "lambda_s": lam,
                 "delta_s": None if lam is None or base is None else lam - base,
                 "angefragt": angefragt,
+                "auf_kreis": auf_kreis,
             }
         )
     rows.sort(key=lambda r: (r["lambda_s"] is not None, r["lambda_s"] or 0.0))
@@ -452,13 +470,40 @@ def _mc_text(d: dict[str, Any]) -> list[str]:
     return zeilen
 
 
+def _sammelzeile(kompakt: list[dict[str, Any]]) -> str:
+    kreis = sum(1 for r in kompakt if r["auf_kreis"])
+    extern = len(kompakt) - kreis
+    teile = []
+    if kreis:
+        teile.append("1 Kreis-Gleichstand" if kreis == 1 else f"{kreis} Kreis-Gleichstaende")
+    if extern:
+        teile.append(
+            "1 Kante ausserhalb des kritischen Kreises"
+            if extern == 1
+            else f"{extern} Kanten ausserhalb des kritischen Kreises"
+        )
+    kopf = (
+        "1 weiteres Szenario aendert Lambda nicht"
+        if len(kompakt) == 1
+        else f"{len(kompakt)} weitere Szenarien aendern Lambda nicht"
+    )
+    return f"  {kopf}: {', '.join(teile)}."
+
+
 def _what_if_text(d: dict[str, Any]) -> list[str]:
     if not d["what_if"]:
         return []
     zeilen = ["", "What-if", "-" * 7]
     if d["lambda_s"] is not None:
         zeilen.append(f"Basis: Lambda = {_dauer(d['lambda_s'])}. Sortiert nach neuem Lambda.")
-    for i, zeile in enumerate(d["what_if"], start=1):
+    # Null-Delta-Kompaktierung (Abnahme 009a): Standard-Szenarien ohne Wirkung werden
+    # zu einer Sammelzeile. Angefragte Szenarien bleiben immer sichtbar — wer explizit
+    # fragt, bekommt die Zeile. In --json stehen weiterhin alle Zeilen.
+    gezeigt = [
+        r for r in d["what_if"] if r["angefragt"] or r["delta_s"] is None or abs(r["delta_s"]) > TOL
+    ]
+    kompakt = [r for r in d["what_if"] if r not in gezeigt]
+    for i, zeile in enumerate(gezeigt, start=1):
         if zeile["lambda_s"] is None:
             wirkung = "kein Kreis mehr, Taktgrenze nicht anwendbar"
         else:
@@ -467,11 +512,13 @@ def _what_if_text(d: dict[str, Any]) -> list[str]:
                 vorzeichen = "-" if zeile["delta_s"] < 0 else "+"
                 wirkung += f", Veraenderung {vorzeichen}{_num(abs(zeile['delta_s']))} s"
         zeilen.append(f"  {i}. {zeile['szenario']}: {wirkung}")
+    if kompakt:
+        zeilen.append(_sammelzeile(kompakt))
     zeilen.append(
         "Eine Optimierung, die nicht auf dem kritischen Kreis liegt, aendert Lambda um"
-        " exakt null. Das Ranking zeigt deshalb nur Kreis-Tasks und Cross-Kanten;"
-        " alles andere ist fuer die Taktgrenze wirkungslos, so nuetzlich es fuer die"
-        " Latenz eines Einzellaufs sein mag."
+        " exakt null. Das Ranking rechnet deshalb die Kreis-Tasks und alle Cross-Kanten"
+        " durch; was Lambda nicht aendert, ist fuer die Taktgrenze wirkungslos, so"
+        " nuetzlich es fuer die Latenz eines Einzellaufs sein mag."
     )
     return zeilen
 

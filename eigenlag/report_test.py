@@ -202,6 +202,101 @@ def test_requested_drop_edge_wird_gerechnet() -> None:
     assert angefragt[0]["lambda_s"] is None
 
 
+# --- Null-Delta-Kompaktierung (Abnahme 009a) ---------------------------------------------
+
+
+def test_compose_markiert_kreis_zugehoerigkeit_der_szenarien() -> None:
+    d = bericht(requested=[WhatIfTask(task="takt.rechne", seconds=10.0)])
+    halbiert = next(s for s in d["what_if"] if "halbiert" in s["szenario"])
+    assert halbiert["auf_kreis"] is True
+    entfernt = next(s for s in d["what_if"] if s["szenario"].startswith("Cross-Kante"))
+    assert entfernt["auf_kreis"] is True
+    angefragt = next(s for s in d["what_if"] if s["angefragt"])
+    assert angefragt["auf_kreis"] is False
+
+
+def zeile(
+    szenario: str,
+    lam: float | None,
+    delta: float | None,
+    angefragt: bool = False,
+    auf_kreis: bool = False,
+) -> dict[str, Any]:
+    return {
+        "szenario": szenario,
+        "lambda_s": lam,
+        "delta_s": delta,
+        "angefragt": angefragt,
+        "auf_kreis": auf_kreis,
+    }
+
+
+def test_null_delta_zeilen_werden_zur_sammelzeile_kompaktiert() -> None:
+    d = bericht()
+    d["what_if"] = [
+        zeile("Task takt.lade halbiert (auf 900 s)", 900.0, -900.0, auf_kreis=True),
+        zeile("Cross-Kante a -> a entfernt", 1800.0, 0.0, auf_kreis=True),
+        zeile("Cross-Kante b -> b entfernt", 1800.0, 0.0),
+        zeile("Cross-Kante c -> c entfernt", 1800.0, 0.0),
+        zeile("Task takt.rechne = 10 s (angefragt)", 1800.0, 0.0, angefragt=True),
+    ]
+    text = render(d)
+    assert "1. Task takt.lade halbiert" in text
+    assert "2. Task takt.rechne = 10 s (angefragt)" in text
+    assert (
+        "3 weitere Szenarien aendern Lambda nicht: 1 Kreis-Gleichstand,"
+        " 2 Kanten ausserhalb des kritischen Kreises." in text
+    )
+    assert "Cross-Kante a -> a entfernt" not in text
+
+
+def test_sammelzeile_singular_und_nur_eine_kategorie() -> None:
+    d = bericht()
+    d["what_if"] = [
+        zeile("Task takt.lade halbiert (auf 900 s)", 900.0, -900.0, auf_kreis=True),
+        zeile("Cross-Kante a -> a entfernt", 1800.0, 0.0, auf_kreis=True),
+    ]
+    text = render(d)
+    assert "1 weiteres Szenario aendert Lambda nicht: 1 Kreis-Gleichstand." in text
+
+
+def test_lauter_null_deltas_ergeben_nur_die_sammelzeile() -> None:
+    # Der 009a-Flaggschiff-Fall: uniforme Assume-Dauern, alle 15 Zeilen +0 s.
+    d = bericht()
+    d["what_if"] = [
+        zeile("Task t1 halbiert (auf 150 s)", 600.0, 0.0, auf_kreis=True),
+        zeile("Task t2 halbiert (auf 150 s)", 600.0, 0.0, auf_kreis=True),
+        zeile("Cross-Kante x -> y entfernt", 600.0, 0.0, auf_kreis=True),
+        zeile("Cross-Kante u -> v entfernt", 600.0, 0.0),
+        zeile("Cross-Kante w -> w entfernt", 600.0, 0.0),
+    ]
+    text = render(d)
+    assert (
+        "5 weitere Szenarien aendern Lambda nicht: 3 Kreis-Gleichstaende,"
+        " 2 Kanten ausserhalb des kritischen Kreises." in text
+    )
+    assert "  1. " not in text
+
+
+def test_kein_kreis_mehr_zeile_wird_nie_kompaktiert() -> None:
+    d = bericht()
+    d["what_if"] = [
+        zeile("Cross-Kante takt.lade -> takt.lade entfernt", None, None, auf_kreis=True),
+        zeile("Cross-Kante b -> b entfernt", 1800.0, 0.0),
+    ]
+    text = render(d)
+    assert "kein Kreis mehr" in text
+
+
+def test_schlusssatz_beschreibt_das_verhalten() -> None:
+    # 009a: der alte Satz behauptete "zeigt nur Kreis-Tasks und Cross-Kanten",
+    # tatsaechlich rechnet das Ranking alle Cross-Kanten durch.
+    text = render(bericht())
+    assert "exakt null" in text
+    assert "alle Cross-Kanten" in text
+    assert "zeigt deshalb nur" not in text
+
+
 # --- Pflicht-Warnblock und Modellgrenzen ------------------------------------------------
 
 
