@@ -30,7 +30,15 @@ Nummern verschoben, weil 005 und 006 dazwischenkamen. Inhalte unverändert.
 
 **Akzeptanz Phase 2:** `pipx install .` läuft, `eigenlag analyze <pfad> --db <url>` liefert λ, kritischen Kreis und What-if-Ranking, CI-Gate-Test grün.
 
-**Feedback-Meilenstein (nach 009, vor Polish):** das CLI an 2–3 echte Teams bringen (Davids Netzwerk, Build-in-public auf Reddit) und erst danach über CI-Gate-Umfang, dbt-Parser und Packaging-Reihenfolge entscheiden. Begründung in `positioning.md`, Zwischenbewertung nach Phase 1.
+**Feedback-Meilenstein (umgeplant 2026-07-15):** Die ursprüngliche Idee "an 2–3 Teams aus dem Netzwerk" scheitert daran, dass es dieses Netzwerk nicht gibt — David kennt keine Data-Engineering-Teams. Die Alternative ist der öffentliche Weg, und er passt zur ohnehin geplanten Solo-Founder-Identität (Reddit/X, Dev-Crowd):
+
+1. **010 und 011 zuerst fertig** (Gate plus Packaging/README) — veröffentlicht wird ein installierbares Tool, kein Rohbau.
+2. **Repo öffentlich stellen** und ein Content-Stück, das Wert liefert statt zu werben: der Wikimedia-Sweep (30 DAGs über Takt, 29 driften nicht — "Laufzeit über Takt ist als Diagnose wertlos") als Post in r/dataengineering, dazu Airflow-Community-Slack. Die Zahlen aus `scan/v2/` und der Fall aus `wikimedia/case.md` sind genau dafür gebaut worden: jede mit Permalink belegbar.
+3. **Wikimedia direkt anschreiben.** Wir haben deren Pipelines vermessen, die Daten sind öffentlich, der Befund ist für sie interessant (Phabricator/Mailing-Liste). Das ist die eine "echtes Team"-Rückmeldung, die ohne Netzwerk erreichbar ist.
+
+Konsequenz für 011: Die Zielgruppe liest englisch. README englisch, und die Report-Sprachfrage (EN-Fassung oder `--lang`) wird in der 011-Spec entschieden — `compose()`/`render()` aus 009 hat die Trennung dafür schon.
+
+Jede nach außen gerichtete Aktion (Repo public, Posts, Anschreiben) löst David selbst aus; die Sessions bereiten nur Material vor.
 
 ## Reihenfolge
 
