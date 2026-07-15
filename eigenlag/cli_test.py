@@ -68,7 +68,7 @@ def test_pfad_ohne_analysierbaren_dag_exit_2_mit_warnungen(
     pfad = schreibe(tmp_path, "x = 1  # kein DAG weit und breit\n", name="leer.py")
     code = main(["analyze", pfad, "--assume-duration", "60"])
     assert code == 2
-    assert "kein analysierbarer DAG" in capsys.readouterr().err
+    assert "no analyzable DAG" in capsys.readouterr().err
 
 
 def test_dag_id_ohne_treffer_exit_2(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -82,7 +82,7 @@ def test_dag_id_ohne_treffer_exit_2(tmp_path: Path, capsys: pytest.CaptureFixtur
 def test_assume_only_liefert_report_mit_urteil(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    code = main(["analyze", schreibe(tmp_path), "--assume-duration", "600"])
+    code = main(["analyze", schreibe(tmp_path), "--assume-duration", "600", "--lang", "de"])
     assert code == 0
     out = capsys.readouterr().out
     assert "Urteil" in out
@@ -91,7 +91,7 @@ def test_assume_only_liefert_report_mit_urteil(
 
 def test_instabil_ist_trotzdem_exit_0(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     # assume 7200 s je Task bei @hourly: Lambda 7200 > T 3600, instabil.
-    code = main(["analyze", schreibe(tmp_path), "--assume-duration", "7200"])
+    code = main(["analyze", schreibe(tmp_path), "--assume-duration", "7200", "--lang", "de"])
     assert code == 0
     assert "nstabil" in capsys.readouterr().out
 

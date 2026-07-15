@@ -32,6 +32,7 @@ from typing import Any
 from eigenlag.analyze import Analysis, analyze_result
 from eigenlag.durations import Statistic, TaskStats
 from eigenlag.maxplus import TOL
+from eigenlag.messages import Lang, dur, fmt, perioden, scenario_label, t
 from eigenlag.model import Pipeline
 from eigenlag.parse_airflow import (
     ParsedCrossEdge,
@@ -40,20 +41,16 @@ from eigenlag.parse_airflow import (
     node_name,
     select_dags,
 )
-from eigenlag.report import _cycle_cross_pairs, _dauer, _num, _what_if, cycle_report
+from eigenlag.report import _cycle_cross_pairs, _what_if, cycle_report
 
 SUB_TAEGLICH_S = 86400.0
 
+# Deutsche Fassung fuers --json (ADR-023, sprachneutral eingefroren); render_check
+# waehlt die Sprache aus dem Katalog.
 MODELLGRENZEN_KURZ = (
     "Lambda ist eine Untergrenze der realen Taktzeit: unbegrenzte Parallelitaet ist"
     " angenommen. Retries, Sensor-Poking und Pool-Limits sind nicht modelliert; sie"
     " koennen die reale Taktzeit nur erhoehen, nie senken."
-)
-
-STRUKTUR_HINWEIS = (
-    "Struktur-Vergleich: Lambda in Task-Einheiten (uniforme Dauer 1.0 je Task, keine"
-    " Dauern-Quelle angegeben). Fuer Lambda in Sekunden gegen den Takt: --db oder"
-    " --assume-duration."
 )
 
 
@@ -148,38 +145,63 @@ def _takt(dag: ParsedDag | None, period_override: float | None) -> tuple[float |
     return dag.period_s, f"Schedule {dag.schedule_expr}"
 
 
-def _fix_hint(analysis: Analysis, takt_s: float | None, struct_mode: bool) -> str:
-    """Der What-if-Hinweis: die kleinste Standard-Aenderung, die Lambda unter T bringt.
+def _fix_hint_code(analysis: Analysis, takt_s: float | None, struct_mode: bool) -> dict[str, Any]:
+    """Der What-if-Hinweis als sprachneutraler Code plus Parameter (ADR-023): die
+    kleinste Standard-Aenderung, die Lambda unter T bringt.
 
     Unter den Szenarien, die T unterschreiten, gewinnt das mit dem groessten neuen
     Lambda (die am wenigsten invasive Aenderung, die reicht); Kreis-Aufloesungen
-    (kein Lambda mehr) nur, wenn kein endliches Szenario existiert."""
+    (kein Lambda mehr) nur, wenn kein endliches Szenario existiert. Die What-if-Zeile
+    wandert strukturiert mit, damit render_check ihr Label pro Sprache bauen kann."""
     if struct_mode:
-        return (
-            "Die ausloesende Kante zu entfernen behebt den Fail. Eine Zeit-Aussage"
-            " (Lambda gegen T in Sekunden) braucht eine Dauern-Quelle: --db oder"
-            " --assume-duration."
-        )
+        return {"code": "behebung_struktur"}
     if takt_s is None:
-        return "Kein Takt bekannt; --period setzt ihn, sonst gibt es kein Unter-T-Ziel."
+        return {"code": "behebung_kein_takt"}
     rows = _what_if(analysis, ())
     unter_t = [r for r in rows if r["lambda_s"] is not None and r["lambda_s"] < takt_s]
     if unter_t:
         best = max(unter_t, key=lambda r: float(r["lambda_s"]))
-        return (
-            f"{best['szenario']} bringt Lambda auf {_dauer(best['lambda_s'])} und damit"
-            f" unter T = {_dauer(takt_s)}."
-        )
+        return {"code": "behebung_bestes", "row": best, "lam_s": best["lambda_s"], "takt_s": takt_s}
     ohne_kreis = [r for r in rows if r["lambda_s"] is None]
     if ohne_kreis:
-        return (
-            "Keine einzelne Standard-Aenderung bringt Lambda unter T, aber"
-            f" {ohne_kreis[0]['szenario']} loest den Kreis ganz auf (keine Taktgrenze mehr)."
+        return {"code": "behebung_aufloesung", "row": ohne_kreis[0]}
+    return {"code": "behebung_keine"}
+
+
+def _behebung_text(code: dict[str, Any], lang: Lang) -> str:
+    name = code["code"]
+    if name == "behebung_bestes":
+        return t(
+            lang,
+            name,
+            szenario=scenario_label(lang, code["row"]),
+            lam=dur(code["lam_s"], lang),
+            takt=dur(code["takt_s"], lang),
         )
-    return (
-        "Keine einzelne Standard-Aenderung (Kreis-Task halbiert, Cross-Kante entfernt)"
-        " bringt Lambda unter T; der Kreis traegt an mehreren Stellen dasselbe Zyklusmittel."
-    )
+    if name == "behebung_aufloesung":
+        return t(lang, name, szenario=scenario_label(lang, code["row"]))
+    return t(lang, name)
+
+
+def _grund_text(code: dict[str, Any], lang: Lang) -> str:
+    name = code["code"]
+    if name == "grund_struktur_kreis":
+        return t(lang, name, takt=dur(code["takt_s"], lang))
+    if name == "grund_lambda_ueber_t":
+        return t(lang, name, lam=dur(code["lam_s"], lang), takt=dur(code["takt_s"], lang))
+    if name == "grund_fail_on_new_edge":
+        n = code["n"]
+        anzahl = t(lang, "grund_kante_1") if n == 1 else t(lang, "grund_kante_n", n=n)
+        return t(lang, name, anzahl=anzahl)
+    if name == "grund_max_increase_neu":
+        return t(lang, name, schranke=f"{code['schranke']:g}")
+    return t(lang, name, anstieg=fmt(code["anstieg"], lang), schranke=f"{code['schranke']:g}")
+
+
+def _hinweis_text(code: dict[str, Any], lang: Lang) -> str:
+    if code["code"] == "hinweis_unbenannt":
+        return t(lang, "hinweis_unbenannt", n=code["n"], stellen=code["stellen"])
+    return t(lang, code["code"])
 
 
 def _edge_dict(
@@ -253,41 +275,33 @@ def _dag_row(
         for k in sorted(b_keys - set(a_edges))
     ]
 
-    gruende: list[str] = []
+    # Fail-Gruende als sprachneutrale Codes (ADR-023); die deutsche 'gruende'-Liste ist
+    # die --json-Fassung, render_check baut den Text pro Sprache aus den Codes.
+    gruende_codes: list[dict[str, Any]] = []
     if neue_kanten and a_dag is not None:
         if struct_mode:
             kreis_kanten = [k for k in neue_kanten if k["auf_kreis"]]
             if kreis_kanten and takt_s is not None and takt_s < SUB_TAEGLICH_S:
-                gruende.append(
-                    "neue Cross-Run-Kante schliesst einen Kreis ueber die Zeitachse"
-                    f" bei sub-taeglichem Takt (T = {_dauer(takt_s)})"
-                )
+                gruende_codes.append({"code": "grund_struktur_kreis", "takt_s": takt_s})
         elif takt_s is not None and lam_a is not None and lam_a > takt_s:
-            gruende.append(
-                f"neue Cross-Run-Kante und Lambda = {_dauer(lam_a)} ueber dem"
-                f" Takt T = {_dauer(takt_s)}"
-            )
+            gruende_codes.append({"code": "grund_lambda_ueber_t", "lam_s": lam_a, "takt_s": takt_s})
     if fail_on_new_edge and neue_kanten:
-        anzahl = (
-            "1 neue Cross-Run-Kante"
-            if len(neue_kanten) == 1
-            else (f"{len(neue_kanten)} neue Cross-Run-Kanten")
-        )
-        gruende.append(f"{anzahl} (--fail-on-new-edge)")
+        gruende_codes.append({"code": "grund_fail_on_new_edge", "n": len(neue_kanten)})
     if max_increase is not None and lam_a is not None:
         if lam_b is None:
-            gruende.append(
-                f"Lambda-Anstieg ueber {max_increase:g} % (--max-increase):"
-                " vorher kein Kreis, nachher eine Taktgrenze"
-            )
+            gruende_codes.append({"code": "grund_max_increase_neu", "schranke": max_increase})
         elif lam_a > lam_b * (1.0 + max_increase / 100.0) + TOL:
             anstieg = (lam_a - lam_b) / lam_b * 100.0
-            gruende.append(
-                f"Lambda-Anstieg {_num(anstieg)} % ueber der Schranke"
-                f" {max_increase:g} % (--max-increase)"
+            gruende_codes.append(
+                {"code": "grund_max_increase", "anstieg": anstieg, "schranke": max_increase}
             )
 
-    ausgeloest = bool(gruende)
+    ausgeloest = bool(gruende_codes)
+    behebung_code = (
+        _fix_hint_code(a_analysis, takt_s, struct_mode)
+        if ausgeloest and a_analysis is not None
+        else None
+    )
     return {
         "dag_id": dag_id,
         "vorher_vorhanden": b_dag is not None,
@@ -299,16 +313,14 @@ def _dag_row(
         "neue_kanten": neue_kanten,
         "entfallene_kanten": entfallene,
         "ausgeloest": ausgeloest,
-        "gruende": gruende,
+        "gruende": [_grund_text(c, "de") for c in gruende_codes],
+        "gruende_codes": gruende_codes,
         "ausloeser_kante": _pick_ausloeser(neue_kanten, a_analysis) if ausgeloest else None,
         "kritischer_kreis": (
             cycle_report(select_dags(after, dag_id), a_analysis) if a_analysis is not None else None
         ),
-        "behebung": (
-            _fix_hint(a_analysis, takt_s, struct_mode)
-            if ausgeloest and a_analysis is not None
-            else None
-        ),
+        "behebung": _behebung_text(behebung_code, "de") if behebung_code is not None else None,
+        "behebung_code": behebung_code,
     }
 
 
@@ -332,22 +344,19 @@ def compose_check(
     den PR-Kommentar. Eine Quelle fuer Text und --json, wie in 009."""
     before_ids = {d.dag_id for d in before.dags if d.dag_id is not None}
     after_ids = {d.dag_id for d in after.dags if d.dag_id is not None}
-    hinweise: list[str] = []
+    hinweis_codes: list[dict[str, Any]] = []
 
     unbenannt = [d for d in (*before.dags, *after.dags) if d.dag_id is None]
     if unbenannt:
         stellen = ", ".join(f"{d.file}:{d.lineno}" for d in unbenannt)
-        hinweise.append(
-            f"{len(unbenannt)} DAG-Definition(en) ohne statisch aufloesbare dag_id"
-            f" sind nicht vergleichbar und bleiben aussen vor: {stellen}"
-        )
+        hinweis_codes.append({"code": "hinweis_unbenannt", "n": len(unbenannt), "stellen": stellen})
 
     # dag_id_filter validiert die CLI (Systemgrenze User-Input), hier wird nur gefiltert.
     ids = sorted(before_ids | after_ids)
     if dag_id_filter is not None:
         ids = [dag_id for dag_id in ids if dag_id == dag_id_filter]
     if not ids:
-        hinweise.append("Keine DAGs in beiden Staenden — nichts zu pruefen.")
+        hinweis_codes.append({"code": "hinweis_keine_dags"})
 
     rows = [
         _dag_row(
@@ -366,12 +375,7 @@ def compose_check(
     ]
 
     ausgeloeste = [r for r in rows if r["ausgeloest"]]
-    grund: str | None = None
-    if ausgeloeste:
-        erster = ausgeloeste[0]
-        grund = f"{erster['dag_id']}: {erster['gruende'][0]}"
-        if len(ausgeloeste) > 1:
-            grund += f" (und {len(ausgeloeste) - 1} weitere DAGs)"
+    grund = _grund_summary(ausgeloeste, "de")
 
     return {
         "version": 1,
@@ -385,63 +389,97 @@ def compose_check(
         "grund": grund,
         "exit_code": 0 if not ausgeloeste else 3,
         "dags": rows,
-        "hinweise": hinweise,
+        "hinweise": [_hinweis_text(c, "de") for c in hinweis_codes],
+        "hinweis_codes": hinweis_codes,
         "modellgrenzen": MODELLGRENZEN_KURZ,
     }
+
+
+def _grund_summary(ausgeloeste: list[dict[str, Any]], lang: Lang) -> str | None:
+    """Die Kopfzeile 'DAG: Grund (und N weitere DAGs)' in der gewaehlten Sprache,
+    aus den strukturierten gruende_codes der ausgeloesten Zeilen."""
+    if not ausgeloeste:
+        return None
+    erster = ausgeloeste[0]
+    grund = f"{erster['dag_id']}: {_grund_text(erster['gruende_codes'][0], lang)}"
+    if len(ausgeloeste) > 1:
+        grund += t(lang, "check_grund_suffix", n=len(ausgeloeste) - 1)
+    return grund
 
 
 # --- PR-Kommentar (Markdown) -------------------------------------------------------------
 
 
-def _lam_text(value: float | None, struct_mode: bool) -> str:
+def _lam_text(value: float | None, struct_mode: bool, lang: Lang) -> str:
     if value is None:
-        return "kein Kreis"
+        return t(lang, "check_lam_kein_kreis")
     if struct_mode:
-        return "1 Task-Einheit" if value == 1.0 else f"{_num(value)} Task-Einheiten"
-    return _dauer(value)
+        return (
+            t(lang, "check_lam_einheit_1")
+            if value == 1.0
+            else t(lang, "check_lam_einheit_n", n=fmt(value, lang))
+        )
+    return dur(value, lang)
 
 
-def _perioden_text(perioden: int) -> str:
-    return "1 Periode zurueck" if perioden == 1 else f"{perioden} Perioden zurueck"
-
-
-def _kanten_zeile(kante: dict[str, Any]) -> str:
-    return (
-        f"  - `{kante['src']} -> {kante['dst']}`"
-        f" ({kante['signal']}, {kante['datei']}:{kante['zeile']},"
-        f" {_perioden_text(kante['perioden'])})"
+def _kanten_zeile(kante: dict[str, Any], lang: Lang) -> str:
+    return t(
+        lang,
+        "check_kanten_zeile",
+        src=kante["src"],
+        dst=kante["dst"],
+        signal=kante["signal"],
+        datei=kante["datei"],
+        zeile=kante["zeile"],
+        perioden=perioden(kante["perioden"], lang),
     )
 
 
-def _dag_abschnitt(row: dict[str, Any], struct_mode: bool) -> list[str]:
+def _dag_abschnitt(row: dict[str, Any], struct_mode: bool, lang: Lang) -> list[str]:
     zeilen = ["", f"### {row['dag_id']}", ""]
     vorher = (
-        _lam_text(row["lambda_vorher"], struct_mode)
+        _lam_text(row["lambda_vorher"], struct_mode, lang)
         if row["vorher_vorhanden"]
-        else "existierte nicht"
+        else t(lang, "check_existierte_nicht")
     )
     nachher = (
-        _lam_text(row["lambda_nachher"], struct_mode) if row["nachher_vorhanden"] else "geloescht"
+        _lam_text(row["lambda_nachher"], struct_mode, lang)
+        if row["nachher_vorhanden"]
+        else t(lang, "check_geloescht")
     )
-    zeilen.append(f"- Lambda: {vorher} -> {nachher} (vorher -> nachher)")
+    zeilen.append(t(lang, "check_abschnitt_lambda", vorher=vorher, nachher=nachher))
     if row["takt_s"] is not None:
-        zeilen.append(f"- Takt T: {_dauer(row['takt_s'])}, Quelle: {row['takt_quelle']}")
+        zeilen.append(
+            t(
+                lang,
+                "check_abschnitt_takt",
+                dauer=dur(row["takt_s"], lang),
+                quelle=row["takt_quelle"],
+            )
+        )
     else:
-        zeilen.append("- Takt T: unbekannt (kein statischer Schedule; --period setzt ihn)")
+        zeilen.append(t(lang, "check_abschnitt_takt_unbekannt"))
     if row["neue_kanten"]:
-        zeilen.append(f"- Neue Cross-Run-Kanten ({len(row['neue_kanten'])}):")
-        zeilen.extend(_kanten_zeile(k) for k in row["neue_kanten"])
+        zeilen.append(t(lang, "check_abschnitt_neue_kanten", n=len(row["neue_kanten"])))
+        zeilen.extend(_kanten_zeile(k, lang) for k in row["neue_kanten"])
     if row["entfallene_kanten"]:
         weg = ", ".join(f"`{k['src']} -> {k['dst']}`" for k in row["entfallene_kanten"])
-        zeilen.append(f"- Entfallene Cross-Run-Kanten: {weg}")
+        zeilen.append(t(lang, "check_abschnitt_entfallene", liste=weg))
     if row["ausgeloest"]:
-        for grund in row["gruende"]:
-            zeilen.append(f"- **Ausgeloest:** {grund}")
+        for code in row["gruende_codes"]:
+            zeilen.append(t(lang, "check_abschnitt_ausgeloest", grund=_grund_text(code, lang)))
         if row["ausloeser_kante"] is not None:
             k = row["ausloeser_kante"]
             zeilen.append(
-                f"- **Ausloesende Kante:** `{k['src']} -> {k['dst']}`"
-                f" ({k['signal']}, {k['datei']}:{k['zeile']})"
+                t(
+                    lang,
+                    "check_abschnitt_ausloeser",
+                    src=k["src"],
+                    dst=k["dst"],
+                    signal=k["signal"],
+                    datei=k["datei"],
+                    zeile=k["zeile"],
+                )
             )
     kreis = row["kritischer_kreis"]
     if kreis is not None and (row["ausgeloest"] or row["neue_kanten"]):
@@ -450,28 +488,34 @@ def _dag_abschnitt(row: dict[str, Any], struct_mode: bool) -> list[str]:
             if kante["datei"] is not None:
                 beleg = f" [{kante['signal']}, {kante['datei']}:{kante['zeile']}]"
             zeilen.append(
-                f"- Kritischer Kreis, kondensiert: `{kante['src']} -> {kante['dst']}`,"
-                f" Gewicht {_lam_text(kante['gewicht_s'], struct_mode)},"
-                f" {_perioden_text(kante['perioden'])}{beleg}"
+                t(
+                    lang,
+                    "check_abschnitt_kreis",
+                    src=kante["src"],
+                    dst=kante["dst"],
+                    gewicht=_lam_text(kante["gewicht_s"], struct_mode, lang),
+                    perioden=perioden(kante["perioden"], lang),
+                    beleg=beleg,
+                )
             )
-        zeilen.append(f"- Aufgeloest: {' -> '.join(kreis['aufgeloest'])}")
-    if row["behebung"] is not None:
-        zeilen.append(f"- Behebung: {row['behebung']}")
+        zeilen.append(t(lang, "check_abschnitt_aufgeloest", pfad=" -> ".join(kreis["aufgeloest"])))
+    if row["behebung_code"] is not None:
+        zeilen.append(
+            t(lang, "check_abschnitt_behebung", text=_behebung_text(row["behebung_code"], lang))
+        )
     return zeilen
 
 
-def render_check(d: dict[str, Any]) -> str:
+def render_check(d: dict[str, Any], lang: Lang = "en") -> str:
     struct_mode = d["modus"] == "struktur"
     if d["bestanden"]:
-        kopf = (
-            f"**eigenlag check: bestanden.** Keine Aenderung hebt Lambda ueber den Takt"
-            f" (`{d['pfad']}` gegen `{d['ref']}`)."
-        )
+        kopf = t(lang, "check_bestanden", pfad=d["pfad"], ref=d["ref"])
     else:
-        kopf = f"**eigenlag check: ausgeloest** — {d['grund']}."
+        ausgeloeste = [r for r in d["dags"] if r["ausgeloest"]]
+        kopf = t(lang, "check_ausgeloest", grund=_grund_summary(ausgeloeste, lang))
     zeilen = [kopf]
     if struct_mode and d["dags"]:
-        zeilen += ["", STRUKTUR_HINWEIS]
+        zeilen += ["", t(lang, "check_struktur_hinweis")]
 
     betroffen = [
         r
@@ -483,14 +527,16 @@ def render_check(d: dict[str, Any]) -> str:
         or not r["nachher_vorhanden"]
     ]
     for row in betroffen:
-        zeilen.extend(_dag_abschnitt(row, struct_mode))
+        zeilen.extend(_dag_abschnitt(row, struct_mode, lang))
     unveraendert = len(d["dags"]) - len(betroffen)
     if unveraendert:
-        zeilen += [
-            "",
-            f"{unveraendert} DAG(s) ohne Aenderung an Cross-Run-Kanten oder Lambda.",
-        ]
-    for hinweis in d["hinweise"]:
-        zeilen += ["", hinweis]
-    zeilen += ["", "---", f"_{d['modellgrenzen']}_", ""]
+        zeilen += ["", t(lang, "check_unveraendert", n=unveraendert)]
+    for code in d["hinweis_codes"]:
+        zeilen += ["", _hinweis_text(code, lang)]
+    zeilen += [
+        "",
+        "---",
+        t(lang, "check_modellgrenzen_fuss", text=t(lang, "check_modellgrenzen_kurz")),
+        "",
+    ]
     return "\n".join(zeilen)

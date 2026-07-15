@@ -140,7 +140,7 @@ def test_neue_kante_bei_subtaeglichem_takt_loest_aus_mit_datei_und_zeile(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     repo = repo_mit(tmp_path, [{"dags/pipeline.py": V1}, {"dags/pipeline.py": V2}])
-    code = main(["check", str(repo / "dags"), "--against", "v1"])
+    code = main(["check", str(repo / "dags"), "--against", "v1", "--lang", "de"])
     out = capsys.readouterr().out
     assert code == 3
     assert "ausgeloest" in out
@@ -153,14 +153,14 @@ def test_kante_wieder_entfernt_besteht(tmp_path: Path, capsys: pytest.CaptureFix
         tmp_path,
         [{"dags/pipeline.py": V1}, {"dags/pipeline.py": V2}, {"dags/pipeline.py": V1}],
     )
-    code = main(["check", str(repo / "dags"), "--against", "v2"])
+    code = main(["check", str(repo / "dags"), "--against", "v2", "--lang", "de"])
     assert code == 0
     assert "bestanden" in capsys.readouterr().out
 
 
 def test_unveraenderter_stand_besteht(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo = repo_mit(tmp_path, [{"dags/pipeline.py": V2}])
-    code = main(["check", str(repo / "dags"), "--against", "v1"])
+    code = main(["check", str(repo / "dags"), "--against", "v1", "--lang", "de"])
     assert code == 0
     assert "bestanden" in capsys.readouterr().out
 
@@ -169,7 +169,7 @@ def test_geloeschter_dag_wird_benannt_und_besteht(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     repo = repo_mit(tmp_path, [{"dags/pipeline.py": V2}, {"dags/pipeline.py": None}])
-    code = main(["check", str(repo / "dags"), "--against", "v1"])
+    code = main(["check", str(repo / "dags"), "--against", "v1", "--lang", "de"])
     out = capsys.readouterr().out
     assert code == 0
     assert "load_data_wikiviews" in out
@@ -183,7 +183,7 @@ def test_neuer_dag_mit_kreis_ist_fail_und_vorher_existierte_nicht(
         tmp_path,
         [{"dags/util.py": KEIN_DAG}, {"dags/util.py": KEIN_DAG, "dags/pipeline.py": V2}],
     )
-    code = main(["check", str(repo / "dags"), "--against", "v1"])
+    code = main(["check", str(repo / "dags"), "--against", "v1", "--lang", "de"])
     out = capsys.readouterr().out
     assert code == 3
     assert "existierte nicht" in out
@@ -238,7 +238,18 @@ def test_behebungs_hinweis_nennt_die_billigste_aenderung_unter_t(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     repo = repo_mit(tmp_path, [{"dags/pipeline.py": V1}, {"dags/pipeline.py": V2_DOP}])
-    code = main(["check", str(repo / "dags"), "--against", "v1", "--assume-duration", "5000"])
+    code = main(
+        [
+            "check",
+            str(repo / "dags"),
+            "--against",
+            "v1",
+            "--assume-duration",
+            "5000",
+            "--lang",
+            "de",
+        ]
+    )
     out = capsys.readouterr().out
     assert code == 3
     assert "Behebung" in out
@@ -251,7 +262,18 @@ def test_behebungs_hinweis_sagt_wenn_keine_aenderung_reicht(
     # V2: mehrere Kreise mit gleichem Zyklusmittel — keine einzelne Standard-Aenderung
     # drueckt Lambda unter T.
     repo = repo_mit(tmp_path, [{"dags/pipeline.py": V1}, {"dags/pipeline.py": V2}])
-    code = main(["check", str(repo / "dags"), "--against", "v1", "--assume-duration", "2500"])
+    code = main(
+        [
+            "check",
+            str(repo / "dags"),
+            "--against",
+            "v1",
+            "--assume-duration",
+            "2500",
+            "--lang",
+            "de",
+        ]
+    )
     out = capsys.readouterr().out
     assert code == 3
     assert "Keine einzelne Standard-Aenderung" in out
@@ -364,7 +386,7 @@ def test_exit_code_matrix(
                 "-m",
                 "leer",
             )
-            argv = ["check", str(repo / "dags"), "--against", "HEAD"]
+            argv = ["check", str(repo / "dags"), "--against", "HEAD", "--lang", "de"]
     assert main(argv) == erwartet
     ausgabe = capsys.readouterr()
     if fall == "keine_dags":
@@ -411,7 +433,18 @@ def test_json_und_text_kommen_aus_einer_quelle(
 def test_comment_file_schreibt_markdown(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo = repo_mit(tmp_path, [{"dags/pipeline.py": V1}, {"dags/pipeline.py": V2}])
     ziel = tmp_path / "kommentar.md"
-    code = main(["check", str(repo / "dags"), "--against", "v1", "--comment-file", str(ziel)])
+    code = main(
+        [
+            "check",
+            str(repo / "dags"),
+            "--against",
+            "v1",
+            "--comment-file",
+            str(ziel),
+            "--lang",
+            "de",
+        ]
+    )
     assert code == 3
     inhalt = ziel.read_text()
     assert "ausgeloest" in inhalt
@@ -423,7 +456,7 @@ def test_kommentar_nennt_kreis_doppelt_und_modellgrenzen(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     repo = repo_mit(tmp_path, [{"dags/pipeline.py": V1}, {"dags/pipeline.py": V2}])
-    main(["check", str(repo / "dags"), "--against", "v1"])
+    main(["check", str(repo / "dags"), "--against", "v1", "--lang", "de"])
     out = capsys.readouterr().out
     assert "kondensiert" in out.lower()
     assert "aufgeloest" in out.lower()

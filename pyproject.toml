@@ -1,10 +1,34 @@
 [project]
 name = "eigenlag"
 version = "0.1.0"
-description = "Rekurrenz-Analyzer für Daten-Pipelines: berechnet die nachhaltige minimale Taktzeit (Max-Plus-Eigenwert λ)"
+description = "Recurrence analyzer for data pipelines: the sustainable minimum cycle time (max-plus eigenvalue λ) of an Airflow schedule"
 readme = "README.md"
 requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "David Paci" }]
+keywords = [
+    "airflow",
+    "data-engineering",
+    "scheduling",
+    "max-plus",
+    "pipeline",
+    "recurrence",
+    "ci",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Topic :: System :: Monitoring",
+    "Topic :: Software Development :: Quality Assurance",
+]
 dependencies = []
+
+[project.urls]
+Repository = "https://github.com/webse-at/eigenlag"
 
 [project.optional-dependencies]
 # sqlalchemy in dev nur fuer die durations-Tests (SQLite-Fixture-DB).
@@ -20,7 +44,7 @@ db = ["sqlalchemy"]
 eigenlag = "eigenlag.cli:main"
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]

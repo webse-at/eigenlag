@@ -744,7 +744,7 @@ class _FileParser:
             owner.warn(
                 "include_prior_dates",
                 call.lineno,
-                "irgendein frueherer Lauf reicht; eine Kante wuerde Lambda faelschlich heben",
+                "any earlier run suffices; an edge would falsely raise λ",
             )
         if delta_set or date_fn:
             owner.sensors.append(
@@ -799,7 +799,7 @@ class _FileParser:
             if left is not None or right is not None:
                 draft = self._ref_draft(left) or self._ref_draft(right) or scope
                 if draft is not None:
-                    draft.warn("edge_dropped", lineno, "Kanten-Ende nicht statisch aufloesbar")
+                    draft.warn("edge_dropped", lineno, "edge endpoint not statically resolvable")
             return
         sinks, left_draft, left_dyn = self._endpoints(left, "sink")
         sources, right_draft, right_dyn = self._endpoints(right, "source")
@@ -807,9 +807,9 @@ class _FileParser:
         if draft is None:
             return
         if left_dyn or right_dyn:
-            draft.warn("edge_dropped", lineno, "Kante an dynamischer Task verfaellt")
+            draft.warn("edge_dropped", lineno, "edge lapses at a dynamic task")
         if left_draft is not None and right_draft is not None and left_draft is not right_draft:
-            draft.warn("edge_dropped", lineno, "Kante verbindet zwei DAGs")
+            draft.warn("edge_dropped", lineno, "edge connects two DAGs")
             return
         for s in sinks:
             for q in sources:
@@ -832,7 +832,7 @@ class _FileParser:
             if len(left.items) != len(right.items):
                 draft = self._ref_draft(left) or self._ref_draft(right) or scope
                 if draft is not None:
-                    draft.warn("edge_dropped", lineno, "chain: Listen ungleicher Laenge")
+                    draft.warn("edge_dropped", lineno, "chain: lists of unequal length")
                 return
             for a, b in zip(left.items, right.items, strict=True):
                 self._connect(a, b, lineno, scope)
@@ -866,9 +866,9 @@ class _FileParser:
     def _prev_warning(self, text: str, owner: _Draft, lineno: int) -> None:
         if PREV_SUCCESS.search(text):
             # ADR-020: Datenabhaengigkeit ohne Wartesemantik — Befund, keine Lambda-Kante.
-            owner.warn("prev_run_success", lineno, "Datenabhaengigkeit ohne Wartesemantik")
+            owner.warn("prev_run_success", lineno, "data dependency without wait semantics")
         elif PREV_DATE.search(text):
-            owner.warn("prev_run_date", lineno, "schwaches Signal, reine Datums-Arithmetik")
+            owner.warn("prev_run_date", lineno, "weak signal, pure date arithmetic")
 
     def _context_param_signals(
         self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda, scope: _Draft | None
@@ -882,9 +882,9 @@ class _FileParser:
             return
         for arg in names:
             if arg.arg in PREV_SUCCESS_PARAMS:
-                owner.warn("prev_run_success", arg.lineno, f"Context-Parameter {arg.arg}")
+                owner.warn("prev_run_success", arg.lineno, f"context parameter {arg.arg}")
             elif arg.arg in PREV_DATE_PARAMS:
-                owner.warn("prev_run_date", arg.lineno, f"Context-Parameter {arg.arg}")
+                owner.warn("prev_run_date", arg.lineno, f"context parameter {arg.arg}")
 
     def _module_template_signals(self) -> None:
         for stmt in self.tree.body:
@@ -941,13 +941,13 @@ def _cross_edges(draft: _Draft, drafts: Sequence[_Draft]) -> list[ParsedCrossEdg
         draft.warn(
             "depends_on_past",
             line("depends_on_past", "depends_on_past"),
-            "in default_args erkannt, aber keine Task traegt eine Kante",
+            "detected in default_args, but no task carries an edge",
         )
     if draft.wfd_default and not modeled_b:
         draft.warn(
             "wait_for_downstream",
             line("wait_for_downstream", "wait_for_downstream"),
-            "in default_args erkannt, aber keine Task traegt eine Kante",
+            "detected in default_args, but no task carries an edge",
         )
 
     if draft.serialized:
@@ -961,7 +961,7 @@ def _cross_edges(draft: _Draft, drafts: Sequence[_Draft]) -> list[ParsedCrossEdg
                 for q in sources:
                     edges.append(ParsedCrossEdge(s, q, 1, "max_active_runs", draft.file, lineno))
         else:
-            draft.warn("max_active_runs", lineno, "erkannt, aber der DAG hat keine Tasks")
+            draft.warn("max_active_runs", lineno, "detected, but the DAG has no tasks")
 
     edges.extend(_sensor_edges(draft, drafts))
     return edges
@@ -974,7 +974,7 @@ def _sensor_edges(draft: _Draft, drafts: Sequence[_Draft]) -> list[ParsedCrossEd
             draft.warn(
                 "sensor_dynamic_offset",
                 sensor.lineno,
-                "execution_date_fn: Rueckgabewert statisch nicht bestimmbar",
+                "execution_date_fn: return value not statically determinable",
             )
         if not sensor.delta_set:
             continue
@@ -983,28 +983,28 @@ def _sensor_edges(draft: _Draft, drafts: Sequence[_Draft]) -> list[ParsedCrossEd
             draft.warn("sensor_not_modeled", sensor.lineno, reason)
 
         if sensor.delta_s is None:
-            unmodeled("execution_delta nicht statisch aufloesbar")
+            unmodeled("execution_delta not statically resolvable")
             continue
         if sensor.delta_s == 0:
             continue  # Versatz null zeigt auf denselben Logical Date: Intra-Run, kein Signal
         if sensor.external_dag_id is None:
-            unmodeled("external_dag_id nicht statisch aufloesbar")
+            unmodeled("external_dag_id not statically resolvable")
             continue
         if sensor.external_dag_id == draft.dag_id:
             # ADR-021: Selbst-Referenz — beide Enden im eigenen DAG, T-Gleichheit und
             # Merge-Frage entfallen per Konstruktion. Lauf k wartet auf Lauf k - n.
             if draft.period_s is None:
-                unmodeled("Takt des DAGs nicht bestimmbar")
+                unmodeled("the DAG's period cannot be determined")
                 continue
             ratio = sensor.delta_s / draft.period_s
             if ratio < 1 or abs(ratio - round(ratio)) > 1e-9:
-                unmodeled(f"execution_delta/T = {ratio:g} ist nicht ganzzahlig >= 1")
+                unmodeled(f"execution_delta/T = {ratio:g} is not an integer >= 1")
                 continue
             if sensor.external_task_id is None:
-                unmodeled("external_task_id fehlt oder ist nicht statisch aufloesbar")
+                unmodeled("external_task_id missing or not statically resolvable")
                 continue
             if sensor.external_task_id not in draft.tasks:
-                unmodeled(f"Ziel-Task {sensor.external_task_id!r} nicht im eigenen DAG gefunden")
+                unmodeled(f"target task {sensor.external_task_id!r} not found in the DAG")
                 continue
             edges.append(
                 ParsedCrossEdge(
@@ -1019,27 +1019,27 @@ def _sensor_edges(draft: _Draft, drafts: Sequence[_Draft]) -> list[ParsedCrossEd
             continue
         targets = [d for d in drafts if d.dag_id == sensor.external_dag_id and d is not draft]
         if len(targets) != 1:
-            unmodeled(f"Ziel-DAG {sensor.external_dag_id!r} nicht (eindeutig) im Parse-Satz")
+            unmodeled(f"target DAG {sensor.external_dag_id!r} not (uniquely) in the parse set")
             continue
         target = targets[0]
         if draft.period_s is None or target.period_s is None:
-            unmodeled("Takt eines der beiden DAGs nicht bestimmbar")
+            unmodeled("the period of one of the two DAGs cannot be determined")
             continue
         if draft.period_s != target.period_s:
             unmodeled(
-                f"verschiedene Takte ({target.period_s:.0f}s vs {draft.period_s:.0f}s) "
-                "sind im Ein-Perioden-Modell nicht darstellbar"
+                f"different periods ({target.period_s:.0f}s vs {draft.period_s:.0f}s) "
+                "cannot be represented in the single-period model"
             )
             continue
         ratio = sensor.delta_s / draft.period_s
         if ratio < 1 or abs(ratio - round(ratio)) > 1e-9:
-            unmodeled(f"execution_delta/T = {ratio:g} ist nicht ganzzahlig >= 1")
+            unmodeled(f"execution_delta/T = {ratio:g} is not an integer >= 1")
             continue
         if sensor.external_task_id is None:
-            unmodeled("external_task_id fehlt oder ist nicht statisch aufloesbar")
+            unmodeled("external_task_id missing or not statically resolvable")
             continue
         if sensor.external_task_id not in target.tasks:
-            unmodeled(f"Ziel-Task {sensor.external_task_id!r} nicht im Ziel-DAG gefunden")
+            unmodeled(f"target task {sensor.external_task_id!r} not found in the target DAG")
             continue
         edges.append(
             ParsedCrossEdge(

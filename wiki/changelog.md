@@ -73,3 +73,12 @@ Feature-Historie. Ein Eintrag pro abgeschlossenem Feature, nicht pro Commit.
 - `scanner/analyze.py`: Signal G, `max_active_runs=1` (ADR-016). Wikimedia: 13 → 68 Cross-Run-Signale, 3 → 8 Risiko-Kandidaten
 - `scanner/schedule.py`: `period_seconds`, der Takt T aus dem Schedule-Ausdruck gerechnet
 - Ergebnis: `wdqs_streaming_updater_reconcile_hourly` läuft mit λ = 3598,4 s gegen T = 3600 s, also 1,6 s Reserve, bei 48 Minuten dauerhafter Verspätung. 67 neue Tests (207 im Repo).
+
+### Session 011 — Zweisprachig, installierbar, veröffentlichungsreif (2026-07-15)
+
+- `eigenlag/messages.py`: EN/DE-Nachrichten-Kataloge, `fmt`/`dur`/`perioden`/`scenario_label`/`t`; Vollständigkeits-Test (`messages_test.py`)
+- `report.render(d, lang)` / `gate.render_check(d, lang)` katalogbasiert zweisprachig; `--json` sprachneutral und byte-identisch (`i18n_test.py`); sprachneutrale Struktur-Felder in `compose`/`compose_check` (ADR-023)
+- CLI `--lang en|de` (Default en) an `analyze` und `check`; argparse-Hilfe + Fehlermeldungen einsprachig englisch (ADR-023, Spec-Punkt 4)
+- README.md englisch neu (Quickstart aus echtem Lauf, CI-Gate, Wikimedia-Beleg, Limitations); `docs/ci-gate.md` englisch
+- Packaging: `pyproject.toml` (MIT/PEP 639, classifiers, keywords, urls), `LICENSE`, `dist/` gitignored; `python -m build` + Wheel in frischer venv verifiziert
+- 356 Tests grün (Pflicht-Dependencies weiterhin null)

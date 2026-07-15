@@ -17,6 +17,7 @@ import pytest
 
 from eigenlag.analyze import analyze_result
 from eigenlag.durations import Statistic, TaskStats, assume
+from eigenlag.messages import scenario_label
 from eigenlag.montecarlo import MonteCarloResult
 from eigenlag.parse_airflow import parse_source
 from eigenlag.report import WhatIfDropEdge, WhatIfTask, compose, render
@@ -88,7 +89,7 @@ def test_stabil_mit_reserve_in_prozent() -> None:
     assert d["urteil"] == "stabil"
     assert d["lambda_s"] == 1800.0
     assert d["reserve_prozent"] == pytest.approx(50.0)
-    text = render(d)
+    text = render(d, "de")
     assert "stabil" in text.lower()
     assert "Reserve: 50 %" in text
 
@@ -96,7 +97,7 @@ def test_stabil_mit_reserve_in_prozent() -> None:
 def test_an_der_grenze_binnen_10_prozent_mit_rueckkopplungs_hinweis() -> None:
     d = bericht(stats=stats_mit(3500.0))
     assert d["urteil"] == "an_der_grenze"
-    text = render(d)
+    text = render(d, "de")
     assert "an der grenze" in text.lower()
     assert "eingeschwungen" in text
 
@@ -106,7 +107,7 @@ def test_instabil_mit_drift_und_zeit_bis_eine_stunde_rueckstand() -> None:
     assert d["urteil"] == "instabil"
     assert d["drift_s_pro_lauf"] == pytest.approx(900.0)
     assert d["laeufe_bis_1h_rueckstand"] == pytest.approx(4.0)
-    text = render(d)
+    text = render(d, "de")
     assert "pro Lauf" in text
     assert "Stunde" in text
 
@@ -120,7 +121,7 @@ def test_kein_kreis_ist_nicht_anwendbar_und_ausdruecklich_kein_lambda_null() -> 
     assert d["urteil"] == "nicht_anwendbar"
     assert d["anwendbar"] is False
     assert d["lambda_s"] is None
-    text = render(d)
+    text = render(d, "de")
     assert "nicht anwendbar" in text.lower()
     assert "keine Cross-Run-Kante" in text
     assert "Lambda = 0" not in text and "= 0 s" not in text
@@ -129,7 +130,7 @@ def test_kein_kreis_ist_nicht_anwendbar_und_ausdruecklich_kein_lambda_null() -> 
 def test_takt_unbekannt_verlangt_period_statt_zu_raten() -> None:
     d = bericht(takt_s=None, takt_quelle=None)
     assert d["urteil"] == "takt_unbekannt"
-    assert "--period" in render(d)
+    assert "--period" in render(d, "de")
 
 
 # --- Der kritische Kreis, doppelt (ADR-002) ---------------------------------------------
@@ -145,7 +146,7 @@ def test_kreis_kondensiert_und_aufgeloest_mit_herkunft() -> None:
     assert kanten[0]["datei"] == "dags/takt.py"
     assert kanten[0]["zeile"] > 0
     assert kreis["aufgeloest"] == ["takt.lade"]
-    text = render(d)
+    text = render(d, "de")
     assert "dags/takt.py:" in text
 
 
@@ -164,13 +165,13 @@ def test_monte_carlo_pendel_satz_wenn_p95_ueber_takt_und_p50_darunter() -> None:
     d = bericht(monte_carlo=mc)
     assert d["monte_carlo"]["lambda_p50_s"] == 3000.0
     assert d["monte_carlo"]["lambda_p95_s"] == 4800.0
-    text = render(d)
+    text = render(d, "de")
     assert "pendelt" in text
     assert "schlechten Wochen" in text
 
 
 def test_monte_carlo_abgeschaltet_wird_benannt() -> None:
-    text = render(bericht(monte_carlo=None))
+    text = render(bericht(monte_carlo=None), "de")
     assert "Monte Carlo" in text
 
 
@@ -191,7 +192,7 @@ def test_standard_ranking_halbiert_kreis_tasks_und_entfernt_cross_kanten() -> No
     # Die angefragte Nicht-Kreis-Optimierung bringt exakt null.
     angefragt = next(s for s in szenarien if s["angefragt"])
     assert angefragt["delta_s"] == pytest.approx(0.0)
-    text = render(d)
+    text = render(d, "de")
     assert "exakt null" in text
 
 
@@ -216,31 +217,45 @@ def test_compose_markiert_kreis_zugehoerigkeit_der_szenarien() -> None:
 
 
 def zeile(
-    szenario: str,
     lam: float | None,
     delta: float | None,
+    *,
+    art: str = "cross_entfernt",
+    task: str | None = None,
+    wert_s: float | None = None,
+    src: str | None = None,
+    dst: str | None = None,
     angefragt: bool = False,
     auf_kreis: bool = False,
 ) -> dict[str, Any]:
-    return {
-        "szenario": szenario,
-        "lambda_s": lam,
-        "delta_s": delta,
+    struktur = {
+        "art": art,
+        "task": task,
+        "wert_s": wert_s,
+        "src": src,
+        "dst": dst,
         "angefragt": angefragt,
         "auf_kreis": auf_kreis,
+    }
+    # szenario ist die deutsche --json-Fassung; render baut das Label selbst neu.
+    return {
+        "szenario": scenario_label("de", struktur),
+        "lambda_s": lam,
+        "delta_s": delta,
+        **struktur,
     }
 
 
 def test_null_delta_zeilen_werden_zur_sammelzeile_kompaktiert() -> None:
     d = bericht()
     d["what_if"] = [
-        zeile("Task takt.lade halbiert (auf 900 s)", 900.0, -900.0, auf_kreis=True),
-        zeile("Cross-Kante a -> a entfernt", 1800.0, 0.0, auf_kreis=True),
-        zeile("Cross-Kante b -> b entfernt", 1800.0, 0.0),
-        zeile("Cross-Kante c -> c entfernt", 1800.0, 0.0),
-        zeile("Task takt.rechne = 10 s (angefragt)", 1800.0, 0.0, angefragt=True),
+        zeile(900.0, -900.0, art="task_halbiert", task="takt.lade", wert_s=900.0, auf_kreis=True),
+        zeile(1800.0, 0.0, src="a", dst="a", auf_kreis=True),
+        zeile(1800.0, 0.0, src="b", dst="b"),
+        zeile(1800.0, 0.0, src="c", dst="c"),
+        zeile(1800.0, 0.0, art="task_gesetzt", task="takt.rechne", wert_s=10.0, angefragt=True),
     ]
-    text = render(d)
+    text = render(d, "de")
     assert "1. Task takt.lade halbiert" in text
     assert "2. Task takt.rechne = 10 s (angefragt)" in text
     assert (
@@ -253,10 +268,10 @@ def test_null_delta_zeilen_werden_zur_sammelzeile_kompaktiert() -> None:
 def test_sammelzeile_singular_und_nur_eine_kategorie() -> None:
     d = bericht()
     d["what_if"] = [
-        zeile("Task takt.lade halbiert (auf 900 s)", 900.0, -900.0, auf_kreis=True),
-        zeile("Cross-Kante a -> a entfernt", 1800.0, 0.0, auf_kreis=True),
+        zeile(900.0, -900.0, art="task_halbiert", task="takt.lade", wert_s=900.0, auf_kreis=True),
+        zeile(1800.0, 0.0, src="a", dst="a", auf_kreis=True),
     ]
-    text = render(d)
+    text = render(d, "de")
     assert "1 weiteres Szenario aendert Lambda nicht: 1 Kreis-Gleichstand." in text
 
 
@@ -264,13 +279,13 @@ def test_lauter_null_deltas_ergeben_nur_die_sammelzeile() -> None:
     # Der 009a-Flaggschiff-Fall: uniforme Assume-Dauern, alle 15 Zeilen +0 s.
     d = bericht()
     d["what_if"] = [
-        zeile("Task t1 halbiert (auf 150 s)", 600.0, 0.0, auf_kreis=True),
-        zeile("Task t2 halbiert (auf 150 s)", 600.0, 0.0, auf_kreis=True),
-        zeile("Cross-Kante x -> y entfernt", 600.0, 0.0, auf_kreis=True),
-        zeile("Cross-Kante u -> v entfernt", 600.0, 0.0),
-        zeile("Cross-Kante w -> w entfernt", 600.0, 0.0),
+        zeile(600.0, 0.0, art="task_halbiert", task="t1", wert_s=150.0, auf_kreis=True),
+        zeile(600.0, 0.0, art="task_halbiert", task="t2", wert_s=150.0, auf_kreis=True),
+        zeile(600.0, 0.0, src="x", dst="y", auf_kreis=True),
+        zeile(600.0, 0.0, src="u", dst="v"),
+        zeile(600.0, 0.0, src="w", dst="w"),
     ]
-    text = render(d)
+    text = render(d, "de")
     assert (
         "5 weitere Szenarien aendern Lambda nicht: 3 Kreis-Gleichstaende,"
         " 2 Kanten ausserhalb des kritischen Kreises." in text
@@ -281,17 +296,17 @@ def test_lauter_null_deltas_ergeben_nur_die_sammelzeile() -> None:
 def test_kein_kreis_mehr_zeile_wird_nie_kompaktiert() -> None:
     d = bericht()
     d["what_if"] = [
-        zeile("Cross-Kante takt.lade -> takt.lade entfernt", None, None, auf_kreis=True),
-        zeile("Cross-Kante b -> b entfernt", 1800.0, 0.0),
+        zeile(None, None, src="takt.lade", dst="takt.lade", auf_kreis=True),
+        zeile(1800.0, 0.0, src="b", dst="b"),
     ]
-    text = render(d)
+    text = render(d, "de")
     assert "kein Kreis mehr" in text
 
 
 def test_schlusssatz_beschreibt_das_verhalten() -> None:
     # 009a: der alte Satz behauptete "zeigt nur Kreis-Tasks und Cross-Kanten",
     # tatsaechlich rechnet das Ranking alle Cross-Kanten durch.
-    text = render(bericht())
+    text = render(bericht(), "de")
     assert "exakt null" in text
     assert "alle Cross-Kanten" in text
     assert "zeigt deshalb nur" not in text
@@ -305,7 +320,7 @@ def test_angenommene_dauern_stehen_im_warnblock() -> None:
     d = bericht(stats=stats, fallback=assume(300.0))
     arten = {w["art"] for w in d["warnungen"]}
     assert "dauer_angenommen" in arten
-    text = render(d)
+    text = render(d, "de")
     assert "takt.rechne" in text
     assert "angenommen" in text
 
@@ -319,12 +334,12 @@ def test_sensor_im_kritischen_kreis_warnt_im_report() -> None:
     d = bericht(stats=stats)
     arten = {w["art"] for w in d["warnungen"]}
     assert "sensor_im_kritischen_kreis" in arten
-    text = render(d)
+    text = render(d, "de")
     assert "Wartezeit" in text
 
 
 def test_modellgrenzen_fusszeile_steht_immer() -> None:
-    text = render(bericht())
+    text = render(bericht(), "de")
     assert "Untergrenze" in text
     assert "Retries" in text
     assert "Makespan" in text

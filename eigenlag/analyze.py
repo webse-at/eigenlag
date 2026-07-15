@@ -20,8 +20,8 @@ from eigenlag.model import Pipeline
 from eigenlag.parse_airflow import ParseResult, Warning_, node_name, parse_path, to_pipeline
 
 SENSOR_CYCLE_TEXT = (
-    "Kreis enthaelt Wartezeit auf externe Ereignisse;"
-    " Lambda kann ueberschaetzt sein und ist keine harte Untergrenze mehr"
+    "cycle contains waiting time for external events;"
+    " λ may be overestimated and is no longer a hard lower bound"
 )
 
 

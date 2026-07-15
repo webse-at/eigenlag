@@ -21,6 +21,7 @@ from typing import Any
 from eigenlag.analyze import Analysis
 from eigenlag.durations import Statistic, TaskStats
 from eigenlag.maxplus import TOL, condense, howard
+from eigenlag.messages import CATALOG, Lang, dur, fmt, perioden, scenario_label, t
 from eigenlag.model import Pipeline
 from eigenlag.montecarlo import MonteCarloResult
 from eigenlag.parse_airflow import ParsedDag, node_name
@@ -35,22 +36,6 @@ MODELLGRENZEN = [
     "Latenz-Angaben sind Makespan: die Dauer eines Laufs von seinem Start bis zum"
     " Ende seines laengsten Pfads, nicht die Verspaetung gegenueber dem Plan.",
 ]
-
-SENSOR_KREIS_TEXT = (
-    "Die gemessene Dauer eines Sensors enthaelt Wartezeit auf externe Ereignisse und"
-    " laesst sich aus der Metadaten-DB nicht von Arbeitszeit trennen. Lambda kann"
-    " dadurch ueberschaetzt sein und ist keine harte Untergrenze mehr. Wartet der"
-    " Sensor auf Daten der laufenden Periode, koppelt er die Pipeline an die Wanduhr:"
-    " solche Systeme pendeln sich genau an ihrer Taktgrenze ein, und die gemessenen"
-    " Dauern sind bereits das Ergebnis dieses eingeschwungenen Zustands."
-)
-
-F_DIVERGENZ_TEXT = (
-    "Hinweis zu prev_*_success: der Zugriff zaehlt als Cross-Run-Befund, erzeugt aber"
-    " keine Lambda-Kante. Das Template rendert einen Zeitstempel und wartet nicht;"
-    " ein Task damit startet puenktlich und liest schlimmstenfalls veraltete Daten."
-    " Das ist ein Korrektheits-, kein Durchsatz-Problem."
-)
 
 
 @dataclass(frozen=True)
@@ -111,69 +96,78 @@ def _cycle_cross_pairs(analysis: Analysis) -> set[tuple[str, str]]:
 def _what_if(
     analysis: Analysis, requested: Sequence[WhatIfTask | WhatIfDropEdge]
 ) -> list[dict[str, Any]]:
+    """What-if-Ranking. Jede Zeile traegt sprachneutrale Struktur-Felder
+    (art/task/wert_s/src/dst), aus denen scenario_label das Label pro Sprache baut;
+    das deutsche 'szenario' hier ist die --json-Fassung (ADR-023) und dient dem Gate."""
     pipeline = analysis.pipeline
     base = analysis.lam
     cycle_pairs = _cycle_cross_pairs(analysis)
-    scenarios: list[tuple[str, Pipeline, bool, bool]] = []
+    scenarios: list[tuple[dict[str, Any], Pipeline]] = []
 
     if base is not None:
         for task in analysis.cycle_tasks:
             halved = pipeline.durations[task] / 2
-            scenarios.append(
-                (
-                    f"Task {task} halbiert (auf {_num(halved)} s)",
-                    _with_duration(pipeline, task, halved),
-                    False,
-                    True,
-                )
-            )
+            struktur = {
+                "art": "task_halbiert",
+                "task": task,
+                "wert_s": halved,
+                "src": None,
+                "dst": None,
+                "angefragt": False,
+                "auf_kreis": True,
+            }
+            scenarios.append((struktur, _with_duration(pipeline, task, halved)))
         seen: set[tuple[str, str]] = set()
         for edge in pipeline.cross:
             if (edge.src, edge.dst) in seen:
                 continue
             seen.add((edge.src, edge.dst))
-            scenarios.append(
-                (
-                    f"Cross-Kante {edge.src} -> {edge.dst} entfernt",
-                    _without_edge(pipeline, edge.src, edge.dst),
-                    False,
-                    (edge.src, edge.dst) in cycle_pairs,
-                )
-            )
+            struktur = {
+                "art": "cross_entfernt",
+                "task": None,
+                "wert_s": None,
+                "src": edge.src,
+                "dst": edge.dst,
+                "angefragt": False,
+                "auf_kreis": (edge.src, edge.dst) in cycle_pairs,
+            }
+            scenarios.append((struktur, _without_edge(pipeline, edge.src, edge.dst)))
 
     for wish in requested:
         if isinstance(wish, WhatIfTask):
             task = resolve_task_name(pipeline, wish.task)
-            scenarios.append(
-                (
-                    f"Task {task} = {_num(wish.seconds)} s (angefragt)",
-                    _with_duration(pipeline, task, wish.seconds),
-                    True,
-                    task in analysis.cycle_tasks,
-                )
-            )
+            struktur = {
+                "art": "task_gesetzt",
+                "task": task,
+                "wert_s": wish.seconds,
+                "src": None,
+                "dst": None,
+                "angefragt": True,
+                "auf_kreis": task in analysis.cycle_tasks,
+            }
+            scenarios.append((struktur, _with_duration(pipeline, task, wish.seconds)))
         else:
-            scenarios.append(
-                (
-                    f"Cross-Kante {wish.src} -> {wish.dst} entfernt (angefragt)",
-                    _without_edge(pipeline, wish.src, wish.dst),
-                    True,
-                    (wish.src, wish.dst) in cycle_pairs,
-                )
-            )
+            struktur = {
+                "art": "cross_entfernt",
+                "task": None,
+                "wert_s": None,
+                "src": wish.src,
+                "dst": wish.dst,
+                "angefragt": True,
+                "auf_kreis": (wish.src, wish.dst) in cycle_pairs,
+            }
+            scenarios.append((struktur, _without_edge(pipeline, wish.src, wish.dst)))
 
     rows = []
-    for label, variant, angefragt, auf_kreis in scenarios:
+    for struktur, variant in scenarios:
         lam = _lam_of(variant)
-        rows.append(
-            {
-                "szenario": label,
-                "lambda_s": lam,
-                "delta_s": None if lam is None or base is None else lam - base,
-                "angefragt": angefragt,
-                "auf_kreis": auf_kreis,
-            }
-        )
+        row = {
+            "szenario": scenario_label("de", struktur),
+            "lambda_s": lam,
+            "delta_s": None if lam is None or base is None else lam - base,
+            **struktur,
+        }
+        rows.append(row)
     rows.sort(key=lambda r: (r["lambda_s"] is not None, r["lambda_s"] or 0.0))
     return rows
 
@@ -310,198 +304,165 @@ def compose(
 # --- Text-Ausgabe ----------------------------------------------------------------------
 
 
-def _num(x: float) -> str:
-    text = f"{x:.2f}".rstrip("0").rstrip(".")
-    return text.replace(".", ",")
+def _header(lang: Lang, key: str) -> list[str]:
+    titel = t(lang, key)
+    return ["", titel, "-" * len(titel)]
 
 
-def _dauer(seconds: float) -> str:
-    base = f"{_num(seconds)} s"
-    if seconds >= 5400:
-        return f"{base} ({_num(seconds / 3600)} h)"
-    if seconds >= 120:
-        return f"{base} ({_num(seconds / 60)} min)"
-    return base
-
-
-STATISTIK_SATZ = {
-    "mean": (
-        "mean. Fuer den asymptotischen Drift ist der Mittelwert die theoretisch richtige"
-        " Groesse; er ist ausreisserempfindlich, ein einzelner haengender Lauf kann ihn"
-        " deutlich verschieben."
-    ),
-    "p50": "p50. Der Median ist robust gegen Ausreisser, unterschaetzt aber den Drift,"
-    " wenn die Dauern rechtsschief streuen.",
-    "p95": "p95. Bewusst pessimistisch: Lambda einer durchgehend schlechten Woche.",
-}
-
-
-def _kopf(d: dict[str, Any]) -> list[str]:
-    zeilen = ["eigenlag analyze", "=" * 16, ""]
+def _kopf(d: dict[str, Any], lang: Lang) -> list[str]:
+    titel = t(lang, "report_title")
+    zeilen = [titel, "=" * len(titel), ""]
     for dag in d["dags"]:
-        name = dag["dag_id"] if dag["dag_id"] is not None else "(dag_id nicht statisch)"
-        schedule = f", Schedule {dag['schedule']}" if dag["schedule"] else ""
-        zeilen.append(f"DAG:        {name} ({dag['datei']}:{dag['zeile']}{schedule})")
+        name = dag["dag_id"] if dag["dag_id"] is not None else t(lang, "kopf_dag_id_missing")
+        schedule = (
+            t(lang, "kopf_schedule_suffix", schedule=dag["schedule"]) if dag["schedule"] else ""
+        )
+        zeilen.append(
+            t(
+                lang,
+                "kopf_dag",
+                name=name,
+                datei=dag["datei"],
+                zeile=dag["zeile"],
+                schedule=schedule,
+            )
+        )
     if d["takt_s"] is not None:
-        zeilen.append(f"Takt T:     {_dauer(d['takt_s'])}, Quelle: {d['takt_quelle']}")
+        zeilen.append(t(lang, "kopf_takt", dauer=dur(d["takt_s"], lang), quelle=d["takt_quelle"]))
     else:
-        zeilen.append("Takt T:     unbekannt (kein statischer Schedule; --period setzt ihn)")
-    zeilen.append(f"Dauern:     {d['dauern_quelle']}")
-    zeilen.append(f"Statistik:  {STATISTIK_SATZ[d['statistik']]}")
+        zeilen.append(t(lang, "kopf_takt_unbekannt"))
+    zeilen.append(t(lang, "kopf_dauern", quelle=d["dauern_quelle"]))
+    zeilen.append(t(lang, "kopf_statistik", satz=t(lang, "stat_" + d["statistik"])))
     if d["stichprobe_laeufe_min"] is not None:
         zeilen.append(
-            "Stichprobe: Laeufe je Task minimal"
-            f" {d['stichprobe_laeufe_min']}, im Median {_num(d['stichprobe_laeufe_median'])}."
+            t(
+                lang,
+                "kopf_stichprobe",
+                min=d["stichprobe_laeufe_min"],
+                median=fmt(d["stichprobe_laeufe_median"], lang),
+            )
         )
     return zeilen
 
 
-def _urteil_text(d: dict[str, Any]) -> list[str]:
-    zeilen = ["", "Urteil", "-" * 6]
+def _urteil_text(d: dict[str, Any], lang: Lang) -> list[str]:
+    zeilen = _header(lang, "urteil_header")
     lam, takt = d["lambda_s"], d["takt_s"]
     if d["urteil"] == "nicht_anwendbar":
-        zeilen.append(
-            "Nicht anwendbar: keine Cross-Run-Kante. Kein Lauf dieses DAGs wartet auf"
-            " einen frueheren Lauf, es gibt keinen Kreis ueber die Zeitachse und damit"
-            " keine strukturelle Taktgrenze. Der Takt wird allein von Kapazitaet und"
-            " Laufzeit begrenzt, nicht von der Abhaengigkeitsstruktur."
-        )
+        zeilen.append(t(lang, "urteil_nicht_anwendbar"))
         return zeilen
     if d["urteil"] == "takt_unbekannt":
-        zeilen.append(
-            f"Lambda = {_dauer(lam)}: schneller kann diese Pipeline dauerhaft nicht"
-            " takten. Der Takt T ist nicht bekannt (Schedule nicht statisch aufloesbar"
-            " oder dataset-getriggert), deshalb gibt es kein Urteil stabil oder"
-            " instabil. Mit --period SEKUNDEN wird der Vergleich gerechnet."
-        )
+        zeilen.append(t(lang, "urteil_takt_unbekannt", lam=dur(lam, lang)))
         return zeilen
     if d["urteil"] == "an_der_grenze":
-        zeilen.append(
-            f"An der Grenze: Lambda = {_dauer(lam)} liegt innerhalb von 10 Prozent am"
-            f" Takt T = {_dauer(takt)}. Vorsicht bei der Deutung: Systeme, deren Tasks"
-            " auf Daten der laufenden Periode warten, pendeln sich genau hier ein, und"
-            " die gemessenen Dauern sind dann bereits das Ergebnis dieses"
-            " eingeschwungenen Zustands. Ob die Pipeline stabil ist oder driftet,"
-            " entscheidet an dieser Grenze die Rueckkopplung, nicht die Messung."
-        )
+        zeilen.append(t(lang, "urteil_an_der_grenze", lam=dur(lam, lang), takt=dur(takt, lang)))
         return zeilen
     if d["urteil"] == "stabil":
         zeilen.append(
-            f"Stabil: Lambda = {_dauer(lam)} liegt unter dem Takt T = {_dauer(takt)}."
-            f" Reserve: {_num(d['reserve_prozent'])} %. Verspaetungen aus einem"
-            " einzelnen Lauf klingen ab, statt sich aufzubauen."
+            t(
+                lang,
+                "urteil_stabil",
+                lam=dur(lam, lang),
+                takt=dur(takt, lang),
+                reserve=fmt(d["reserve_prozent"], lang),
+            )
         )
         return zeilen
     drift = d["drift_s_pro_lauf"]
     laeufe = d["laeufe_bis_1h_rueckstand"]
     zeilen.append(
-        f"Instabil: Lambda = {_dauer(lam)} liegt ueber dem Takt T = {_dauer(takt)}."
-        f" Die Verspaetung waechst um {_dauer(drift)} pro Lauf, unbegrenzt und"
-        " unabhaengig von der Worker-Anzahl. Eine Stunde Rueckstand ist nach"
-        f" {_num(laeufe)} Laeufen erreicht (etwa {_dauer(laeufe * lam)} Wanduhr-Zeit)."
-        " Mehr Rechenleistung aendert daran nichts, weil der Engpass die"
-        " Abhaengigkeitsstruktur ist, nicht die Kapazitaet."
+        t(
+            lang,
+            "urteil_instabil",
+            lam=dur(lam, lang),
+            takt=dur(takt, lang),
+            drift=dur(drift, lang),
+            laeufe=fmt(laeufe, lang),
+            wanduhr=dur(laeufe * lam, lang),
+        )
     )
     return zeilen
 
 
-def _kreis_text(d: dict[str, Any]) -> list[str]:
+def _kreis_text(d: dict[str, Any], lang: Lang) -> list[str]:
     kreis = d["kritischer_kreis"]
     if kreis is None:
         return []
-    zeilen = ["", "Kritischer Kreis", "-" * 16]
-    zeilen.append("Kondensiert (der Kreis in der Cross-Run-Matrix, sein Zyklusmittel ist Lambda):")
+    zeilen = _header(lang, "kreis_header")
+    zeilen.append(t(lang, "kreis_kondensiert_intro"))
     for kante in kreis["kondensiert"]:
         beleg = ""
         if kante["datei"] is not None:
             beleg = f" [{kante['signal']}, {kante['datei']}:{kante['zeile']}]"
-        perioden = (
-            "1 Periode zurueck"
-            if kante["perioden"] == 1
-            else f"{kante['perioden']} Perioden zurueck"
-        )
         zeilen.append(
-            f"  {kante['src']} -> {kante['dst']}: Gewicht {_dauer(kante['gewicht_s'])},"
-            f" {perioden}{beleg}"
+            t(
+                lang,
+                "kreis_kante",
+                src=kante["src"],
+                dst=kante["dst"],
+                dauer=dur(kante["gewicht_s"], lang),
+                perioden=perioden(kante["perioden"], lang),
+                beleg=beleg,
+            )
         )
         if len(kante["task_pfad"]) > 1:
-            zeilen.append(f"    als Task-Pfad: {' -> '.join(kante['task_pfad'])}")
-    zeilen.append(f"Aufgeloest ueber alle Segmente: {' -> '.join(kreis['aufgeloest'])}")
-    zeilen.append(
-        "Der Weg zu einem kleineren Lambda fuehrt ueber diesen Kreis; eine Verkuerzung"
-        " daneben aendert Lambda um exakt null. Ob eine einzelne Verkuerzung"
-        " durchschlaegt oder ein zweiter Kreis mit gleichem Zyklusmittel uebernimmt,"
-        " rechnet das What-if-Ranking unten nach."
-    )
+            zeilen.append(t(lang, "kreis_task_pfad", pfad=" -> ".join(kante["task_pfad"])))
+    zeilen.append(t(lang, "kreis_aufgeloest", pfad=" -> ".join(kreis["aufgeloest"])))
+    zeilen.append(t(lang, "kreis_hinweis"))
     return zeilen
 
 
-def _mc_text(d: dict[str, Any]) -> list[str]:
-    zeilen = ["", "Monte Carlo", "-" * 11]
+def _mc_text(d: dict[str, Any], lang: Lang) -> list[str]:
+    zeilen = _header(lang, "mc_header")
     mc = d["monte_carlo"]
     if mc is None:
-        zeilen.append(
-            "Nicht gerechnet (abgeschaltet oder kein Kreis). Die Lambda-Angabe oben ist"
-            " ein Punktwert auf der gewaehlten Statistik."
-        )
+        zeilen.append(t(lang, "mc_aus"))
         return zeilen
     zeilen.append(
-        f"Lambda p50 = {_dauer(mc['lambda_p50_s'])}, Lambda p95 = {_dauer(mc['lambda_p95_s'])}"
-        f" ({mc['samples']} Stichproben, Lognormal-Fit aus p50/p95 je Task, Seed"
-        f" {mc['seed']}: derselbe Aufruf liefert dieselben Zahlen)."
+        t(
+            lang,
+            "mc_werte",
+            p50=dur(mc["lambda_p50_s"], lang),
+            p95=dur(mc["lambda_p95_s"], lang),
+            samples=mc["samples"],
+            seed=mc["seed"],
+        )
     )
-    zeilen.append(
-        "p95 beantwortet, ob der Takt auch in einer schlechten Woche haelt, nicht nur"
-        " im Durchschnitt."
-    )
+    zeilen.append(t(lang, "mc_p95_satz"))
     takt = d["takt_s"]
     if takt is not None:
         if mc["lambda_p50_s"] < takt < mc["lambda_p95_s"]:
-            zeilen.append(
-                "Instabil in schlechten Wochen, erholt sich in guten: die Verspaetung"
-                " pendelt statt zu wachsen. Sichtbar wird das als Pipeline, die"
-                " gelegentlich hinterherlaeuft und sich scheinbar grundlos wieder faengt."
-            )
+            zeilen.append(t(lang, "mc_pendel"))
         if mc["anteil_ueber_takt"] is not None:
-            zeilen.append(
-                f"Anteil der Stichproben mit Lambda ueber dem Takt:"
-                f" {_num(mc['anteil_ueber_takt'] * 100)} %."
-            )
+            zeilen.append(t(lang, "mc_anteil", p=fmt(mc["anteil_ueber_takt"] * 100, lang)))
     if mc["konstant_gesampelt"]:
-        zeilen.append(
-            "Konstant gesampelt (keine belastbare Streuung, angenommene oder duenne"
-            f" Dauern): {', '.join(mc['konstant_gesampelt'])}. Die p95-Aussage"
-            " unterschaetzt die Streuung dieser Tasks."
-        )
+        zeilen.append(t(lang, "mc_konstant", tasks=", ".join(mc["konstant_gesampelt"])))
     return zeilen
 
 
-def _sammelzeile(kompakt: list[dict[str, Any]]) -> str:
+def _sammelzeile(kompakt: list[dict[str, Any]], lang: Lang) -> str:
     kreis = sum(1 for r in kompakt if r["auf_kreis"])
     extern = len(kompakt) - kreis
     teile = []
     if kreis:
-        teile.append("1 Kreis-Gleichstand" if kreis == 1 else f"{kreis} Kreis-Gleichstaende")
+        teile.append(
+            t(lang, "sammel_kreis_1") if kreis == 1 else t(lang, "sammel_kreis_n", n=kreis)
+        )
     if extern:
         teile.append(
-            "1 Kante ausserhalb des kritischen Kreises"
-            if extern == 1
-            else f"{extern} Kanten ausserhalb des kritischen Kreises"
+            t(lang, "sammel_extern_1") if extern == 1 else t(lang, "sammel_extern_n", n=extern)
         )
-    kopf = (
-        "1 weiteres Szenario aendert Lambda nicht"
-        if len(kompakt) == 1
-        else f"{len(kompakt)} weitere Szenarien aendern Lambda nicht"
-    )
-    return f"  {kopf}: {', '.join(teile)}."
+    n = len(kompakt)
+    kopf = t(lang, "sammel_kopf_1") if n == 1 else t(lang, "sammel_kopf_n", n=n)
+    return t(lang, "sammel_zeile", kopf=kopf, teile=", ".join(teile))
 
 
-def _what_if_text(d: dict[str, Any]) -> list[str]:
+def _what_if_text(d: dict[str, Any], lang: Lang) -> list[str]:
     if not d["what_if"]:
         return []
-    zeilen = ["", "What-if", "-" * 7]
+    zeilen = _header(lang, "whatif_header")
     if d["lambda_s"] is not None:
-        zeilen.append(f"Basis: Lambda = {_dauer(d['lambda_s'])}. Sortiert nach neuem Lambda.")
+        zeilen.append(t(lang, "whatif_basis", dauer=dur(d["lambda_s"], lang)))
     # Null-Delta-Kompaktierung (Abnahme 009a): Standard-Szenarien ohne Wirkung werden
     # zu einer Sammelzeile. Angefragte Szenarien bleiben immer sichtbar — wer explizit
     # fragt, bekommt die Zeile. In --json stehen weiterhin alle Zeilen.
@@ -511,68 +472,57 @@ def _what_if_text(d: dict[str, Any]) -> list[str]:
     kompakt = [r for r in d["what_if"] if r not in gezeigt]
     for i, zeile in enumerate(gezeigt, start=1):
         if zeile["lambda_s"] is None:
-            wirkung = "kein Kreis mehr, Taktgrenze nicht anwendbar"
+            wirkung = t(lang, "whatif_kein_kreis")
         else:
-            wirkung = f"Lambda {_dauer(zeile['lambda_s'])}"
+            wirkung = t(lang, "whatif_wirkung", dauer=dur(zeile["lambda_s"], lang))
             if zeile["delta_s"] is not None:
                 vorzeichen = "-" if zeile["delta_s"] < 0 else "+"
-                wirkung += f", Veraenderung {vorzeichen}{_num(abs(zeile['delta_s']))} s"
-        zeilen.append(f"  {i}. {zeile['szenario']}: {wirkung}")
+                wirkung += t(
+                    lang, "whatif_veraenderung", vz=vorzeichen, n=fmt(abs(zeile["delta_s"]), lang)
+                )
+        zeilen.append(
+            t(lang, "whatif_zeile", i=i, szenario=scenario_label(lang, zeile), wirkung=wirkung)
+        )
     if kompakt:
-        zeilen.append(_sammelzeile(kompakt))
-    zeilen.append(
-        "Eine Optimierung, die nicht auf dem kritischen Kreis liegt, aendert Lambda um"
-        " exakt null. Das Ranking rechnet deshalb die Kreis-Tasks und alle Cross-Kanten"
-        " durch; was Lambda nicht aendert, ist fuer die Taktgrenze wirkungslos, so"
-        " nuetzlich es fuer die Latenz eines Einzellaufs sein mag."
-    )
+        zeilen.append(_sammelzeile(kompakt, lang))
+    zeilen.append(t(lang, "whatif_schluss"))
     return zeilen
 
 
-WARN_TITEL = {
-    "sensor_im_kritischen_kreis": "Sensor auf dem kritischen Kreis",
-    "dauer_angenommen": "Dauer angenommen",
-    "stichprobe_zu_klein": "Stichprobe zu klein",
-    "sensor_not_modeled": "Sensor-Kante nicht modelliert",
-    "sensor_dynamic_offset": "Sensor-Versatz nicht statisch bestimmbar",
-    "include_prior_dates": "include_prior_dates nicht modelliert",
-    "prev_run_success": "prev_*_success-Zugriff (keine Lambda-Kante)",
-    "prev_run_date": "prev_ds-Zugriff (schwaches Signal)",
-}
-
-
-def _warn_text(d: dict[str, Any]) -> list[str]:
-    zeilen = ["", "Warnungen", "-" * 9]
+def _warn_text(d: dict[str, Any], lang: Lang) -> list[str]:
+    zeilen = _header(lang, "warn_header")
     if not d["warnungen"]:
-        zeilen.append("Keine.")
+        zeilen.append(t(lang, "warn_keine"))
     sensor_kreis = False
     f_befund = False
     for w in d["warnungen"]:
-        titel = WARN_TITEL.get(w["art"], w["art"])
+        art = w["art"]
+        titel = t(lang, "warn_" + art) if ("warn_" + art) in CATALOG[lang] else art
         wo = w["task"] if w["task"] else ""
         if w["datei"] is not None:
             wo = f"{w['datei']}:{w['zeile']}"
         detail = f" ({w['detail']})" if w["detail"] else ""
-        zeilen.append(f"  - {titel}: {wo}{detail}")
-        sensor_kreis = sensor_kreis or w["art"] == "sensor_im_kritischen_kreis"
-        f_befund = f_befund or w["art"] == "prev_run_success"
+        zeilen.append(t(lang, "warn_zeile", titel=titel, wo=wo, detail=detail))
+        sensor_kreis = sensor_kreis or art == "sensor_im_kritischen_kreis"
+        f_befund = f_befund or art == "prev_run_success"
     if sensor_kreis:
-        zeilen.append(f"  {SENSOR_KREIS_TEXT}")
+        zeilen.append("  " + t(lang, "sensor_kreis_text"))
     if f_befund:
-        zeilen.append(f"  {F_DIVERGENZ_TEXT}")
+        zeilen.append("  " + t(lang, "f_divergenz_text"))
     return zeilen
 
 
-def render(d: dict[str, Any]) -> str:
+def render(d: dict[str, Any], lang: Lang = "en") -> str:
+    grenzen = [t(lang, key) for key in ("modellgrenze_1", "modellgrenze_2", "modellgrenze_3")]
     zeilen = (
-        _kopf(d)
-        + _urteil_text(d)
-        + _kreis_text(d)
-        + _mc_text(d)
-        + _what_if_text(d)
-        + _warn_text(d)
-        + ["", "Modellgrenzen", "-" * 13]
-        + [f"  - {grenze}" for grenze in d["modellgrenzen"]]
+        _kopf(d, lang)
+        + _urteil_text(d, lang)
+        + _kreis_text(d, lang)
+        + _mc_text(d, lang)
+        + _what_if_text(d, lang)
+        + _warn_text(d, lang)
+        + _header(lang, "modellgrenzen_header")
+        + [t(lang, "modellgrenze_zeile", text=grenze) for grenze in grenzen]
     )
     zeilen.append("")
     return "\n".join(zeilen)

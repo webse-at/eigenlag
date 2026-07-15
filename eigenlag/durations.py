@@ -107,9 +107,9 @@ def resolve(
             durations[task] = getattr(found, statistic)
             continue
         if fallback is None:
-            reason = "keine Messung" if found is None else f"nur {found.n} Laeufe"
+            reason = "no measurement" if found is None else f"only {found.n} runs"
             raise ValueError(
-                f"Task {task!r}: {reason} und kein Assume-Fallback (--assume-duration) gesetzt"
+                f"task {task!r}: {reason} and no assume fallback (--assume-duration) set"
             )
         durations[task] = getattr(fallback, statistic)
         if found is None:
@@ -117,7 +117,7 @@ def resolve(
                 DurationWarning(
                     kind="dauer_angenommen",
                     task=task,
-                    detail=f"keine Messung, {getattr(fallback, statistic)} s",
+                    detail=f"no measurement, {getattr(fallback, statistic)} s",
                 )
             )
         else:
@@ -125,7 +125,7 @@ def resolve(
                 DurationWarning(
                     kind="stichprobe_zu_klein",
                     task=task,
-                    detail=f"n={found.n} < {min_n}, Assume-Wert {getattr(fallback, statistic)} s",
+                    detail=f"n={found.n} < {min_n}, assumed value {getattr(fallback, statistic)} s",
                 )
             )
     return durations, tuple(warnings)
@@ -279,8 +279,7 @@ def from_rest(
                     kind="rest_seiten_deckel",
                     task="",
                     detail=(
-                        f"DAG {dag_id!r}: nach {max_pages} Seiten abgebrochen,"
-                        f" {total} Eintraege insgesamt"
+                        f"DAG {dag_id!r}: stopped after {max_pages} pages, {total} entries total"
                     ),
                 )
             )

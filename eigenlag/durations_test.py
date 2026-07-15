@@ -89,7 +89,7 @@ def test_resolve_mischbetrieb_fehlende_task_bekommt_assume_mit_warnung() -> None
     )
     assert durations == {"d.a": 12.0, "d.b": 6.0, "d.neu": 300.0}
     assert warnings == (
-        DurationWarning(kind="dauer_angenommen", task="d.neu", detail="keine Messung, 300.0 s"),
+        DurationWarning(kind="dauer_angenommen", task="d.neu", detail="no measurement, 300.0 s"),
     )
 
 

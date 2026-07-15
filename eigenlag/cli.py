@@ -7,6 +7,10 @@ kommt in 010), 1 = Bedienfehler, 2 = Pfad geparst, aber kein analysierbarer DAG.
 Quellen-Mischung wie in 008: DB oder REST liefert, was sie hat, --assume-duration
 fuellt Luecken je Task mit Warnung. Ohne jede Quelle bricht die CLI mit Erklaerung
 ab, kein stiller Default.
+
+argparse-Hilfe, Fehlermeldungen und Quellen-Beschriftungen sind englisch (ADR-023,
+Spec 011): sie tragen keinen --lang-Kontext, weil der Flag erst geparst wird, und
+gehen sprachneutral ins --json.
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from typing import cast
 from eigenlag import gate, montecarlo
 from eigenlag.analyze import analyze_result
 from eigenlag.durations import Statistic, Stats, TaskStats, assume
+from eigenlag.messages import Lang
 from eigenlag.parse_airflow import ParsedDag, ParseResult, parse_path, select_dags
 from eigenlag.report import (
     WhatIfDropEdge,
@@ -42,95 +47,107 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="eigenlag",
         description=(
-            "Rekurrenz-Analyzer fuer Daten-Pipelines: berechnet die nachhaltige"
-            " minimale Taktzeit (Max-Plus-Eigenwert Lambda) und den kritischen Kreis."
+            "Recurrence analyzer for data pipelines: computes the sustainable minimum"
+            " cycle time (max-plus eigenvalue λ) and the critical cycle."
         ),
     )
     sub = parser.add_subparsers(dest="befehl", required=True)
-    analyze = sub.add_parser("analyze", help="DAG-Files analysieren und Report ausgeben")
-    analyze.add_argument("pfad", help="DAG-File oder Verzeichnis")
-    analyze.add_argument("--db", help="SQLAlchemy-URL der Airflow-Metadaten-DB")
-    analyze.add_argument("--rest", help="Basis-URL der Airflow-REST-API")
-    analyze.add_argument("--rest-token", help="Bearer-Token fuer die REST-API")
+    analyze = sub.add_parser("analyze", help="analyze DAG files and print a report")
+    analyze.add_argument("pfad", help="DAG file or directory")
+    analyze.add_argument("--db", help="SQLAlchemy URL of the Airflow metadata DB")
+    analyze.add_argument("--rest", help="base URL of the Airflow REST API")
+    analyze.add_argument("--rest-token", help="bearer token for the REST API")
     analyze.add_argument(
         "--assume-duration",
         type=float,
-        help="Sekunden je Task ohne Messung (fuellt Luecken, mit Warnung im Report)",
+        help="seconds per task without a measurement (fills gaps, with a warning in the report)",
     )
-    analyze.add_argument("--dag-id", help="nur diesen DAG analysieren (sonst: alle im Pfad)")
+    analyze.add_argument("--dag-id", help="analyze only this DAG (default: all in the path)")
     analyze.add_argument(
         "--statistic",
         choices=["mean", "p50", "p95"],
         default="mean",
-        help="welche Dauer-Statistik in Lambda eingeht (Default mean, im Report begruendet)",
+        help="which duration statistic feeds λ (default mean, justified in the report)",
     )
-    analyze.add_argument(
-        "--since", type=int, default=90, help="Fenster fuer die Metadaten-DB in Tagen"
-    )
+    analyze.add_argument("--since", type=int, default=90, help="window for the metadata DB in days")
     analyze.add_argument(
         "--period",
         type=float,
-        help="Takt-Override in Sekunden, wenn der Schedule unbekannt oder dataset-getriggert ist",
+        help="period override in seconds when the schedule is unknown or dataset-triggered",
     )
     analyze.add_argument(
-        "--samples", type=int, default=1000, help="Monte-Carlo-Stichproben, 0 schaltet ab"
+        "--samples", type=int, default=1000, help="Monte Carlo samples, 0 disables it"
     )
     analyze.add_argument(
         "--what-if",
         action="append",
         default=[],
-        metavar="task=NAME:SEKUNDEN | drop-edge=SRC->DST",
-        help="Szenario rechnen, wiederholbar",
+        metavar="task=NAME:SECONDS | drop-edge=SRC->DST",
+        help="compute a scenario, repeatable",
     )
-    analyze.add_argument("--json", action="store_true", help="maschinenlesbare Ausgabe statt Text")
+    analyze.add_argument(
+        "--json", action="store_true", help="machine-readable output instead of text"
+    )
+    analyze.add_argument(
+        "--lang",
+        choices=["en", "de"],
+        default="en",
+        help="report language (default en; --json stays language-independent)",
+    )
 
     check = sub.add_parser(
         "check",
-        help="CI-Gate: Lambda und Cross-Run-Kanten gegen einen Git-Stand vergleichen",
+        help="CI gate: compare λ and cross-run edges against a git state",
     )
-    check.add_argument("pfad", help="DAG-File oder Verzeichnis im Arbeits-Repo (Nachher-Stand)")
+    check.add_argument("pfad", help="DAG file or directory in the working repo (the after state)")
     check.add_argument(
         "--against",
         required=True,
         metavar="REF",
-        help="Git-Referenz des Vorher-Stands (z. B. origin/main, HEAD~1, ein Tag)",
+        help="git reference of the before state (e.g. origin/main, HEAD~1, a tag)",
     )
-    check.add_argument("--db", help="SQLAlchemy-URL der Airflow-Metadaten-DB")
+    check.add_argument("--db", help="SQLAlchemy URL of the Airflow metadata DB")
     check.add_argument(
         "--assume-duration",
         type=float,
-        help="Sekunden je Task ohne Messung; ohne Dauern-Quelle laeuft der Struktur-Modus",
+        help="seconds per task without a measurement; without a source the structural mode runs",
     )
-    check.add_argument("--dag-id", help="nur diesen DAG vergleichen (sonst: alle im Pfad)")
+    check.add_argument("--dag-id", help="compare only this DAG (default: all in the path)")
     check.add_argument(
         "--statistic",
         choices=["mean", "p50", "p95"],
         default="mean",
-        help="welche Dauer-Statistik in Lambda eingeht (Punkt-Lambda, ADR-022)",
+        help="which duration statistic feeds λ (point λ, ADR-022)",
     )
-    check.add_argument(
-        "--since", type=int, default=90, help="Fenster fuer die Metadaten-DB in Tagen"
-    )
+    check.add_argument("--since", type=int, default=90, help="window for the metadata DB in days")
     check.add_argument(
         "--period",
         type=float,
-        help="Takt-Override in Sekunden, wenn der Schedule unbekannt oder dataset-getriggert ist",
+        help="period override in seconds when the schedule is unknown or dataset-triggered",
     )
     check.add_argument(
         "--fail-on-new-edge",
         action="store_true",
-        help="jede neue Cross-Run-Kante loest aus, unabhaengig vom Takt",
+        help="every new cross-run edge triggers, independent of the period",
     )
     check.add_argument(
         "--max-increase",
         type=float,
-        metavar="PROZENT",
-        help="Lambda-Wachstum gegenueber REF deckeln, auch ohne neue Kante",
+        metavar="PERCENT",
+        help="cap λ growth against REF, even without a new edge",
     )
     check.add_argument(
-        "--comment-file", metavar="PFAD", help="PR-Kommentar (Markdown) zusaetzlich in diese Datei"
+        "--comment-file", metavar="PATH", help="also write the PR comment (Markdown) to this file"
     )
-    check.add_argument("--json", action="store_true", help="maschinenlesbare Ausgabe statt Text")
+    check.add_argument(
+        "--json", action="store_true", help="machine-readable output instead of text"
+    )
+    check.add_argument(
+        "--lang",
+        choices=["en", "de"],
+        default="en",
+        help="comment language (default en; --json stays language-independent)",
+    )
     check.set_defaults(rest=None, rest_token=None)  # _fetch_stats teilt sich analyze und check
     return parser
 
@@ -139,17 +156,17 @@ def _parse_what_if(text: str) -> WhatIfTask | WhatIfDropEdge:
     if text.startswith("task="):
         name, sep, seconds = text[len("task=") :].rpartition(":")
         if not sep or not name:
-            raise Bedienfehler(f"--what-if {text!r}: erwartet task=NAME:SEKUNDEN")
+            raise Bedienfehler(f"--what-if {text!r}: expected task=NAME:SECONDS")
         try:
             return WhatIfTask(task=name, seconds=float(seconds))
         except ValueError as err:
-            raise Bedienfehler(f"--what-if {text!r}: {seconds!r} ist keine Zahl") from err
+            raise Bedienfehler(f"--what-if {text!r}: {seconds!r} is not a number") from err
     if text.startswith("drop-edge="):
         src, sep, dst = text[len("drop-edge=") :].partition("->")
         if not sep or not src or not dst:
-            raise Bedienfehler(f"--what-if {text!r}: erwartet drop-edge=SRC->DST")
+            raise Bedienfehler(f"--what-if {text!r}: expected drop-edge=SRC->DST")
         return WhatIfDropEdge(src=src.strip(), dst=dst.strip())
-    raise Bedienfehler(f"--what-if {text!r}: erwartet task=NAME:SEKUNDEN oder drop-edge=SRC->DST")
+    raise Bedienfehler(f"--what-if {text!r}: expected task=NAME:SECONDS or drop-edge=SRC->DST")
 
 
 def _redact(url: str) -> str:
@@ -157,18 +174,18 @@ def _redact(url: str) -> str:
 
 
 def _fetch_stats(args: argparse.Namespace, dag_ids: Sequence[str]) -> tuple[Stats, str]:
-    """Dauern-Quelle aufloesen: (Stats, Beschreibung fuer den Report-Kopf)."""
+    """Dauern-Quelle aufloesen: (Stats, englische Beschreibung fuer den Report-Kopf)."""
     if args.db and args.rest:
-        raise Bedienfehler("--db und --rest schliessen sich aus: eine Quelle waehlen")
+        raise Bedienfehler("--db and --rest are mutually exclusive: choose one source")
     if args.rest and not args.rest_token:
-        raise Bedienfehler("--rest braucht --rest-token (Airflow 3: JWT via POST /auth/token)")
+        raise Bedienfehler("--rest needs --rest-token (Airflow 3: JWT via POST /auth/token)")
     if args.rest_token and not args.rest:
-        raise Bedienfehler("--rest-token ohne --rest ergibt keinen Sinn")
+        raise Bedienfehler("--rest-token without --rest makes no sense")
     if not args.db and not args.rest and args.assume_duration is None:
         raise Bedienfehler(
-            "keine Dauern-Quelle: --db URL (Airflow-Metadaten-DB), --rest URL mit"
-            " --rest-token (Airflow-REST-API) oder --assume-duration SEKUNDEN angeben."
-            " Ohne Dauern gibt es keine Zeit-Aussage, und geraten wird nicht."
+            "no duration source: pass --db URL (Airflow metadata DB), --rest URL with"
+            " --rest-token (Airflow REST API) or --assume-duration SECONDS."
+            " Without durations there is no time statement, and nothing is guessed."
         )
 
     quellen: list[str] = []
@@ -177,14 +194,14 @@ def _fetch_stats(args: argparse.Namespace, dag_ids: Sequence[str]) -> tuple[Stat
         from eigenlag.durations import from_metadata_db
 
         stats, _ = from_metadata_db(args.db, list(dag_ids), since_days=args.since)
-        quellen.append(f"Metadaten-DB {_redact(args.db)}, Fenster {args.since} Tage")
+        quellen.append(f"Airflow metadata DB {_redact(args.db)}, window {args.since} days")
     elif args.rest:
         from eigenlag.durations import from_rest
 
         stats, _ = from_rest(args.rest, args.rest_token, list(dag_ids), since_days=args.since)
-        quellen.append(f"Airflow-REST {args.rest}, Fenster {args.since} Tage")
+        quellen.append(f"Airflow REST {args.rest}, window {args.since} days")
     if args.assume_duration is not None:
-        quellen.append(f"angenommen: {args.assume_duration:g} s je Task ohne Messung")
+        quellen.append(f"assumed: {args.assume_duration:g} s per task without a measurement")
     return stats, " + ".join(quellen)
 
 
@@ -195,13 +212,13 @@ def _takt(dags: Sequence[ParsedDag], period: float | None) -> tuple[float | None
     if len(perioden) != 1:
         return None, None  # kein oder kein gemeinsamer Takt: kein Urteil, kein Raten
     ausdruecke = sorted({dag.schedule_expr or "" for dag in dags if dag.period_s is not None})
-    return perioden.pop(), f"Schedule {', '.join(ausdruecke)}"
+    return perioden.pop(), f"schedule {', '.join(ausdruecke)}"
 
 
 def _run_analyze(args: argparse.Namespace) -> int:
     root = Path(args.pfad)
     if not root.exists():
-        raise Bedienfehler(f"Pfad {args.pfad!r} existiert nicht")
+        raise Bedienfehler(f"path {args.pfad!r} does not exist")
 
     requested = [_parse_what_if(text) for text in args.what_if]
 
@@ -210,10 +227,10 @@ def _run_analyze(args: argparse.Namespace) -> int:
     if args.dag_id is not None:
         dags = select_dags(result, args.dag_id)
         if not dags:
-            gefunden = ", ".join(sorted({d.dag_id or "(ohne dag_id)" for d in result.dags}))
+            gefunden = ", ".join(sorted({d.dag_id or "(no dag_id)" for d in result.dags}))
             print(
-                f"kein analysierbarer DAG: --dag-id {args.dag_id!r} nicht gefunden."
-                f" Im Pfad gefunden: {gefunden or 'keine DAGs'}",
+                f"no analyzable DAG: --dag-id {args.dag_id!r} not found."
+                f" Found in the path: {gefunden or 'no DAGs'}",
                 file=sys.stderr,
             )
             return KEIN_DAG
@@ -223,8 +240,8 @@ def _run_analyze(args: argparse.Namespace) -> int:
         )
     if not any(dag.tasks for dag in dags):
         print(
-            f"kein analysierbarer DAG in {args.pfad!r}"
-            f" ({len(dags)} DAG-Definitionen, keine mit statisch aufloesbaren Tasks).",
+            f"no analyzable DAG in {args.pfad!r}"
+            f" ({len(dags)} DAG definitions, none with statically resolvable tasks).",
             file=sys.stderr,
         )
         for warning in result.warnings + tuple(w for d in dags for w in d.warnings):
@@ -243,7 +260,7 @@ def _run_analyze(args: argparse.Namespace) -> int:
         analysis = analyze_result(result, stats, statistic, fallback)
     except ValueError as err:
         raise Bedienfehler(
-            f"{err} — Luecken fuellt --assume-duration SEKUNDEN, je Task mit Warnung."
+            f"{err} — fill gaps with --assume-duration SECONDS, per task with a warning."
         ) from err
 
     takt_s, takt_quelle = _takt(dags, args.period)
@@ -281,23 +298,23 @@ def _run_analyze(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(bericht, ensure_ascii=False, indent=2))
     else:
-        print(render(bericht))
+        print(render(bericht, cast(Lang, args.lang)))
     return OK
 
 
 def _run_check(args: argparse.Namespace) -> int:
     pfad = Path(args.pfad)
     if not pfad.exists():
-        raise Bedienfehler(f"Pfad {args.pfad!r} existiert nicht")
+        raise Bedienfehler(f"path {args.pfad!r} does not exist")
 
     try:
         root = gate.repo_root(pfad)
     except gate.GitFehler as err:
-        raise Bedienfehler(f"Pfad {args.pfad!r} liegt in keinem Git-Repo: {err}") from err
+        raise Bedienfehler(f"path {args.pfad!r} is not inside a git repo: {err}") from err
     try:
         ref_sha = gate.resolve_ref(root, args.against)
     except gate.GitFehler as err:
-        raise Bedienfehler(f"--against {args.against!r} ist nicht aufloesbar: {err}") from err
+        raise Bedienfehler(f"--against {args.against!r} is not resolvable: {err}") from err
     rel = pfad.resolve().relative_to(root.resolve())
 
     after = parse_path(pfad)
@@ -310,17 +327,16 @@ def _run_check(args: argparse.Namespace) -> int:
     if args.dag_id is not None:
         ids = {dag.dag_id for dag in (*before.dags, *after.dags) if dag.dag_id is not None}
         if args.dag_id not in ids:
-            gefunden = ", ".join(sorted(ids)) or "keine DAGs"
+            gefunden = ", ".join(sorted(ids)) or "no DAGs"
             raise Bedienfehler(
-                f"--dag-id {args.dag_id!r} in keinem der beiden Staende gefunden."
-                f" Gefunden: {gefunden}"
+                f"--dag-id {args.dag_id!r} not found in either state. Found: {gefunden}"
             )
 
     struct_mode = args.db is None and args.assume_duration is None
     if struct_mode:
         stats: Stats = {}
         fallback: TaskStats | None = assume(1.0)
-        dauern_quelle = "Struktur-Modus: uniforme Dauer 1.0 je Task"
+        dauern_quelle = "structural mode: uniform duration 1.0 per task"
     else:
         dag_ids = sorted(
             {dag.dag_id for dag in (*before.dags, *after.dags) if dag.dag_id is not None}
@@ -346,10 +362,10 @@ def _run_check(args: argparse.Namespace) -> int:
         )
     except ValueError as err:
         raise Bedienfehler(
-            f"{err} — Luecken fuellt --assume-duration SEKUNDEN, je Task mit Warnung."
+            f"{err} — fill gaps with --assume-duration SECONDS, per task with a warning."
         ) from err
 
-    kommentar = gate.render_check(ergebnis)
+    kommentar = gate.render_check(ergebnis, cast(Lang, args.lang))
     if args.comment_file:
         Path(args.comment_file).write_text(kommentar, encoding="utf-8")
     if args.json:
@@ -368,7 +384,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (Bedienfehler, ValueError, gate.GitFehler) as err:
         # ValueError: Systemgrenze User-Input (unbekannter What-if-Task, kaputte Kante).
         # GitFehler: Systemgrenze git (Worktree-Anlage schlug fehl).
-        print(f"Bedienfehler: {err}", file=sys.stderr)
+        print(f"error: {err}", file=sys.stderr)
         return BEDIENFEHLER
 
 
