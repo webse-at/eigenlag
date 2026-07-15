@@ -794,7 +794,7 @@ Container danach gestoppt und weg (`docker ps -a`: leer), nichts persistiert. Tr
 
 ```
 pytest: 312 passed (38 neue: 4 Parser/ADR-021, 6 Monte Carlo, 14 Report, 13 CLI, 1 SyntaxWarning)
-ruff check: All checks passed!  |  ruff format --check: 64 files already formatted
+ruff check: All checks passed!  |  ruff format --check: 44 files already formatted (ein Zwischenstand zaehlte 64, weil pipx-Build-Artefakte build/ und eigenlag.egg-info/ noch nicht gitignored waren)
 mypy: Success: no issues found in 20 source files (eigenlag/)
 ```
 
