@@ -1,0 +1,69 @@
+eigenlag analyze
+================
+
+DAG:        load_data_wikiviews (dags/wikiviews/load_data.py:55, Schedule '@hourly')
+Takt T:     3600 s (60 min), Quelle: Schedule '@hourly'
+Dauern:     angenommen: 300 s je Task ohne Messung
+Statistik:  mean. Fuer den asymptotischen Drift ist der Mittelwert die theoretisch richtige Groesse; er ist ausreisserempfindlich, ein einzelner haengender Lauf kann ihn deutlich verschieben.
+Stichprobe: Laeufe je Task minimal 0, im Median 0.
+
+Urteil
+------
+Stabil: Lambda = 600 s (10 min) liegt unter dem Takt T = 3600 s (60 min). Reserve: 83,33 %. Verspaetungen aus einem einzelnen Lauf klingen ab, statt sich aufzubauen.
+
+Kritischer Kreis
+----------------
+Kondensiert (der Kreis in der Cross-Run-Matrix, sein Zyklusmittel ist Lambda):
+  load_data_wikiviews.load_data -> load_data_wikiviews.load_data: Gewicht 600 s (10 min), 1 Periode zurueck [wait_for_downstream, dags/wikiviews/load_data.py:49]
+    als Task-Pfad: load_data_wikiviews.сheck_data -> load_data_wikiviews.load_data
+Aufgeloest ueber alle Segmente: load_data_wikiviews.сheck_data -> load_data_wikiviews.load_data
+Der Weg zu einem kleineren Lambda fuehrt ueber diesen Kreis; eine Verkuerzung daneben aendert Lambda um exakt null. Ob eine einzelne Verkuerzung durchschlaegt oder ein zweiter Kreis mit gleichem Zyklusmittel uebernimmt, rechnet das What-if-Ranking unten nach.
+
+Monte Carlo
+-----------
+Lambda p50 = 600 s (10 min), Lambda p95 = 600 s (10 min) (1000 Stichproben, Lognormal-Fit aus p50/p95 je Task, Seed 20260715: derselbe Aufruf liefert dieselben Zahlen).
+p95 beantwortet, ob der Takt auch in einer schlechten Woche haelt, nicht nur im Durchschnitt.
+Anteil der Stichproben mit Lambda ueber dem Takt: 0 %.
+Konstant gesampelt (keine belastbare Streuung, angenommene oder duenne Dauern): load_data_wikiviews.create_success_file, load_data_wikiviews.load_data, load_data_wikiviews.load_to_postgres_trigger_clickhouse.clean_table, load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day, load_data_wikiviews.load_to_postgres_trigger_clickhouse.success, load_data_wikiviews.load_to_postgres_trigger_clickhouse.time_check, load_data_wikiviews.send_message_telegram, load_data_wikiviews.сheck_data. Die p95-Aussage unterschaetzt die Streuung dieser Tasks.
+
+What-if
+-------
+Basis: Lambda = 600 s (10 min). Sortiert nach neuem Lambda.
+  1. Task load_data_wikiviews.сheck_data halbiert (auf 150 s): Lambda 600 s (10 min), Veraenderung +0 s
+  2. Task load_data_wikiviews.load_data halbiert (auf 150 s): Lambda 600 s (10 min), Veraenderung +0 s
+  3. Cross-Kante load_data_wikiviews.сheck_data -> load_data_wikiviews.сheck_data entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+  4. Cross-Kante load_data_wikiviews.load_data -> load_data_wikiviews.сheck_data entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+  5. Cross-Kante load_data_wikiviews.load_data -> load_data_wikiviews.load_data entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+  6. Cross-Kante load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day -> load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+  7. Cross-Kante load_data_wikiviews.load_to_postgres_trigger_clickhouse.success -> load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+  8. Cross-Kante load_data_wikiviews.load_to_postgres_trigger_clickhouse.time_check -> load_data_wikiviews.load_to_postgres_trigger_clickhouse.time_check entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+  9. Cross-Kante load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day -> load_data_wikiviews.load_to_postgres_trigger_clickhouse.time_check entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+  10. Cross-Kante load_data_wikiviews.load_to_postgres_trigger_clickhouse.clean_table -> load_data_wikiviews.load_to_postgres_trigger_clickhouse.clean_table entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+  11. Cross-Kante load_data_wikiviews.load_to_postgres_trigger_clickhouse.success -> load_data_wikiviews.load_to_postgres_trigger_clickhouse.clean_table entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+  12. Cross-Kante load_data_wikiviews.load_to_postgres_trigger_clickhouse.success -> load_data_wikiviews.load_to_postgres_trigger_clickhouse.success entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+  13. Cross-Kante load_data_wikiviews.create_success_file -> load_data_wikiviews.create_success_file entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+  14. Cross-Kante load_data_wikiviews.send_message_telegram -> load_data_wikiviews.create_success_file entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+  15. Cross-Kante load_data_wikiviews.send_message_telegram -> load_data_wikiviews.send_message_telegram entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+Eine Optimierung, die nicht auf dem kritischen Kreis liegt, aendert Lambda um exakt null. Das Ranking zeigt deshalb nur Kreis-Tasks und Cross-Kanten; alles andere ist fuer die Taktgrenze wirkungslos, so nuetzlich es fuer die Latenz eines Einzellaufs sein mag.
+
+Warnungen
+---------
+  - Dauer angenommen: load_data_wikiviews.сheck_data (keine Messung, 300.0 s)
+  - Dauer angenommen: load_data_wikiviews.load_data (keine Messung, 300.0 s)
+  - Dauer angenommen: load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day (keine Messung, 300.0 s)
+  - Dauer angenommen: load_data_wikiviews.load_to_postgres_trigger_clickhouse.time_check (keine Messung, 300.0 s)
+  - Dauer angenommen: load_data_wikiviews.load_to_postgres_trigger_clickhouse.clean_table (keine Messung, 300.0 s)
+  - Dauer angenommen: load_data_wikiviews.load_to_postgres_trigger_clickhouse.success (keine Messung, 300.0 s)
+  - Dauer angenommen: load_data_wikiviews.create_success_file (keine Messung, 300.0 s)
+  - Dauer angenommen: load_data_wikiviews.send_message_telegram (keine Messung, 300.0 s)
+  - edge_dropped: dags/wikiviews/load_data.py:165 (Kanten-Ende nicht statisch aufloesbar)
+  - edge_dropped: dags/wikiviews/load_data.py:166 (Kanten-Ende nicht statisch aufloesbar)
+  - task_dag_inferred: dags/wikiviews/load_data.py:171 (create_success_file)
+  - edge_dropped: dags/wikiviews/load_data.py:187 (Kanten-Ende nicht statisch aufloesbar)
+
+Modellgrenzen
+-------------
+  - Unbegrenzte Parallelitaet angenommen: Lambda ist eine Untergrenze der realen Taktzeit. Das Tool sagt 'nicht schneller als Lambda', nicht 'Lambda ist erreichbar'.
+  - Retries, Sensor-Poking und Pool-Limits sind nicht modelliert. Sie koennen die reale Taktzeit nur erhoehen, nie senken; die Untergrenze bleibt gueltig.
+  - Latenz-Angaben sind Makespan: die Dauer eines Laufs von seinem Start bis zum Ende seines laengsten Pfads, nicht die Verspaetung gegenueber dem Plan.
+

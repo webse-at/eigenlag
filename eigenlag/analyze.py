@@ -17,7 +17,7 @@ from pathlib import Path
 from eigenlag.durations import DurationWarning, Statistic, TaskStats, resolve
 from eigenlag.maxplus import CondensedEdge, condense, critical_path, howard
 from eigenlag.model import Pipeline
-from eigenlag.parse_airflow import Warning_, node_name, parse_path, to_pipeline
+from eigenlag.parse_airflow import ParseResult, Warning_, node_name, parse_path, to_pipeline
 
 SENSOR_CYCLE_TEXT = (
     "Kreis enthaelt Wartezeit auf externe Ereignisse;"
@@ -43,7 +43,17 @@ def analyze(
     statistic: Statistic = "mean",
     fallback: TaskStats | None = None,
 ) -> Analysis:
-    result = parse_path(path)
+    return analyze_result(parse_path(path), stats, statistic, fallback)
+
+
+def analyze_result(
+    result: ParseResult,
+    stats: Mapping[str, TaskStats],
+    statistic: Statistic = "mean",
+    fallback: TaskStats | None = None,
+) -> Analysis:
+    """Wie analyze(), aber auf einem bereits geparsten Satz: die CLI parst zuerst
+    (DAG-Filter, dag_ids fuer die Metadaten-Query) und analysiert danach."""
     parse_warnings = result.warnings + tuple(w for dag in result.dags for w in dag.warnings)
 
     nodes = [node_name(dag, task) for dag in result.dags for task in dag.tasks]

@@ -19,7 +19,7 @@
     "max_active_runs": 45,
     "prev_run_success": 6,
     "sensor_dynamic_offset": 7,
-    "sensor_not_modeled": 27,
+    "sensor_not_modeled": 26,
     "task_dag_inferred": 54,
     "task_mapping": 28,
     "unresolved_default_args": 336,

@@ -4,6 +4,15 @@ Feature-Historie. Ein Eintrag pro abgeschlossenem Feature, nicht pro Commit.
 
 ## Unreleased
 
+### Session 009 — CLI `eigenlag analyze` (2026-07-15)
+
+- `eigenlag/cli.py`: `eigenlag analyze PFAD` (argparse, Entry-Point via `[project.scripts]`, per `pipx install .` verprobt). Quellen `--db` / `--rest --rest-token` / `--assume-duration` mischbar wie in 008; `--dag-id`, `--statistic`, `--since`, `--period`, `--samples`, `--what-if` (wiederholbar: `task=NAME:SEKUNDEN`, `drop-edge=SRC->DST`), `--json`. Exit-Codes: 0 analysiert (auch instabil), 1 Bedienfehler, 2 kein analysierbarer DAG
+- `eigenlag/report.py`: der deutsche Report — Urteil zuerst (stabil / an der Grenze mit Rückkopplungs-Hinweis / instabil mit Drift und Zeit bis 1 h Rückstand / „nicht anwendbar: keine Cross-Run-Kante" statt λ = 0), Kreis doppelt mit Signal und Datei:Zeile je Segment (ADR-002), Monte Carlo mit Pendel-Satz, What-if-Ranking (Standard-Szenarien automatisch, „bringt exakt null"), Pflicht-Warnblock (nie abschaltbar, inkl. F-Divergenz-Erklärung nach ADR-020) und Modellgrenzen-Fußzeile. `compose()` liefert die stabilen JSON-Keys für das 010-Gate, `render()` den Text aus derselben Quelle
+- `eigenlag/montecarlo.py`: stdlib-Monte-Carlo (analytischer Lognormal-Fit aus p50/p95, Kondensation pro Sample, fester Seed, Tasks ohne Varianz-Basis konstant); 1000 Samples auf der Demo-Pipeline in 0,05 s, `numpy` bleibt draußen
+- ADR-021 umgesetzt: Selbst-Referenz-Sensor (`external_dag_id == eigene dag_id`, `execution_delta = n × T`) wird Cross-Kante im eigenen Namespace; 007-Graph-Check neu: 4836/4836 Karp = Howard
+- Postgres-Integrationsbeleg (offener Punkt aus 008): `percentile_cont`-Pfad == Python-Aggregation auf denselben Fixture-Zeilen, Wegwerf-Container `postgres:16`
+- 38 neue Tests (312 im Repo), Kern weiter ohne Laufzeit-Dependencies
+
 ### Session 008 — Dauern-Schicht (2026-07-15)
 
 - `eigenlag/durations.py`: drei Quellen, eine Ausgabeform (`TaskStats`: p50/p95/mean/n/operator/is_sensor) — `from_metadata_db` (sqlalchemy lazy, neues Extra `eigenlag[db]`, PostgreSQL aggregiert per `percentile_cont`, sonst Python), `from_rest` (urllib, Paginierung, max. 2 Requests/s, Seiten-Deckel mit Warnung), `assume(seconds)`. `pick`/`resolve` bauen das `durations`-Mapping für `to_pipeline`; Mischbetrieb und Mindest-Stichprobe (n < 5) fallen je Task mit Warnung auf den Assume-Wert

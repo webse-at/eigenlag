@@ -604,3 +604,200 @@ Kern weiterhin ohne Pflicht-Dependencies (`dependencies = []` unverändert); `sq
 **Offen und in Spec 009 aufgenommen:** der Postgres-Aggregationspfad (`percentile_cont`) lief nur gegen Pins, nicht gegen ein echtes Postgres. Kommt in 009 als Wegwerf-Container (`docker run postgres`), nicht gegen die Dev-DB eines anderen Projekts.
 
 **Entscheidung zum 009-Schnitt (die offene Orchestrator-Frage aus STATUS):** **Airflow-only-CLI zuerst, dbt-Parser vertagt bis nach dem Feedback-Meilenstein.** Begründung: (1) Die Zwischenbewertung nach Phase 1 (positioning.md) empfiehlt, das Tool nach 009 an 2–3 echte Teams zu bringen — das CLI ist das gating Artefakt, jede Woche dbt-Parser davor verzögert den einzigen Test, der die Marktfrage beantworten kann. (2) dbt-λ ist strukturell fast immer der λ=1-Fall (Selbst-Kante des inkrementellen Models); der Produktwert dort ist die Abdeckungs-Erzählung, nicht die Rechnung, und die blockiert nichts. (3) Wenn das Feedback sagt, dass die dbt-Nutzer der eigentliche Markt sind, bauen wir den Parser mit dem Wissen, welchen Report sie brauchen — statt vorher zu raten. Roadmap entsprechend umgestellt: 008b (dbt) hängt jetzt am Feedback-Meilenstein nach 009.
+
+---
+
+## Session 009 — CLI `eigenlag analyze`: der Report ist das Produkt (2026-07-15)
+
+**Auftrag:** `eigenlag/cli.py` (argparse, Entry-Point, Exit-Codes 0/1/2), `eigenlag/report.py` (deutscher Report + `--json`), `eigenlag/montecarlo.py` (stdlib), ADR-021 im Parser, vier Verifikations-Läufe, pipx-Rauchtest. Spec: `cc-sessions/009_offen-cli.md`.
+
+**Was gebaut wurde (alles Tests-zuerst, rot gesehen):**
+
+- **ADR-021 umgesetzt:** `_sensor_edges` behandelt `external_dag_id == eigene dag_id` als Selbst-Referenz — Kante `CrossEdge(ziel_task, sensor_task, n)` im eigenen Namespace, T-Gleichheits- und Merge-Frage entfallen per Konstruktion. 4 neue Tests (n=1, n=2, kein Vielfaches → Warnung wie gehabt, Namespace-Pin über `to_pipeline`); erster Lauf: 3 failed wie erwartet (der Warnungs-Fall war schon vorher Warnung).
+- **`eigenlag/montecarlo.py`:** analytischer Lognormal-Fit aus den Aggregaten (`mu = ln p50`, `sigma = (ln p95 − ln p50) / 1.6449`), Sampling per `random.lognormvariate`, Auswertung per `statistics.quantiles(n=100, method="inclusive")`. Kondensation läuft **pro Sample** neu; der Pfadwechsel-Test pinnt das mit einer Fixture, in der zwei Intra-Pfade konkurrieren (p lognormal-breit p50=90/p95=200, q konstant 100): Sample-Median exakt der q-Pfad (115), p95 der p-Pfad (~215) — eine einmal gebaute Matrix bliebe bei 115 hängen. Tasks mit n < 5 (inkl. `assume`, n=0) samplen konstant und stehen im Report. Seed fest (Default 20260715): derselbe Aufruf liefert dieselben Zahlen, per Test gepinnt.
+- **`eigenlag/report.py`:** `compose()` baut ein dict mit stabilen Keys (das CI-Gate in 010 liest genau diese Felder), `render()` macht daraus den deutschen Text — eine Quelle, Text und `--json` können nicht auseinanderlaufen. Reihenfolge wie in der Spec: Kopf, Urteil (stabil / an der Grenze mit Abschnitt-9-Hinweis / instabil mit Drift und Zeit bis 1 h Rückstand; kein Kreis → „nicht anwendbar: keine Cross-Run-Kante", per Test gepinnt dass nirgends „Lambda = 0" steht), Kreis doppelt (ADR-002, je Segment mit Signal und Datei:Zeile aus `ParsedCrossEdge`), Monte Carlo (Pendel-Satz wenn λ_p95 > T > λ_p50), What-if-Ranking (Standard-Szenarien automatisch: jede Kreis-Task halbiert, jede Cross-Kante entfernt, sortiert; „bringt exakt null"-Satz), Pflicht-Warnblock (nie abschaltbar; Sensor-im-Kreis-Text, F-Divergenz-Erklärung nach ADR-020, angenommene/dünne Dauern, nicht modellierte Kanten mit Datei:Zeile), Modellgrenzen-Fußzeile (Untergrenze, Retries/Pools, Makespan).
+- **`eigenlag/cli.py`:** `eigenlag analyze PFAD` mit exakt der Spec-Flag-Liste, Entry-Point über `[project.scripts]`. Quellen-Mischung wie 008 (DB/REST liefert, `--assume-duration` füllt je Task mit Warnung); ohne jede Quelle Abbruch mit Erklärung. `--dag-id` zieht transitiv die DAGs mit, auf die Sensor-Kanten zeigen (sonst wäre die Pipeline nicht baubar). DB-URLs werden im Report-Kopf passwort-geschwärzt. Exit-Codes per Test gepinnt: 0 auch bei instabil, 1 Bedienfehler (auch unbekannter What-if-Task), 2 kein analysierbarer DAG (mit Warnungs-Liste auf stderr).
+- **`analyze_result()`** als Schwester von `analyze()` (Refactor): die CLI parst zuerst (Filter, dag_ids für die Metadaten-Query) und analysiert den gefilterten Satz.
+
+**Messvorbehalt Monte Carlo (Vorentscheidung 2): 1000 Samples auf der Demo-Pipeline in 0,05 s** — Faktor 100 unter der 5-s-Schwelle, `numpy` bleibt draußen, `dependencies = []` unverändert. Beleg unten (Lauf 1).
+
+**007-Graph-Check neu gelaufen** (Konsistenz-Beleg zum geänderten Parser): **4836/4836 Graphen Karp = Howard**, 4827 zusätzlich Brute-Force. Einzige inhaltliche Änderung gegenüber dem 007-Stand: `bhatiadeepak0805/OmniRoute_Project_Group_4` / `dag2_batch_pipeline_harsh` hat jetzt 1 Cross-Kante statt 0 und die `sensor_not_modeled`-Warnung auf `DAG_Codes/dag_2.py:480` ist weg (26 statt 27) — exakt der ADR-021-Fall, sonst nichts.
+
+### Die vier Verifikations-Läufe (Artefakte in `scan/009_cli/`)
+
+**Lauf 1a — Demo-Pipeline als Python-Aufruf** (`scan/009_cli/verif_demo.py`, Output `lauf1_demo.txt`): alle Prototyp-Pins getroffen, auch die drei What-if-Szenarien über die Report-Maschinerie:
+
+```
+Lambda           = 4.40 h  (Pin: 4.40)
+Kreis kondensiert: [('monitor', 'monitor', 1)]
+Kreis aufgeloest : ['core', 'features', 'retrain', 'score', 'monitor']
+Drift bei T=3.0  = 1.40 h/Lauf  (Pin: 1.40)
+What-if Cross-Kante monitor -> core entfernt (angefragt): Lambda = 2.5
+What-if Task retrain = 0,8 s (angefragt): Lambda = 3.5999999999999996
+What-if Task core = 0,55 s (angefragt): Lambda = 3.85
+
+Monte Carlo 1000 Samples auf der Demo-Pipeline: 0.05 s
+lambda_p50 = 4.51 h, lambda_p95 = 5.56 h
+Anteil ueber T=3.0: 100%, konstant: ()
+```
+
+**Lauf 1b — CLI gegen ein minimales DAG-File mit `--assume-duration`** (voller Report in `scan/009_cli/lauf1_minidag_report.txt`, Fixture `minidag_mini.py`): Exit 0, Urteil stabil (λ = 600 s gegen T = 3600 s, Reserve 83,33 %), Kreis doppelt mit `depends_on_past, mini.py:6`, What-if angefragt `task=lade:120` → λ 120 s, 2 `dauer_angenommen`-Warnungen, Modellgrenzen-Fußzeile.
+
+**Lauf 2 — echtes Airflow 3.3.0:** `.venv-airflow` wiederverwendet, diesmal `AIRFLOW_HOME=data/airflow-home/` (bleibt liegen, unter dem gitignorten `data/`). `airflow db migrate`, die beiden 008-Testfall-DAGs nach `data/airflow-home/dags/`, je 6 Läufe `airflow dags test` (12/12 ok). Dann der Report, den ein echtes Team sehen würde — vollständig:
+
+    eigenlag analyze
+    ================
+    
+    DAG:        testfall_dop_sensor (testfall_dop_sensor.py:10, Schedule '@hourly')
+    DAG:        testfall_gruppe (testfall_gruppe.py:9, Schedule '@hourly')
+    Takt T:     3600 s (60 min), Quelle: Schedule '@hourly'
+    Dauern:     Metadaten-DB sqlite:///data/airflow-home/airflow.db, Fenster 90 Tage
+    Statistik:  mean. Fuer den asymptotischen Drift ist der Mittelwert die theoretisch richtige Groesse; er ist ausreisserempfindlich, ein einzelner haengender Lauf kann ihn deutlich verschieben.
+    Stichprobe: Laeufe je Task minimal 6, im Median 6.
+    
+    Urteil
+    ------
+    Stabil: Lambda = 1,19 s liegt unter dem Takt T = 3600 s (60 min). Reserve: 99,97 %. Verspaetungen aus einem einzelnen Lauf klingen ab, statt sich aufzubauen.
+    
+    Kritischer Kreis
+    ----------------
+    Kondensiert (der Kreis in der Cross-Run-Matrix, sein Zyklusmittel ist Lambda):
+      testfall_dop_sensor.arbeit -> testfall_dop_sensor.arbeit: Gewicht 1,19 s, 1 Periode zurueck [depends_on_past, testfall_dop_sensor.py:19]
+    Aufgeloest ueber alle Segmente: testfall_dop_sensor.arbeit
+    Der Weg zu einem kleineren Lambda fuehrt ueber diesen Kreis; eine Verkuerzung daneben aendert Lambda um exakt null. Ob eine einzelne Verkuerzung durchschlaegt oder ein zweiter Kreis mit gleichem Zyklusmittel uebernimmt, rechnet das What-if-Ranking unten nach.
+    
+    Monte Carlo
+    -----------
+    Lambda p50 = 1,18 s, Lambda p95 = 1,2 s (1000 Stichproben, Lognormal-Fit aus p50/p95 je Task, Seed 20260715: derselbe Aufruf liefert dieselben Zahlen).
+    p95 beantwortet, ob der Takt auch in einer schlechten Woche haelt, nicht nur im Durchschnitt.
+    Anteil der Stichproben mit Lambda ueber dem Takt: 0 %.
+    
+    What-if
+    -------
+    Basis: Lambda = 1,19 s. Sortiert nach neuem Lambda.
+      1. Cross-Kante testfall_dop_sensor.arbeit -> testfall_dop_sensor.arbeit entfernt: kein Kreis mehr, Taktgrenze nicht anwendbar
+      2. Task testfall_dop_sensor.arbeit halbiert (auf 0,59 s): Lambda 0,59 s, Veraenderung -0,59 s
+    Eine Optimierung, die nicht auf dem kritischen Kreis liegt, aendert Lambda um exakt null. Das Ranking zeigt deshalb nur Kreis-Tasks und Cross-Kanten; alles andere ist fuer die Taktgrenze wirkungslos, so nuetzlich es fuer die Latenz eines Einzellaufs sein mag.
+    
+    Warnungen
+    ---------
+    Keine.
+    
+    Modellgrenzen
+    -------------
+      - Unbegrenzte Parallelitaet angenommen: Lambda ist eine Untergrenze der realen Taktzeit. Das Tool sagt 'nicht schneller als Lambda', nicht 'Lambda ist erreichbar'.
+      - Retries, Sensor-Poking und Pool-Limits sind nicht modelliert. Sie koennen die reale Taktzeit nur erhoehen, nie senken; die Untergrenze bleibt gueltig.
+      - Latenz-Angaben sind Makespan: die Dauer eines Laufs von seinem Start bis zum Ende seines laengsten Pfads, nicht die Verspaetung gegenueber dem Plan.
+    
+
+λ = 1,19 s ist exakt `mean(arbeit)` aus der echten Metadaten-DB — deckungsgleich mit dem 008-Wert (1,186 s), jetzt durch die komplette CLI-Kette (parse → DB-Dauern → Report).
+
+**Lauf 3 — Postgres-Wegwerf-Container** (offener Punkt aus 008, `scan/009_cli/verif_postgres.py`, Output `lauf3_postgres.txt`): `docker run --rm postgres:16`, dieselben Fixture-Zeilen wie die SQLite-Tests (inkl. failed/NULL/stale/fremder-DAG-Filterfälle) in beide Datenbanken, `from_metadata_db` gegen beide. **Der `percentile_cont`-Pfad liefert auf allen 4 Tasks exakt dieselben Werte wie die Python-Aggregation** (Toleranz 1e-9), inkl. des Interpolations-Falls `rare` (n=2, p95 = 3,9):
+
+```
+etl.extract     pg:  n=5 mean=30 p50=30 p95=48 op=PythonOperator
+                lite:n=5 mean=30 p50=30 p95=48 op=PythonOperator
+etl.grp.load    pg:  n=5 mean=3 p50=3 p95=4.8 op=PythonOperator
+                lite:n=5 mean=3 p50=3 p95=4.8 op=PythonOperator
+etl.rare        pg:  n=2 mean=3 p50=3 p95=3.9 op=None
+                lite:n=2 mean=3 p50=3 p95=3.9 op=None
+etl.wait        pg:  n=5 mean=60 p50=60 p95=60 op=ExternalTaskSensor
+                lite:n=5 mean=60 p50=60 p95=60 op=ExternalTaskSensor
+
+Postgres (percentile_cont) == SQLite (Python-Aggregation): identisch.
+```
+
+Container danach gestoppt und weg (`docker ps -a`: leer), nichts persistiert. Treiber `psycopg2-binary` nur in der Dev-venv, keine Projekt-Dependency.
+
+**Lauf 4 — Flaggschiff `load_data_wikiviews`** mit `--assume-duration 300` (der Report für späteres Launch-Material) — vollständig:
+
+    eigenlag analyze
+    ================
+    
+    DAG:        load_data_wikiviews (dags/wikiviews/load_data.py:55, Schedule '@hourly')
+    Takt T:     3600 s (60 min), Quelle: Schedule '@hourly'
+    Dauern:     angenommen: 300 s je Task ohne Messung
+    Statistik:  mean. Fuer den asymptotischen Drift ist der Mittelwert die theoretisch richtige Groesse; er ist ausreisserempfindlich, ein einzelner haengender Lauf kann ihn deutlich verschieben.
+    Stichprobe: Laeufe je Task minimal 0, im Median 0.
+    
+    Urteil
+    ------
+    Stabil: Lambda = 600 s (10 min) liegt unter dem Takt T = 3600 s (60 min). Reserve: 83,33 %. Verspaetungen aus einem einzelnen Lauf klingen ab, statt sich aufzubauen.
+    
+    Kritischer Kreis
+    ----------------
+    Kondensiert (der Kreis in der Cross-Run-Matrix, sein Zyklusmittel ist Lambda):
+      load_data_wikiviews.load_data -> load_data_wikiviews.load_data: Gewicht 600 s (10 min), 1 Periode zurueck [wait_for_downstream, dags/wikiviews/load_data.py:49]
+        als Task-Pfad: load_data_wikiviews.сheck_data -> load_data_wikiviews.load_data
+    Aufgeloest ueber alle Segmente: load_data_wikiviews.сheck_data -> load_data_wikiviews.load_data
+    Der Weg zu einem kleineren Lambda fuehrt ueber diesen Kreis; eine Verkuerzung daneben aendert Lambda um exakt null. Ob eine einzelne Verkuerzung durchschlaegt oder ein zweiter Kreis mit gleichem Zyklusmittel uebernimmt, rechnet das What-if-Ranking unten nach.
+    
+    Monte Carlo
+    -----------
+    Lambda p50 = 600 s (10 min), Lambda p95 = 600 s (10 min) (1000 Stichproben, Lognormal-Fit aus p50/p95 je Task, Seed 20260715: derselbe Aufruf liefert dieselben Zahlen).
+    p95 beantwortet, ob der Takt auch in einer schlechten Woche haelt, nicht nur im Durchschnitt.
+    Anteil der Stichproben mit Lambda ueber dem Takt: 0 %.
+    Konstant gesampelt (keine belastbare Streuung, angenommene oder duenne Dauern): load_data_wikiviews.create_success_file, load_data_wikiviews.load_data, load_data_wikiviews.load_to_postgres_trigger_clickhouse.clean_table, load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day, load_data_wikiviews.load_to_postgres_trigger_clickhouse.success, load_data_wikiviews.load_to_postgres_trigger_clickhouse.time_check, load_data_wikiviews.send_message_telegram, load_data_wikiviews.сheck_data. Die p95-Aussage unterschaetzt die Streuung dieser Tasks.
+    
+    What-if
+    -------
+    Basis: Lambda = 600 s (10 min). Sortiert nach neuem Lambda.
+      1. Task load_data_wikiviews.сheck_data halbiert (auf 150 s): Lambda 600 s (10 min), Veraenderung +0 s
+      2. Task load_data_wikiviews.load_data halbiert (auf 150 s): Lambda 600 s (10 min), Veraenderung +0 s
+      3. Cross-Kante load_data_wikiviews.сheck_data -> load_data_wikiviews.сheck_data entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+      4. Cross-Kante load_data_wikiviews.load_data -> load_data_wikiviews.сheck_data entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+      5. Cross-Kante load_data_wikiviews.load_data -> load_data_wikiviews.load_data entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+      6. Cross-Kante load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day -> load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+      7. Cross-Kante load_data_wikiviews.load_to_postgres_trigger_clickhouse.success -> load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+      8. Cross-Kante load_data_wikiviews.load_to_postgres_trigger_clickhouse.time_check -> load_data_wikiviews.load_to_postgres_trigger_clickhouse.time_check entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+      9. Cross-Kante load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day -> load_data_wikiviews.load_to_postgres_trigger_clickhouse.time_check entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+      10. Cross-Kante load_data_wikiviews.load_to_postgres_trigger_clickhouse.clean_table -> load_data_wikiviews.load_to_postgres_trigger_clickhouse.clean_table entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+      11. Cross-Kante load_data_wikiviews.load_to_postgres_trigger_clickhouse.success -> load_data_wikiviews.load_to_postgres_trigger_clickhouse.clean_table entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+      12. Cross-Kante load_data_wikiviews.load_to_postgres_trigger_clickhouse.success -> load_data_wikiviews.load_to_postgres_trigger_clickhouse.success entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+      13. Cross-Kante load_data_wikiviews.create_success_file -> load_data_wikiviews.create_success_file entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+      14. Cross-Kante load_data_wikiviews.send_message_telegram -> load_data_wikiviews.create_success_file entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+      15. Cross-Kante load_data_wikiviews.send_message_telegram -> load_data_wikiviews.send_message_telegram entfernt: Lambda 600 s (10 min), Veraenderung +0 s
+    Eine Optimierung, die nicht auf dem kritischen Kreis liegt, aendert Lambda um exakt null. Das Ranking zeigt deshalb nur Kreis-Tasks und Cross-Kanten; alles andere ist fuer die Taktgrenze wirkungslos, so nuetzlich es fuer die Latenz eines Einzellaufs sein mag.
+    
+    Warnungen
+    ---------
+      - Dauer angenommen: load_data_wikiviews.сheck_data (keine Messung, 300.0 s)
+      - Dauer angenommen: load_data_wikiviews.load_data (keine Messung, 300.0 s)
+      - Dauer angenommen: load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day (keine Messung, 300.0 s)
+      - Dauer angenommen: load_data_wikiviews.load_to_postgres_trigger_clickhouse.time_check (keine Messung, 300.0 s)
+      - Dauer angenommen: load_data_wikiviews.load_to_postgres_trigger_clickhouse.clean_table (keine Messung, 300.0 s)
+      - Dauer angenommen: load_data_wikiviews.load_to_postgres_trigger_clickhouse.success (keine Messung, 300.0 s)
+      - Dauer angenommen: load_data_wikiviews.create_success_file (keine Messung, 300.0 s)
+      - Dauer angenommen: load_data_wikiviews.send_message_telegram (keine Messung, 300.0 s)
+      - edge_dropped: dags/wikiviews/load_data.py:165 (Kanten-Ende nicht statisch aufloesbar)
+      - edge_dropped: dags/wikiviews/load_data.py:166 (Kanten-Ende nicht statisch aufloesbar)
+      - task_dag_inferred: dags/wikiviews/load_data.py:171 (create_success_file)
+      - edge_dropped: dags/wikiviews/load_data.py:187 (Kanten-Ende nicht statisch aufloesbar)
+    
+    Modellgrenzen
+    -------------
+      - Unbegrenzte Parallelitaet angenommen: Lambda ist eine Untergrenze der realen Taktzeit. Das Tool sagt 'nicht schneller als Lambda', nicht 'Lambda ist erreichbar'.
+      - Retries, Sensor-Poking und Pool-Limits sind nicht modelliert. Sie koennen die reale Taktzeit nur erhoehen, nie senken; die Untergrenze bleibt gueltig.
+      - Latenz-Angaben sind Makespan: die Dauer eines Laufs von seinem Start bis zum Ende seines laengsten Pfads, nicht die Verspaetung gegenueber dem Plan.
+    
+
+λ = 600 s = die 007a-Struktur (2 × 300), Kreis kondensiert `load_data → load_data`, aufgelöst `сheck_data → load_data`, 8 `dauer_angenommen`-Warnungen — deckungsgleich mit 008.
+
+**Zwei Befunde aus Lauf 4, beide behoben:**
+
+1. **Alle What-if-Deltas sind +0 s, und das ist korrekt:** bei uniformen 300-s-Annahmen erreichen mehrere disjunkte Kreise dasselbe Zyklusmittel (600 s). Wer eine Kreis-Task halbiert, übergibt an den nächsten Kreis — λ bleibt. Der Report-Satz „Jede Verkürzung auf diesem Kreis senkt Lambda" widersprach damit den eigenen Zahlen im selben Report; er benennt jetzt den Gleichstand-Fall und verweist auf das Ranking. Ehrlichkeit vor Verkaufs-Satz.
+2. **`ast.parse` schreibt für krumme Escapes in fremden Files (`"\;"` in einem bash_command) SyntaxWarnings auf stderr** und verschmutzt den CLI-Output. Fremde Files sind Systemgrenze: Warning jetzt unterdrückt, per Test gepinnt (zuerst rot).
+
+**pipx-Rauchtest:** pipx via apt installiert (1.8.0), `pipx install .` → „installed package eigenlag 0.1.0, installed using Python 3.14.4", `eigenlag --help` und `eigenlag analyze <minidag> --assume-duration 600 --json` liefern über den Entry-Point dieselben Ergebnisse. Die Mechanik trägt; README/Versionierung bleiben 011.
+
+**Verifiziert:**
+
+```
+pytest: 312 passed (38 neue: 4 Parser/ADR-021, 6 Monte Carlo, 14 Report, 13 CLI, 1 SyntaxWarning)
+ruff check: All checks passed!  |  ruff format --check: 64 files already formatted
+mypy: Success: no issues found in 20 source files (eigenlag/)
+```
+
+Kern weiterhin ohne Pflicht-Dependencies (`dependencies = []` unverändert, Akzeptanz „null oder numpy mit Messbeleg": null, Messbeleg 0,05 s steht oben).
+
+**Modell-Notiz für den Orchestrator:** Ein Lauf mit `--samples 1000` auf der Demo zeigt `lambda_p50 = 4.51` — der MC-Median liegt **über** dem Punkt-λ auf mean (4.40), weil der Lognormal-Fit aus p50/p95 einen anderen Mittelwert impliziert als das arithmetische mean der Messung und das Maximum konkurrierender Pfade nach oben zieht. Das ist konsistent (zwei verschiedene Schätzer, beide ausgewiesen), sollte aber im 010-Gate nicht als „Punkt-λ" gegen Schwellen laufen: das Gate soll explizit festlegen, welcher der beiden Werte gilt.

@@ -16,6 +16,9 @@ scanner = ["pyyaml", "types-PyYAML"]
 # laeuft ohne; REST (from_rest) braucht nur die stdlib.
 db = ["sqlalchemy"]
 
+[project.scripts]
+eigenlag = "eigenlag.cli:main"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

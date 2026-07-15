@@ -1177,7 +1177,6 @@
 {"repo": "beefjerky/new_airflow", "dag_id": null, "file": "tests/jobs.py", "lineno": 1182, "kind": "unresolved_default_args", "detail": "default_args"}
 {"repo": "beefjerky/new_airflow", "dag_id": null, "file": "tests/jobs.py", "lineno": 1215, "kind": "unresolved_default_args", "detail": "default_args"}
 {"repo": "bhatiadeepak0805/OmniRoute_Project_Group_4", "dag_id": "dag2_batch_pipeline_harsh", "file": "DAG_Codes/dag_2.py", "lineno": 427, "kind": "sensor_dynamic_offset", "detail": "execution_date_fn: Rueckgabewert statisch nicht bestimmbar"}
-{"repo": "bhatiadeepak0805/OmniRoute_Project_Group_4", "dag_id": "dag2_batch_pipeline_harsh", "file": "DAG_Codes/dag_2.py", "lineno": 480, "kind": "sensor_not_modeled", "detail": "Ziel-DAG 'dag2_batch_pipeline_harsh' nicht (eindeutig) im Parse-Satz"}
 {"repo": "billCaplan/apache-airflow", "file": "tests/models/test_dag.py", "lineno": 184, "kind": "ambiguous_task", "detail": "keine DAG-Zuordnung moeglich, mehrere oder keine DAGs im File"}
 {"repo": "billCaplan/apache-airflow", "file": "tests/models/test_dag.py", "lineno": 193, "kind": "ambiguous_task", "detail": "keine DAG-Zuordnung moeglich, mehrere oder keine DAGs im File"}
 {"repo": "billCaplan/apache-airflow", "file": "tests/models/test_dag.py", "lineno": 200, "kind": "ambiguous_task", "detail": "keine DAG-Zuordnung moeglich, mehrere oder keine DAGs im File"}

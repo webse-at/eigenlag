@@ -98,7 +98,7 @@ Bei Terminierung ist der Kreis in der finalen Policy der kritische Kreis. Howard
 
 ## 7. Stochastik
 
-Task-Dauern sind keine Konstanten. Aus der Airflow-Metadaten-DB werden pro Task die historischen Laufzeiten gezogen und ein Lognormal-Fit gerechnet (Lognormal, weil Laufzeiten positiv und rechtsschief sind). Monte Carlo über diese Verteilungen liefert eine Verteilung von λ, aus der `λ_p50` und `λ_p95` abgelesen werden.
+Task-Dauern sind keine Konstanten. Je Task wird ein Lognormal-Fit gerechnet (Lognormal, weil Laufzeiten positiv und rechtsschief sind), und zwar analytisch aus den vorhandenen Aggregaten: `mu = ln(p50)`, `sigma = (ln(p95) − ln(p50)) / 1,6449` (z-Wert der 95. Perzentile) — Rohdaten braucht es dafür nicht. Tasks ohne belastbare Streuung (n < 5, insbesondere `assume`-Werte) gehen als Konstante ins Sampling; eine erfundene Varianz wäre eine erfundene p95. Monte Carlo über diese Verteilungen liefert eine Verteilung von λ, aus der `λ_p50` und `λ_p95` abgelesen werden. Wichtig: die Kondensation läuft **pro Sample** neu, weil die Kantengewichte der kondensierten Matrix längste Pfade sind und bei anderen Dauern ein anderer Pfad der längste sein kann (Umsetzung `eigenlag/montecarlo.py`, Session 009).
 
 `λ_p95` ist die eigentlich interessante Zahl: sie beantwortet, ob der Schedule auch an einem schlechten Tag hält. Ein Schedule, der gegen `λ_p50` stabil ist und gegen `λ_p95` nicht, ist eine Pipeline, die einmal pro Monat aus dem Ruder läuft und die niemand erklären kann.
 

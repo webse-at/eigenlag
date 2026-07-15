@@ -43,16 +43,17 @@ eigenlag/
     ├── schedule.py              Cron, Preset, timedelta, Dataset: sub-täglich oder nicht,
     │                            plus period_seconds: der Takt T als Zahl (aus scanner/ umgezogen, 007)
     ├── parse_airflow.py         AST-Parser: DAG-Files → ParsedDag; to_pipeline heiratet Struktur mit Dauern
-    ├── montecarlo.py            Lognormal-Fits, λ_p50, λ_p95
-    ├── whatif.py                What-if-Szenarien und Ranking
-    ├── parse_dbt.py             manifest.json
+    ├── montecarlo.py            analytischer Lognormal-Fit aus p50/p95, Kondensation pro Sample,
+    │                            λ_p50/λ_p95, fester Seed — stdlib, kein numpy (Session 009)
+    ├── parse_dbt.py             manifest.json (vertagt bis nach dem Feedback-Meilenstein)
     ├── durations.py             Airflow-Metadaten-DB (Extra [db]), REST (v1/v2), --assume-duration;
     │                            je Task p50/p95/mean/n/operator/is_sensor (Session 008)
-    ├── analyze.py               analyze(): parsen + Dauern heiraten + condense + Howard,
-    │                            Pflicht-Warnung bei Sensor im kritischen Kreis (Session 008)
-    ├── gate.py                  CI-Gate, λ vor/nach Diff
-    ├── report.py                Nutzer-Ausgabe (deutsch)
-    ├── cli.py                   Argument-Parsing, Subcommands
+    ├── analyze.py               analyze()/analyze_result(): parsen + Dauern heiraten + condense +
+    │                            Howard, Pflicht-Warnung bei Sensor im kritischen Kreis (008/009)
+    ├── gate.py                  CI-Gate, λ vor/nach Diff (Session 010)
+    ├── report.py                compose(): stabile JSON-Keys fürs Gate; render(): deutscher Text;
+    │                            What-if-Szenarien und Ranking (Session 009)
+    ├── cli.py                   argparse, `eigenlag analyze`, Exit-Codes 0/1/2 (Session 009)
     └── *_test.py
 ```
 

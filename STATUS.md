@@ -2,55 +2,52 @@
 
 > Wird am Ende jeder Session überschrieben. Schnelle Orientierung für die nächste Session.
 
-## Stand: Session 008 — Dauern-Schicht: aus Struktur-Aussagen werden Zeit-Aussagen (2026-07-15)
+## Stand: Session 009 — CLI `eigenlag analyze`: der Report ist das Produkt (2026-07-15)
 
-**Das erste λ in Sekunden steht, end-to-end.** `eigenlag/durations.py` beschafft echte
-Task-Dauern (Metadaten-DB via sqlalchemy als Extra `[db]`, REST via urllib, `assume` als
-Fallback; je Task p50/p95/mean/n/operator/is_sensor), `eigenlag/analyze.py` komponiert
-parsen → Dauern heiraten → kondensieren → Howard. Sensor auf dem kritischen Kreis erzeugt
-die Pflicht-Warnung (`sensor_im_kritischen_kreis`), Mischbetrieb und Mindest-Stichprobe
-(n < 5) warnen je Task und fallen auf den Assume-Wert.
+**Das Tool ist jetzt in fremde Hände gebbar.** `pipx install .` → `eigenlag analyze PFAD`
+mit `--db`/`--rest`/`--assume-duration` liefert den deutschen Report (Urteil zuerst,
+Kreis doppelt, Monte Carlo, What-if-Ranking, Pflicht-Warnblock, Modellgrenzen) und per
+`--json` dieselben Felder maschinenlesbar (stabile Keys, ab 010 vom CI-Gate gelesen).
+Exit-Codes: 0 analysiert (auch instabil), 1 Bedienfehler, 2 kein analysierbarer DAG.
 
-### Kern-Ergebnisse (Belege in `wiki/log.md`, Session 008)
+### Kern-Ergebnisse (Belege in `wiki/log.md`, Session 009; Artefakte in `scan/009_cli/`)
 
 | Was | Ergebnis |
 |---|---|
-| Schema-Verifikation | Airflow **3.3.0** standalone (`.venv-airflow`, Python 3.12.13): alle `task_instance`-Annahmen halten (Spalten, Sekunden, TaskGroup-Prefix `grp.laden`, `operator`-Klassenname) |
-| REST-Befund | **Airflow 3 hat `/api/v1` (404) und Basic Auth (401) entfernt** → `from_rest(..., api_version="v2")` mit JWT-Token als Default, `"v1"`+Basic für Airflow 2. DB- und REST-Pfad liefern identische Statistik auf denselben Läufen |
-| End-to-End echt | `analyze(testfall_dop_sensor)` mit DB-Dauern: **λ = 1,186 s** (Selbstkante `arbeit`), CP 2,977 s — Teilpfad-Fall in Sekunden |
-| End-to-End Flaggschiff | `load_data_wikiviews` mit `assume(300)`: **λ = 600 s** vs. CP 900 s = die 007-Struktur (2 vs. 3) × 300; 8 `dauer_angenommen`-Warnungen |
-| Sensor-Nachlauf (14 Fälle, ganze Repos) | **1 modellierbar / 11 weiterhin nicht / 2 Ziel nicht im Repo** (`scan/008_sensor/nachlauf.csv`, je mit Permalink). Kein `periods > 1` in freier Wildbahn — ADR-006 bleibt test-belegt |
+| Demo-Pipeline | Alle Prototyp-Pins über die neue Maschinerie: λ 4,40 h, Drift 1,40, What-ifs 3,60 / 2,50 / 3,85 |
+| Monte Carlo Perf | **1000 Samples in 0,05 s** (Messvorbehalt Spec 009) → `numpy` bleibt draußen, `dependencies = []` |
+| Echtes Airflow | 3.3.0, 12 Läufe, `AIRFLOW_HOME=data/airflow-home/` (liegt noch): CLI-Report aus der echten Metadaten-DB, λ = 1,19 s = mean(arbeit), deckungsgleich 008 |
+| Postgres = SQLite | `percentile_cont`-Pfad == Python-Aggregation auf denselben Fixture-Zeilen (Wegwerf-Container `postgres:16`, offener 008-Punkt geschlossen) |
+| Flaggschiff | `load_data_wikiviews --assume-duration 300`: λ = 600 s, Kreis `сheck_data → load_data`, voller Report im Log |
+| ADR-021 | Selbst-Referenz-Sensor wird Kante; 007-Graph-Check neu: **4836/4836 Karp = Howard**, OmniRoute-Kante modelliert |
+| pipx | installiert (apt, 1.8.0), Entry-Point trägt: `eigenlag --help` + `analyze` über die pipx-Installation gelaufen |
 
 ### Verifiziert
 
-- `pytest`: **274 passed** (18 neue; beide neuen Module zuerst rot — `ModuleNotFoundError` im Log belegt)
-- `ruff check`, `ruff format --check` (38 Files), `mypy` (38 Files) grün
-- Kern ohne Pflicht-Dependencies (`dependencies = []`); `sqlalchemy` nur Extra `db` + `dev`
+- `pytest`: **312 passed** (38 neue; jedes neue Modul zuerst rot, Beleg im Log)
+- `ruff check`, `ruff format --check` (64 Files), `mypy eigenlag/` (20 Files) grün
+- Kern ohne Pflicht-Dependencies; `psycopg2-binary` nur ad hoc in der Dev-venv (Postgres-Beleg), keine Projekt-Dependency
 
 ## Hinweise für nächste Session
 
-- **Roadmap: 009 (CLI, Report, Monte Carlo, What-if)** ist der nächste Schritt. `analyze()`
-  liefert bereits alles, was der Report braucht (λ, Kreis kondensiert + aufgelöst, CP,
-  drei Warnungs-Sorten). Der Report soll λ auf `mean` **und** `p95` nebeneinander zeigen
-  (Vorentscheid 3 der Spec 008) und die F-Divergenz erklären (ADR-020).
-- **dbt-Parser ist offen:** er stand ursprünglich in 008, wurde beim Spec-Schnitt
-  herausgenommen (Roadmap-Zeile 008b, Spec fehlt). Vor oder mit 009 entscheiden, ob die
-  CLI Airflow-only startet.
-- **Für den Orchestrator zu prüfen:** (1) **Selbst-Referenz-Sensor als ADR-Kandidat** —
-  `bhatiadeepak0805/OmniRoute_Project_Group_4`, `DAG_Codes/dag_2.py:480`: ExternalTaskSensor
-  auf den *eigenen* DAG (5-h-Versatz). Der Parser modelliert nur Fremd-DAG-Sensoren; semantisch
-  wäre das eine Selbst-Rekurrenz-Kante. Lohnt eine Regel, oder bleibt es Warnung? (2) Der
-  PostgreSQL-Pfad von `from_metadata_db` (percentile_cont-SQL) ist gegen kein echtes Postgres
-  gelaufen — nur SQLite war im Standalone-Setup. Die Python-Aggregation ist gegen dieselben
-  Pins getestet; ein Postgres-Integrationslauf wäre der fehlende Beleg (z. B. Docker-Postgres
-  in 009/010 oder am echten Airflow eines Kunden).
-- **Airflow-Verifikations-Setup ist wegwerfbar:** `.venv-airflow/` (gitignored) mit
-  AIRFLOW_HOME darin; die beiden Test-DAGs liegen als Beleg in `scan/008_sensor/testfall_*.py`.
-  Wiederholung: uv venv, `apache-airflow==3.3.0` + Constraints, `airflow dags test`.
+- **Roadmap: 010 (CI-Gate `eigenlag check --against main`)** ist der nächste Code-Schritt —
+  aber die Roadmap setzt den **Feedback-Meilenstein vor den Polish**: das CLI an 2–3 echte
+  Teams bringen (Davids Netzwerk, Build-in-public), erst danach über Gate-Umfang, dbt und
+  Packaging-Reihenfolge entscheiden (`positioning.md`, Zwischenbewertung). Die Spec für 010
+  schreibt der Orchestrator.
+- **Für das 010-Gate festlegen:** welcher λ-Wert gegen Schwellen läuft — Punkt-λ auf der
+  gewählten Statistik oder MC-λ_p50/λ_p95. Die beiden Schätzer weichen systematisch ab
+  (Demo: 4,40 vs. 4,51; Modell-Notiz am Ende von `wiki/log.md`, Session 009).
+- **Gleichstand-Befund aus Lauf 4:** bei uniformen Assume-Dauern erreichen oft mehrere
+  Kreise dasselbe Zyklusmittel; alle Standard-What-ifs zeigen dann +0 s (korrekt, Report
+  benennt es). Fürs Feedback ggf. eine „gemeinsame Engpass-Menge"-Darstellung überlegen —
+  erst wenn echte Nutzer darüber stolpern.
+- **`data/airflow-home/`** (gitignored) enthält die Airflow-3.3.0-Test-DB der Verifikation;
+  wiederverwendbar für 010-Tests, wegwerfbar. `.venv-airflow/` liegt ebenfalls noch.
 - **Offen aus 006a (unverändert):** Import-genauer DAG-Check im Scanner, DAG-Generatoren
   mit Literal-Argumenten.
 
 ## Was David entscheiden muss
 
-1. Nichts Blockierendes. Session 009 kann starten; die dbt-Frage (Airflow-only-CLI zuerst?)
-   entscheidet der Orchestrator beim Spec-Schnitt.
+1. Nichts Blockierendes im Code. Die eigentliche Entscheidung ist der Feedback-Meilenstein:
+   an welche 2–3 Teams geht das CLI zuerst?

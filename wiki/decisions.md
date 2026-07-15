@@ -370,4 +370,6 @@ Der Parser aus 007 behandelt `external_dag_id` als Fremd-DAG-Verweis und meldete
 
 **Umsetzung:** in Session 009 (Parser-Erweiterung plus Tests: n = 1, n = 2, delta kein Vielfaches → Warnung wie gehabt). Die 007-Korpus-Artefakte sind Engineering-Artefakte, keine Launch-Zahlen (die Scanner-Zählung von Signal C ist unabhängig davon) — sie werden bei Gelegenheit, nicht zwingend sofort, neu gerechnet.
 
+**Umgesetzt am 2026-07-15 (Session 009).** Der 007-Graph-Check lief direkt danach neu: 4836/4836 Graphen Karp = Howard, einzige inhaltliche Änderung ist die jetzt modellierte OmniRoute-Kante (`DAG_Codes/dag_2.py:480`, `sensor_not_modeled` 27 → 26).
+
 **Einordnung des Fundes, ehrlich:** Das Repo sieht nach Kursarbeit aus (Projektgruppen-Name). Der Wert liegt in der Semantik-Lücke, die es aufgedeckt hat, nicht im Fall als Launch-Material.

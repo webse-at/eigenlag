@@ -1,0 +1,11 @@
+Lambda           = 4.40 h  (Pin: 4.40)
+Kreis kondensiert: [('monitor', 'monitor', 1)]
+Kreis aufgeloest : ['core', 'features', 'retrain', 'score', 'monitor']
+Drift bei T=3.0  = 1.40 h/Lauf  (Pin: 1.40)
+What-if Cross-Kante monitor -> core entfernt (angefragt): Lambda = 2.5
+What-if Task retrain = 0,8 s (angefragt): Lambda = 3.5999999999999996
+What-if Task core = 0,55 s (angefragt): Lambda = 3.85
+
+Monte Carlo 1000 Samples auf der Demo-Pipeline: 0.05 s
+lambda_p50 = 4.51 h, lambda_p95 = 5.56 h
+Anteil ueber T=3.0: 100%, konstant: ()

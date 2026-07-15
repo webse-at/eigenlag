@@ -1,0 +1,10 @@
+etl.extract     pg:  n=5 mean=30 p50=30 p95=48 op=PythonOperator
+                lite:n=5 mean=30 p50=30 p95=48 op=PythonOperator
+etl.grp.load    pg:  n=5 mean=3 p50=3 p95=4.8 op=PythonOperator
+                lite:n=5 mean=3 p50=3 p95=4.8 op=PythonOperator
+etl.rare        pg:  n=2 mean=3 p50=3 p95=3.9 op=None
+                lite:n=2 mean=3 p50=3 p95=3.9 op=None
+etl.wait        pg:  n=5 mean=60 p50=60 p95=60 op=ExternalTaskSensor
+                lite:n=5 mean=60 p50=60 p95=60 op=ExternalTaskSensor
+
+Postgres (percentile_cont) == SQLite (Python-Aggregation): identisch.

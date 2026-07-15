@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ast
 import re
+import warnings
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -989,6 +990,33 @@ def _sensor_edges(draft: _Draft, drafts: Sequence[_Draft]) -> list[ParsedCrossEd
         if sensor.external_dag_id is None:
             unmodeled("external_dag_id nicht statisch aufloesbar")
             continue
+        if sensor.external_dag_id == draft.dag_id:
+            # ADR-021: Selbst-Referenz — beide Enden im eigenen DAG, T-Gleichheit und
+            # Merge-Frage entfallen per Konstruktion. Lauf k wartet auf Lauf k - n.
+            if draft.period_s is None:
+                unmodeled("Takt des DAGs nicht bestimmbar")
+                continue
+            ratio = sensor.delta_s / draft.period_s
+            if ratio < 1 or abs(ratio - round(ratio)) > 1e-9:
+                unmodeled(f"execution_delta/T = {ratio:g} ist nicht ganzzahlig >= 1")
+                continue
+            if sensor.external_task_id is None:
+                unmodeled("external_task_id fehlt oder ist nicht statisch aufloesbar")
+                continue
+            if sensor.external_task_id not in draft.tasks:
+                unmodeled(f"Ziel-Task {sensor.external_task_id!r} nicht im eigenen DAG gefunden")
+                continue
+            edges.append(
+                ParsedCrossEdge(
+                    src=f"{draft.dag_id}.{sensor.external_task_id}",
+                    dst=sensor.task,
+                    periods=int(round(ratio)),
+                    signal="external_task_sensor",
+                    file=draft.file,
+                    lineno=sensor.lineno,
+                )
+            )
+            continue
         targets = [d for d in drafts if d.dag_id == sensor.external_dag_id and d is not draft]
         if len(targets) != 1:
             unmodeled(f"Ziel-DAG {sensor.external_dag_id!r} nicht (eindeutig) im Parse-Satz")
@@ -1050,7 +1078,12 @@ def _parse_file(
     source: str, path: str, dag_names: frozenset[str]
 ) -> tuple[list[_Draft], list[Warning_]]:
     try:
-        tree = ast.parse(source)
+        # Fremde Files sind Systemgrenze: ast.parse schreibt fuer krumme Escapes
+        # ("\;" in einem bash_command) SyntaxWarnings auf stderr — unterdruecken,
+        # der Befund gehoert nicht in den Terminal-Output der CLI.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
+            tree = ast.parse(source)
     except (SyntaxError, ValueError) as err:  # ValueError: Nullbytes in fremden Files
         lineno = getattr(err, "lineno", None) or 0
         return [], [Warning_("syntax_error", path, lineno, str(err)[:200])]

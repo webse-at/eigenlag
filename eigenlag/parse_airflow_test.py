@@ -312,6 +312,18 @@ def test_dag_aus_airflow_models_wird_geparst() -> None:
     assert len(result.dags) == 1
 
 
+def test_fremde_files_loesen_keine_python_syntax_warnungen_aus() -> None:
+    # Korpus-Fund (Verifikation 009): "\;" in einem bash_command laesst ast.parse eine
+    # SyntaxWarning auf stderr schreiben. Fremde Files sind Systemgrenze — der Befund
+    # gehoert ins Warning_-Modell, nicht in den Terminal-Output der CLI.
+    import warnings
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        parse_source('x = "\\;"\n', "dags/fremd.py")
+    assert [w for w in caught if issubclass(w.category, SyntaxWarning)] == []
+
+
 def test_syntaxfehler_ist_warnung_nicht_absturz() -> None:
     result = parse_source('print "python2"\n', "dags/broken.py")
     assert result.dags == ()
@@ -483,6 +495,51 @@ def test_c_versatz_null_ist_intra_run_und_kein_signal() -> None:
     down = sensor_pair("execution_delta=timedelta(hours=0),")
     assert down.cross == ()
     assert warning_kinds(down) == set()
+
+
+# --- Uebersetzungstabelle: C, Selbst-Referenz (ADR-021) -------------------------------
+
+SELF_SENSOR = """
+with DAG(dag_id="selbst", schedule="@hourly") as dag:
+    done = EmptyOperator(task_id="done")
+    wait = ExternalTaskSensor(
+        task_id="wait",
+        external_dag_id="selbst",
+        external_task_id="done",
+        {offset}
+    )
+    wait >> done
+"""
+
+
+def self_sensor(offset: str) -> ParsedDag:
+    return parse_one(SELF_SENSOR.format(offset=offset))
+
+
+def test_c_selbst_referenz_mit_einer_periode_wird_kante() -> None:
+    dag = self_sensor("execution_delta=timedelta(hours=1),")
+    assert edges(dag) == {("selbst.done", "wait", 1, "external_task_sensor")}
+    assert "sensor_not_modeled" not in warning_kinds(dag)
+
+
+def test_c_selbst_referenz_mit_zwei_perioden_wird_kante_mit_periods_2() -> None:
+    dag = self_sensor("execution_delta=timedelta(hours=2),")
+    assert edges(dag) == {("selbst.done", "wait", 2, "external_task_sensor")}
+
+
+def test_c_selbst_referenz_kein_vielfaches_keine_kante_sondern_warnung() -> None:
+    dag = self_sensor("execution_delta=timedelta(minutes=90),")
+    assert dag.cross == ()
+    assert "sensor_not_modeled" in warning_kinds(dag)
+
+
+def test_c_selbst_referenz_kante_landet_im_eigenen_namespace() -> None:
+    dag = self_sensor("execution_delta=timedelta(hours=1),")
+    pipeline = to_pipeline([dag])
+    assert ("selbst.done", "selbst.wait") not in pipeline.intra
+    assert [(e.src, e.dst, e.periods) for e in pipeline.cross] == [
+        ("selbst.done", "selbst.wait", 1)
+    ]
 
 
 # --- Uebersetzungstabelle: D und F ---------------------------------------------------
