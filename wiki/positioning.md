@@ -49,3 +49,16 @@ Phase 1 ist abgeschlossen und hat die Ausgangsthese in einem Punkt widerlegt, in
 **Die ehrliche Marktfrage bleibt offen.** Der Korpus kann den Markt nicht messen: die interessanten Fälle liegen in privaten Produktions-Repos, und genau das sagen unsere eigenen Daten (Konstruktoren-Kapselung bei Wikimedia vs. deren Fehlen im öffentlichen Korpus). Das ist Argument und Ausrede zugleich — entscheidbar nur durch echte Nutzer. Empfehlung: nach Session 009 (CLI auf echter Metadaten-DB) das Werkzeug an 2–3 echte Teams bringen, bevor weiter poliert wird.
 
 **Größtes Produktrisiko** (aus Session 005, `math.md` Abschnitt 9): Pipelines mit Uhr-Synchronisation liefern gemessene Dauern, die bereits das Ergebnis des eingeschwungenen Zustands sind. Ein Analyzer, der das ignoriert, produziert genau die Fehlalarme, die er anderen vorwirft. Die Sensor-Markierung (Spec 008) ist die erste Antwort; sie muss im Report sichtbar bleiben.
+
+## Der Use-Case: wann der verborgene Schmerz akut wird (2026-07-15)
+
+Der Schmerz ist nicht abwesend, er ist falsch etikettiert. Wikimedia zahlt jede Stunde 48 Minuten Verspätung als eingeschwungenen Zustand — niemand hat das entschieden, es fühlt sich nicht wie ein Problem an, sondern wie eine Eigenschaft der Pipeline. Latente Schmerzen verkauft man nicht durch Aufklärung über die Krankheit, sondern an den Momenten, wo die latente Frage akut wird. Vier solche Momente, in absteigender Kauf-Stärke:
+
+1. **Takt-Wechsel.** "Können wir von täglich auf stündlich?" Terminiert, budgetiert, heute ohne Entscheidungsgrundlage — man migriert und schaut. λ beantwortet die Frage vorher. Haupt-Pitch.
+2. **Optimierung, beide Richtungen.** Vorwärts: das What-if-Ranking verhindert, dass ein Quartal in einen Task fließt, der λ um exakt null ändert. Rückwärts (Headroom): "Reserve: 83 %" heißt "viermal so oft laufen, ohne etwas anzufassen" — eine Fähigkeit, von der das Team nicht wusste, dass es sie hat. Verkauft Können statt Angst.
+3. **Incident.** Nach dem ersten Drift-Vorfall will das Team eine Leitplanke: das CI-Gate. Der einzige Trigger mit Wiederkehr-Charakter (Analyzer = Diagnose, Gate = Gewohnheit).
+4. **Fehlalarm-Müdigkeit.** Die 29-von-30-Zahl. Schwächster Kauf-Trigger, bester Content-Aufhänger: macht neugierig statt zu belehren.
+
+**Konsequenz für den Launch:** Der Post führt mit Trigger 4 (die interessante Geschichte), und die Kommentare zeigen, auf welchen der vier Momente die Leute anspringen. Diese Information ist der eigentliche Ertrag des Experiments — wichtiger als Stars oder Installs. Danach ist entscheidbar, ob das Produkt ein Takt-Wechsel-Werkzeug, ein Optimierungs-Ranking oder ein CI-Gate ist.
+
+**Abbruchkriterium, weil es Davids Bedingung von Anfang an war:** Zieht keiner der vier Momente (keine Nachfragen, keine Installs, Kommentare bleiben bei "nett"), hat der Use-Case den Markttest nicht bestanden. Dann wird geparkt, nicht schöngeredet.
