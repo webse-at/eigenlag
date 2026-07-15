@@ -1027,3 +1027,13 @@ Pflicht-Dependencies unveraendert null (`dependencies = []`); das Gate braucht n
 - `pipx install --force .`, dann über den Entry-Point: `analyze` EN + DE, `check` EN + DE (beide Exit 3), `--json` **byte-identisch** EN vs. DE bei `analyze` und `check` (per `diff -q` belegt).
 
 **Was überrascht hat:** Die Spec-Klausel „compose() wird nicht angefasst" und „der ganze Report zweisprachig" widersprachen sich für die in `compose()` generierten Prosa-Felder (What-if-Labels, Gate-Gründe). Ein korrekter englischer Report braucht die Generierungs-Eingaben zur Render-Zeit — additive, sprachneutrale Struktur-Felder waren der einzige Weg, der `--json` byte-identisch hält. In ADR-023 als bewusster Schnitt dokumentiert und für den Orchestrator geflaggt.
+
+---
+
+## 011a — Abnahme Packaging/Sprachfassung durch den Orchestrator (2026-07-15)
+
+**Abgenommen und gepusht** (der Commit lag lokal vor, die Session hatte vor dem Push rückgefragt). Unabhängig geprüft: 356 Tests, ruff, mypy grün; `pipx install --force .` und beide Sprachfassungen selbst gefahren (EN-Default-Urteil, DE unter `--lang de`), `--json` per `diff` byte-identisch über beide Sprachen, README als Erstleser gelesen.
+
+**Beide geflaggten Entscheidungen bestätigt:** (1) Der `compose()`-Schnitt (bestehende Keys und deutsche Werte unverändert, additive sprachneutrale Struktur-Felder für den Renderer) ist die richtige Auflösung des Spec-Widerspruchs — meine Spec verlangte gleichzeitig "compose() nicht anfassen" und einen korrekten englischen Report, was nicht beides ging, weil deutsche Prosa in generierten Feldern steckte. Der Byte-Identitäts-Test belegt, dass die Gate-Schnittstelle stabil blieb. (2) Einsprachig englische Diagnose-Details im DE-Report sind als kleines Folge-Ticket notiert, kein Blocker.
+
+**Damit ist die Roadmap bis 011 komplett.** Das Repo ist veröffentlichungsreif, veröffentlicht ist nichts. Vor dem Schalter kommen noch: Session 012 (Beschleunigungsplan — die Produkt-Ebene aus positioning.md), Launch-Kit (Demo-Einstieg, CI-Workflow als Vertrauenssignal, Launch-Texte), dann Davids Go.
