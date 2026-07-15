@@ -641,7 +641,53 @@ lambda_p50 = 4.51 h, lambda_p95 = 5.56 h
 Anteil ueber T=3.0: 100%, konstant: ()
 ```
 
-**Lauf 1b — CLI gegen ein minimales DAG-File mit `--assume-duration`** (voller Report in `scan/009_cli/lauf1_minidag_report.txt`, Fixture `minidag_mini.py`): Exit 0, Urteil stabil (λ = 600 s gegen T = 3600 s, Reserve 83,33 %), Kreis doppelt mit `depends_on_past, mini.py:6`, What-if angefragt `task=lade:120` → λ 120 s, 2 `dauer_angenommen`-Warnungen, Modellgrenzen-Fußzeile.
+**Lauf 1b — CLI gegen ein minimales DAG-File mit `--assume-duration`** (voller Report in `scan/009_cli/lauf1_minidag_report.txt`, Fixture `minidag_mini.py`): Exit 0, Urteil stabil (λ = 600 s gegen T = 3600 s, Reserve 83,33 %), Kreis doppelt mit `depends_on_past, mini.py:6`, What-if angefragt `task=lade:120` → λ 120 s, 2 `dauer_angenommen`-Warnungen, Modellgrenzen-Fußzeile. Vollständig:
+
+    eigenlag analyze
+    ================
+
+    DAG:        mini (mini.py:5, Schedule '@hourly')
+    Takt T:     3600 s (60 min), Quelle: Schedule '@hourly'
+    Dauern:     angenommen: 600 s je Task ohne Messung
+    Statistik:  mean. Fuer den asymptotischen Drift ist der Mittelwert die theoretisch richtige Groesse; er ist ausreisserempfindlich, ein einzelner haengender Lauf kann ihn deutlich verschieben.
+    Stichprobe: Laeufe je Task minimal 0, im Median 0.
+
+    Urteil
+    ------
+    Stabil: Lambda = 600 s (10 min) liegt unter dem Takt T = 3600 s (60 min). Reserve: 83,33 %. Verspaetungen aus einem einzelnen Lauf klingen ab, statt sich aufzubauen.
+
+    Kritischer Kreis
+    ----------------
+    Kondensiert (der Kreis in der Cross-Run-Matrix, sein Zyklusmittel ist Lambda):
+      mini.lade -> mini.lade: Gewicht 600 s (10 min), 1 Periode zurueck [depends_on_past, mini.py:6]
+    Aufgeloest ueber alle Segmente: mini.lade
+    Der Weg zu einem kleineren Lambda fuehrt ueber diesen Kreis; eine Verkuerzung daneben aendert Lambda um exakt null. Ob eine einzelne Verkuerzung durchschlaegt oder ein zweiter Kreis mit gleichem Zyklusmittel uebernimmt, rechnet das What-if-Ranking unten nach.
+
+    Monte Carlo
+    -----------
+    Lambda p50 = 600 s (10 min), Lambda p95 = 600 s (10 min) (1000 Stichproben, Lognormal-Fit aus p50/p95 je Task, Seed 20260715: derselbe Aufruf liefert dieselben Zahlen).
+    p95 beantwortet, ob der Takt auch in einer schlechten Woche haelt, nicht nur im Durchschnitt.
+    Anteil der Stichproben mit Lambda ueber dem Takt: 0 %.
+    Konstant gesampelt (keine belastbare Streuung, angenommene oder duenne Dauern): mini.lade, mini.rechne. Die p95-Aussage unterschaetzt die Streuung dieser Tasks.
+
+    What-if
+    -------
+    Basis: Lambda = 600 s (10 min). Sortiert nach neuem Lambda.
+      1. Cross-Kante mini.lade -> mini.lade entfernt: kein Kreis mehr, Taktgrenze nicht anwendbar
+      2. Task mini.lade = 120 s (angefragt): Lambda 120 s (2 min), Veraenderung -480 s
+      3. Task mini.lade halbiert (auf 300 s): Lambda 300 s (5 min), Veraenderung -300 s
+    Eine Optimierung, die nicht auf dem kritischen Kreis liegt, aendert Lambda um exakt null. Das Ranking zeigt deshalb nur Kreis-Tasks und Cross-Kanten; alles andere ist fuer die Taktgrenze wirkungslos, so nuetzlich es fuer die Latenz eines Einzellaufs sein mag.
+
+    Warnungen
+    ---------
+      - Dauer angenommen: mini.lade (keine Messung, 600.0 s)
+      - Dauer angenommen: mini.rechne (keine Messung, 600.0 s)
+
+    Modellgrenzen
+    -------------
+      - Unbegrenzte Parallelitaet angenommen: Lambda ist eine Untergrenze der realen Taktzeit. Das Tool sagt 'nicht schneller als Lambda', nicht 'Lambda ist erreichbar'.
+      - Retries, Sensor-Poking und Pool-Limits sind nicht modelliert. Sie koennen die reale Taktzeit nur erhoehen, nie senken; die Untergrenze bleibt gueltig.
+      - Latenz-Angaben sind Makespan: die Dauer eines Laufs von seinem Start bis zum Ende seines laengsten Pfads, nicht die Verspaetung gegenueber dem Plan.
 
 **Lauf 2 — echtes Airflow 3.3.0:** `.venv-airflow` wiederverwendet, diesmal `AIRFLOW_HOME=data/airflow-home/` (bleibt liegen, unter dem gitignorten `data/`). `airflow db migrate`, die beiden 008-Testfall-DAGs nach `data/airflow-home/dags/`, je 6 Läufe `airflow dags test` (12/12 ok). Dann der Report, den ein echtes Team sehen würde — vollständig:
 
