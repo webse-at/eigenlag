@@ -996,3 +996,17 @@ pipx install --force . -> eigenlag 0.1.0; alle 5 Gate-Laeufe oben ueber den Entr
 Pflicht-Dependencies unveraendert null (`dependencies = []`); das Gate braucht nur `subprocess` + git, das ohnehin da ist, wo ein `--against REF` Sinn ergibt.
 
 **Was ueberrascht hat:** Die Auftrags-Regel „neue Kante und Lambda > T" ist im Struktur-Modus, dem realistischen CI-Default, gar nicht auswertbar — die Spec-Vorentscheidungen 3 und 4 standen an dieser Stelle in Spannung (Struktur-Modus als Default, aber die Fail-Bedingung braucht Sekunden). Die Aufloesung steht in ADR-022; falls der Orchestrator die Kreis-plus-sub-taeglich-Regel anders schneiden will, ist sie eine einzelne Funktion (`gate._dag_row`, Verdict-Block) mit gepinnten Tests.
+
+---
+
+## 010a — Abnahme CI-Gate durch den Orchestrator (2026-07-15)
+
+**Abgenommen.** Session 010 lief erstmals als vom Orchestrator gestartete Hintergrund-Implementer-Session (Davids Anweisung, er war abwesend). Abnahme wie immer unabhängig:
+
+- Gates nachgefahren: 344 Tests, ruff (46 Files), mypy grün.
+- **Das Gate selbst bedient, an einem eigenen Fixture-Repo**, das nicht aus der Session stammt (frisches `git init`, v1 ohne Kante, v2 mit `depends_on_past=True` bei `*/30 * * * *`): v2 gegen v1 → Exit 3, Kommentar nennt die auslösende Kante mit `etl.py:7` und Signal-Art, Kreis kondensiert und aufgelöst, Behebungs-Hinweis; unverändert → Exit 0; Nutzer-Repo unangetastet, kein Rest-Worktree.
+- Flaggschiff-Report-Korrektur bestätigt: 15 Null-Delta-Zeilen → eine Sammelzeile ("3 Kreis-Gleichstände, 12 Kanten außerhalb"), Schlusssatz beschreibt jetzt das Verhalten.
+
+**Die zentrale Implementer-Entscheidung wird bestätigt — und der Fehler lag in meiner Spec.** Vorentscheidung 3 behauptete, der Struktur-Modus decke "genau den Fall, den der Auftrag nennt" ab, und Vorentscheidung 4 verlangte gleichzeitig die wörtliche Regel "neue Kante **und** λ > T". Beides zusammen geht nicht: Im Struktur-Modus ist λ in Task-Einheiten und T in Sekunden, der Vergleich ist unauswertbar — das Default-Gate wäre in einer CI ohne Metadaten-DB wirkungslos gewesen, also im häufigsten Einsatzfall. Die Auflösung der Session (Struktur-Modus: neue Kante, die einen Kreis schließt, bei sub-täglichem Takt → deckungsgleich mit der Risiko-Definition aus ADR-018; mit Dauern-Quelle: Auftrag wörtlich) ist genau richtig, sauber in ADR-022 dokumentiert und an einer einzigen Stelle implementiert. Mein Kommentar-Fixture-Lauf oben ist der Beleg, dass sie praktisch funktioniert.
+
+**Damit ist 010 komplett. Es fehlt nur noch 011** (Packaging, englisches README, Report-Sprachfassung), dann ist der Feedback-Meilenstein erreichbar. Die 011-Spec schreibt der Orchestrator als Nächstes; die Session dazu startet David selbst.
