@@ -1125,6 +1125,26 @@ def parse_path(root: Path, dag_names: frozenset[str] = DAG_NAMES) -> ParseResult
     return parse_files(files, root, dag_names)
 
 
+def select_dags(result: ParseResult, dag_id: str) -> tuple[ParsedDag, ...]:
+    """Der gewaehlte DAG plus transitiv alle DAGs, auf die seine Sensor-Kanten zeigen —
+    ohne sie liesse sich die Pipeline nicht bauen (die Kanten-Quelle waere unbekannt)."""
+    selected = [dag for dag in result.dags if dag.dag_id == dag_id]
+    if not selected:
+        return ()
+    by_id = {dag.dag_id: dag for dag in result.dags if dag.dag_id is not None}
+    while True:
+        missing = [
+            other
+            for edge in (e for dag in selected for e in dag.cross)
+            if edge.signal == "external_task_sensor"
+            for other_id, other in by_id.items()
+            if other not in selected and edge.src.startswith(f"{other_id}.")
+        ]
+        if not missing:
+            return tuple(selected)
+        selected.extend(dict.fromkeys(missing))
+
+
 # --- Struktur + Dauern = Pipeline ----------------------------------------------------
 
 

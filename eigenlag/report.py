@@ -192,6 +192,32 @@ def _provenance(dags: Sequence[ParsedDag]) -> dict[tuple[str, int], tuple[str, s
     return found
 
 
+def cycle_report(dags: Sequence[ParsedDag], analysis: Analysis) -> dict[str, Any] | None:
+    """Der kritische Kreis, kondensiert und aufgeloest (ADR-002), mit Herkunft je Kante.
+
+    Gemeinsame Quelle fuer den analyze-Report und das CI-Gate (Session 010)."""
+    if analysis.cycle is None:
+        return None
+    herkunft = _provenance(dags)
+    _, paths = condense(analysis.pipeline)
+    kanten = []
+    for edge in analysis.cycle:
+        signal, datei, zeile = herkunft.get((edge.src, edge.periods), (None, None, None))
+        kanten.append(
+            {
+                "src": edge.src,
+                "dst": edge.dst,
+                "gewicht_s": edge.weight,
+                "perioden": edge.periods,
+                "signal": signal,
+                "datei": datei,
+                "zeile": zeile,
+                "task_pfad": list(paths[(edge.src, edge.dst, edge.periods)]),
+            }
+        )
+    return {"kondensiert": kanten, "aufgeloest": list(analysis.cycle_tasks)}
+
+
 def _urteil(lam: float | None, takt_s: float | None) -> dict[str, Any]:
     if lam is None:
         return {"urteil": "nicht_anwendbar"}
@@ -224,27 +250,7 @@ def compose(
 ) -> dict[str, Any]:
     pipeline = analysis.pipeline
     ns = [stats[task].n if task in stats else 0 for task in pipeline.tasks]
-
-    kreis: dict[str, Any] | None = None
-    if analysis.cycle is not None:
-        herkunft = _provenance(dags)
-        _, paths = condense(pipeline)
-        kanten = []
-        for edge in analysis.cycle:
-            signal, datei, zeile = herkunft.get((edge.src, edge.periods), (None, None, None))
-            kanten.append(
-                {
-                    "src": edge.src,
-                    "dst": edge.dst,
-                    "gewicht_s": edge.weight,
-                    "perioden": edge.periods,
-                    "signal": signal,
-                    "datei": datei,
-                    "zeile": zeile,
-                    "task_pfad": list(paths[(edge.src, edge.dst, edge.periods)]),
-                }
-            )
-        kreis = {"kondensiert": kanten, "aufgeloest": list(analysis.cycle_tasks)}
+    kreis = cycle_report(dags, analysis)
 
     mc: dict[str, Any] | None = None
     if monte_carlo is not None:

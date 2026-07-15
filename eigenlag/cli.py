@@ -19,10 +19,10 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
 
-from eigenlag import montecarlo
+from eigenlag import gate, montecarlo
 from eigenlag.analyze import analyze_result
-from eigenlag.durations import Statistic, Stats, assume
-from eigenlag.parse_airflow import ParsedDag, ParseResult, parse_path
+from eigenlag.durations import Statistic, Stats, TaskStats, assume
+from eigenlag.parse_airflow import ParsedDag, ParseResult, parse_path, select_dags
 from eigenlag.report import (
     WhatIfDropEdge,
     WhatIfTask,
@@ -31,7 +31,7 @@ from eigenlag.report import (
     resolve_task_name,
 )
 
-OK, BEDIENFEHLER, KEIN_DAG = 0, 1, 2
+OK, BEDIENFEHLER, KEIN_DAG, GATE_AUSGELOEST = 0, 1, 2, 3
 
 
 class Bedienfehler(Exception):
@@ -83,6 +83,55 @@ def _parser() -> argparse.ArgumentParser:
         help="Szenario rechnen, wiederholbar",
     )
     analyze.add_argument("--json", action="store_true", help="maschinenlesbare Ausgabe statt Text")
+
+    check = sub.add_parser(
+        "check",
+        help="CI-Gate: Lambda und Cross-Run-Kanten gegen einen Git-Stand vergleichen",
+    )
+    check.add_argument("pfad", help="DAG-File oder Verzeichnis im Arbeits-Repo (Nachher-Stand)")
+    check.add_argument(
+        "--against",
+        required=True,
+        metavar="REF",
+        help="Git-Referenz des Vorher-Stands (z. B. origin/main, HEAD~1, ein Tag)",
+    )
+    check.add_argument("--db", help="SQLAlchemy-URL der Airflow-Metadaten-DB")
+    check.add_argument(
+        "--assume-duration",
+        type=float,
+        help="Sekunden je Task ohne Messung; ohne Dauern-Quelle laeuft der Struktur-Modus",
+    )
+    check.add_argument("--dag-id", help="nur diesen DAG vergleichen (sonst: alle im Pfad)")
+    check.add_argument(
+        "--statistic",
+        choices=["mean", "p50", "p95"],
+        default="mean",
+        help="welche Dauer-Statistik in Lambda eingeht (Punkt-Lambda, ADR-022)",
+    )
+    check.add_argument(
+        "--since", type=int, default=90, help="Fenster fuer die Metadaten-DB in Tagen"
+    )
+    check.add_argument(
+        "--period",
+        type=float,
+        help="Takt-Override in Sekunden, wenn der Schedule unbekannt oder dataset-getriggert ist",
+    )
+    check.add_argument(
+        "--fail-on-new-edge",
+        action="store_true",
+        help="jede neue Cross-Run-Kante loest aus, unabhaengig vom Takt",
+    )
+    check.add_argument(
+        "--max-increase",
+        type=float,
+        metavar="PROZENT",
+        help="Lambda-Wachstum gegenueber REF deckeln, auch ohne neue Kante",
+    )
+    check.add_argument(
+        "--comment-file", metavar="PFAD", help="PR-Kommentar (Markdown) zusaetzlich in diese Datei"
+    )
+    check.add_argument("--json", action="store_true", help="maschinenlesbare Ausgabe statt Text")
+    check.set_defaults(rest=None, rest_token=None)  # _fetch_stats teilt sich analyze und check
     return parser
 
 
@@ -101,26 +150,6 @@ def _parse_what_if(text: str) -> WhatIfTask | WhatIfDropEdge:
             raise Bedienfehler(f"--what-if {text!r}: erwartet drop-edge=SRC->DST")
         return WhatIfDropEdge(src=src.strip(), dst=dst.strip())
     raise Bedienfehler(f"--what-if {text!r}: erwartet task=NAME:SEKUNDEN oder drop-edge=SRC->DST")
-
-
-def _select_dags(result: ParseResult, dag_id: str) -> tuple[ParsedDag, ...]:
-    """Der gewaehlte DAG plus transitiv alle DAGs, auf die seine Sensor-Kanten zeigen —
-    ohne sie liesse sich die Pipeline nicht bauen (die Kanten-Quelle waere unbekannt)."""
-    selected = [dag for dag in result.dags if dag.dag_id == dag_id]
-    if not selected:
-        return ()
-    by_id = {dag.dag_id: dag for dag in result.dags if dag.dag_id is not None}
-    while True:
-        missing = [
-            other
-            for edge in (e for dag in selected for e in dag.cross)
-            if edge.signal == "external_task_sensor"
-            for other_id, other in by_id.items()
-            if other not in selected and edge.src.startswith(f"{other_id}.")
-        ]
-        if not missing:
-            return tuple(selected)
-        selected.extend(dict.fromkeys(missing))
 
 
 def _redact(url: str) -> str:
@@ -179,7 +208,7 @@ def _run_analyze(args: argparse.Namespace) -> int:
     result = parse_path(root)
     dags = result.dags
     if args.dag_id is not None:
-        dags = _select_dags(result, args.dag_id)
+        dags = select_dags(result, args.dag_id)
         if not dags:
             gefunden = ", ".join(sorted({d.dag_id or "(ohne dag_id)" for d in result.dags}))
             print(
@@ -256,12 +285,89 @@ def _run_analyze(args: argparse.Namespace) -> int:
     return OK
 
 
+def _run_check(args: argparse.Namespace) -> int:
+    pfad = Path(args.pfad)
+    if not pfad.exists():
+        raise Bedienfehler(f"Pfad {args.pfad!r} existiert nicht")
+
+    try:
+        root = gate.repo_root(pfad)
+    except gate.GitFehler as err:
+        raise Bedienfehler(f"Pfad {args.pfad!r} liegt in keinem Git-Repo: {err}") from err
+    try:
+        ref_sha = gate.resolve_ref(root, args.against)
+    except gate.GitFehler as err:
+        raise Bedienfehler(f"--against {args.against!r} ist nicht aufloesbar: {err}") from err
+    rel = pfad.resolve().relative_to(root.resolve())
+
+    after = parse_path(pfad)
+    with gate.worktree(root, ref_sha) as vergleich:
+        vorher_pfad = vergleich / rel
+        before = (
+            parse_path(vorher_pfad) if vorher_pfad.exists() else ParseResult(dags=(), warnings=())
+        )
+
+    if args.dag_id is not None:
+        ids = {dag.dag_id for dag in (*before.dags, *after.dags) if dag.dag_id is not None}
+        if args.dag_id not in ids:
+            gefunden = ", ".join(sorted(ids)) or "keine DAGs"
+            raise Bedienfehler(
+                f"--dag-id {args.dag_id!r} in keinem der beiden Staende gefunden."
+                f" Gefunden: {gefunden}"
+            )
+
+    struct_mode = args.db is None and args.assume_duration is None
+    if struct_mode:
+        stats: Stats = {}
+        fallback: TaskStats | None = assume(1.0)
+        dauern_quelle = "Struktur-Modus: uniforme Dauer 1.0 je Task"
+    else:
+        dag_ids = sorted(
+            {dag.dag_id for dag in (*before.dags, *after.dags) if dag.dag_id is not None}
+        )
+        stats, dauern_quelle = _fetch_stats(args, dag_ids)
+        fallback = assume(args.assume_duration) if args.assume_duration is not None else None
+
+    try:
+        ergebnis = gate.compose_check(
+            pfad=args.pfad,
+            ref=args.against,
+            before=before,
+            after=after,
+            stats=stats,
+            statistic=cast(Statistic, args.statistic),
+            fallback=fallback,
+            struct_mode=struct_mode,
+            dauern_quelle=dauern_quelle,
+            period_override=args.period,
+            dag_id_filter=args.dag_id,
+            fail_on_new_edge=args.fail_on_new_edge,
+            max_increase=args.max_increase,
+        )
+    except ValueError as err:
+        raise Bedienfehler(
+            f"{err} — Luecken fuellt --assume-duration SEKUNDEN, je Task mit Warnung."
+        ) from err
+
+    kommentar = gate.render_check(ergebnis)
+    if args.comment_file:
+        Path(args.comment_file).write_text(kommentar, encoding="utf-8")
+    if args.json:
+        print(json.dumps(ergebnis, ensure_ascii=False, indent=2))
+    else:
+        print(kommentar)
+    return int(ergebnis["exit_code"])
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        if args.befehl == "check":
+            return _run_check(args)
         return _run_analyze(args)
-    except (Bedienfehler, ValueError) as err:
+    except (Bedienfehler, ValueError, gate.GitFehler) as err:
         # ValueError: Systemgrenze User-Input (unbekannter What-if-Task, kaputte Kante).
+        # GitFehler: Systemgrenze git (Worktree-Anlage schlug fehl).
         print(f"Bedienfehler: {err}", file=sys.stderr)
         return BEDIENFEHLER
 
