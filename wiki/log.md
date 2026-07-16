@@ -1112,3 +1112,17 @@ $ mypy                          → Success: no issues found in 53 source files
 ```
 
 **Was überrascht hat:** vhs läuft auf dem Server nur mit `VHS_NO_SANDBOX=true` (Host ohne nutzbare Chromium-Sandbox). Und die Terminal-Höhe des Tapes ist Rechenarbeit, kein Geschmack: 840 px ≈ 51 Zeilen sorgen dafür, dass nach dem Durchscrollen genau die Plan-Sektion als Endbild stehen bleibt (47 gewrappte Zeilen von Plan-Header bis Prompt bei 148 Spalten).
+
+---
+
+## 013a — Abnahme Launch-Kit durch den Orchestrator (2026-07-16)
+
+**Abgenommen.** Gates nachgefahren (377 Tests, ruff, mypy). `eigenlag demo` selbst über den Entry-Point: 0,115 s, Kopfzeile deklariert das Beispiel, Fußzeile den nächsten Schritt. GIF geprüft, indem der Endframe per ffmpeg extrahiert und **angesehen** wurde: hält exakt auf der Plan-Sektion mit −43,18 % und dem Tragfähigkeits-Marker; 356 KB, 16,6 s. Der "foreign task"-Satz ist ersetzt ("whether and how to split is yours to judge").
+
+**Die Launch-Texte sind der beste Teil der Session.** Gegen Davids Schreibregeln gelesen: ruhige ganze Sätze, keine Pointen-Stakkatos, Offenlegung der Autorenschaft, und — am wichtigsten — der Reddit-Post nimmt das stärkste Gegenargument (die Uhr-Rückkopplung) **selbst vorweg**, statt es einem Kommentar zu überlassen. Die Wikimedia-Mail schließt mit einem Dank für die offenen Daten statt mit einem Pitch. Die Checkliste hat je Schritt Wirkung und Risiko, inklusive des Details, dass der v0.1.0-Tag erst NACH der README-Umstellung gesetzt wird. Zahlen im Post gegen `case.md` verifiziert (453 Zeilen, 249 mit bekanntem Takt, 30/29).
+
+**Ein Redigier-Hinweis für David, kein Fix-Loop:** In den Release-Notes steht "an acceleration plan that prices every possible change" — "prices" führt in die Irre (es gibt bewusst keine Geld-Rechnung im Tool, ADR-024) und "every possible change" überbehauptet (berechnet werden Kanten-Entfernungen und Task-Halbierungen). Vorschlag: "an acceleration plan that quantifies the structural changes that lower it".
+
+**Ehrlich offen bleibt, was nur der Public-Schalter beweisen kann:** der erste echte CI-Lauf und das Python-3.12-Bein (Server hat nur 3.14; die Frisch-Clone-Probe bildet den Runner nach, beweist ihn aber nicht). Steht in der Checkliste als Schritt 2 mit Anweisung für den Rot-Fall.
+
+**Damit ist die Roadmap bis 013 komplett und der Feedback-Meilenstein wartet nur noch auf Davids Schalter.** Reihenfolge: Repo public → CI prüfen → PyPI → README-Patch → Release → Ruhe → Wikimedia → Reddit → Slack → Woche-1-Reaktionsdienst.
