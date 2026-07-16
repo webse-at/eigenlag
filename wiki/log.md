@@ -1140,3 +1140,13 @@ David hat die fünf Außentexte extern korrekturlesen lassen. Triage durch den O
 **Kaskade, weil zwei Fundstellen im Produkt-Code lagen:** "yours to judge" und "unclaimed reserve" standen nicht nur in der Doku, sondern in `messages.py` (EN-Katalog) — also Report-Strings geändert, Test-Pin angepasst (377 passed), der README-Quickstart-Block aus einem frischen echten Lauf neu erzeugt und auf die kuratierte Länge zurückgeschnitten, und das GIF aus der `.tape` neu gerendert (654 KB, Endframe gesichtet: neue Formulierungen, Umbruch jetzt an der Wortgrenze). Genau für diese Reproduzierbarkeit war das tape-Skript gebaut.
 
 Das Review-Paket (`launch/review-fuer-gemini.md`) ist wieder entfernt, sein Zweck ist erfüllt.
+
+---
+
+## 013b — GIF-Korrektur: sichtbares Scrollen (2026-07-16)
+
+**Davids Befund war korrekt:** `eigenlag demo` rendert in ~0,1 s, im GIF erschien der komplette Report deshalb innerhalb eines Frames — 16,6 s Gesamtdauer, aber nur ~4 s wahrnehmbare Animation, danach Standbild. Fix: der Report wird im Tape zeilenweise mit 30 ms je Zeile ausgegeben (als gestellte Stelle im Tape-Kommentar deklariert, wie die pipx-Zeile), ~2 s sichtbares Scrollen, dann Halten auf der Plan-Sektion.
+
+Zweiter Befund dabei: **vhs 0.11.0 ignoriert `Set Framerate` für GIF-Output** (Mini-Tape gemessen: 83 Frames / 3,32 s = 25 fps trotz `Framerate 10`). Bei 25 fps ist jeder Scroll-Frame ein Vollbild-Wechsel, das GIF lag bei 7,7 MB. Deshalb baut jetzt `launch/build-demo-gif.sh` in zwei Schritten: vhs, dann ffmpeg auf 10 fps mit neu gerechneter Palette (`dither=none`, Text bleibt scharf). Ergebnis: **2 156 895 Bytes (2,1 MB < 3 MB), 14,6 s, 146 Frames.** Mid-Scroll- und Endframe per ffmpeg extrahiert und gesichtet: Scrollen sichtbar, Endstand auf der Plan-Sektion mit −43,18 %.
+
+Hinweis: Das GIF zeigt bereits die redigierten EN-Formulierungen aus Davids Review-Runde ("untapped headroom", "up to you"), die zum Zeitpunkt des Renderns im Working Tree lagen.
