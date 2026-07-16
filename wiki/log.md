@@ -1078,3 +1078,37 @@ $ mypy eigenlag/               → Success: no issues found in 27 source files
 **Der Demo-Report ist jetzt das Marketing-Artefakt, das er sein sollte.** Ein Screenshot dieser Plan-Sektion erzählt die ganze Produktgeschichte: die kostenlose Architektur-Änderung rettet den Takt, das GPU-Upgrade nicht.
 
 **Ein Formulierungs-Detail für 013 (kein Blocker):** Der generische Halbierungs-Katalogtext endet auf "not detail about the foreign task" — "foreign task" ist ein Deutschismus (fremde Task) und liest sich im Englischen schief. Da die Demo-Plan-Sektion künftig das meistgesehene Artefakt ist, gehört der Satz in 013 poliert (etwa "the plan shows the arithmetic; how to split *your* task is yours to judge").
+
+---
+
+## Session 013 — Launch-Kit: der 60-Sekunden-Einstieg und die Texte (2026-07-16)
+
+**Alles für Davids Schalter liegt bereit; veröffentlicht hat diese Session nichts.** Kein Upload, kein Sichtbarkeits-Wechsel, kein Post — nur Material, wie die Spec es verlangt.
+
+- **`eigenlag demo`** (neu, tests-zuerst: `demo_test.py` rot gesehen, dann grün): eingebauter Subcommand, rendert den vollen Report der Prototyp-Pipeline (λ = 15840 s = 4.4 h bei T = 3 h) über denselben `compose()`/`render()`-Pfad wie `analyze`, EN und DE. Kopfzeile deklariert das eingebaute Beispiel, Fußzeile zeigt `eigenlag analyze your/dags --assume-duration 300`. Kein Netz, keine Dateien; über den pipx-Entry-Point gemessen: **0,113 s**. Die MC-Streuung (p95 = 1,5 × p50) und n = 40 sind Beispiel-Annahmen wie im abgenommenen 012-Artefakt und stehen deklariert in der Dauern-Quelle.
+- **Fixture-Umzug (Single Source):** DUR/INTRA/CROSS + `demo()` von `maxplus_test.py` nach `eigenlag/demo.py`, weil der Subcommand sie ausliefert; `maxplus_test`/`plan_test` importieren von dort, alle Pins blieben unverändert in den Tests.
+- **012a-Feinschliff:** `plan_fix_task_halved` neu formuliert — EN "…the plan shows the arithmetic, whether and how to split is yours to judge.", DE "…ob und wie geteilt wird, laesst sich nur am konkreten Task entscheiden." README-Sweep (2 Stellen im Quickstart-Block). Die `demo_fuss`-Erstfassung trug einen Gedankenstrich als Satztrenner (Schreibregel-Verstoß in sichtbarem Output) und wurde vor dem finalen GIF umformuliert.
+- **GIF:** `launch/demo.tape` (vhs 0.11.0 + ttyd 1.7.7, beide nach `~/.local/bin`; Render braucht `VHS_NO_SANDBOX=true`, Chromium-Sandbox auf dem Server nicht nutzbar) → `assets/demo.gif`: **355 978 Bytes (< 3 MB), 16,64 s (< 30 s)**. pipx-Zeile gestellt (Shell-Funktion, im Tape kommentiert), `eigenlag demo` läuft echt. Endframe per ffmpeg extrahiert und gesichtet: hält auf der Plan-Sektion, Aktion 1 mit −43,18 % und Tragfähigkeits-Satz sichtbar. Im README ganz oben eingebettet (Pfad `assets/demo.gif` existiert relativ zum README, mehr Markdown-Check braucht die Einbettung nicht).
+- **CI:** `.github/workflows/ci.yml`, Matrix 3.12/3.14, Schritte exakt wie die Frisch-Clone-Probe: `pip install -e ".[db,scanner]" pytest ruff mypy` → `pytest -q` → `ruff check .` → `ruff format --check .` → `mypy`. Ressourcen-Prüfung der Suite: **kein Test braucht Netz, Docker oder `data/`** (fetch gemockt, clone_test/gate_test mit lokalen Repos und inline git-Identität, `data/` in norecursedirs) — Skip-Marker waren darum nicht nötig; was fehlt, sind nur die Extras db (sqlalchemy, durations-Tests) und scanner (pyyaml, dbt-Analyse). Deshalb installiert die CI `.[db,scanner]` statt des in der Spec skizzierten `.[db]`. Badge im README.
+- **Frisch-Clone-Probe** (Temp-Verzeichnis, `git clone`, frische venv, Python 3.14.4):
+
+  ```
+  377 passed in 2.77s
+  All checks passed!            (ruff check .)
+  53 files already formatted    (ruff format --check .)
+  Success: no issues found in 53 source files   (mypy)
+  ```
+
+  **Ehrlich:** Das 3.12-Bein der Matrix war lokal nicht prüfbar (Server hat nur 3.14), und ein nackter GitHub-Runner ist erst der erste echte CI-Lauf nach dem Public-Schalter — steht als Checklisten-Schritt 2.
+- **PyPI vorbereitet, nicht hochgeladen:** `python -m build` neu gebaut (dist/ von 011 ersetzt — reproduzierbares Build-Artefakt, alter Stand via git-History des Quellcodes jederzeit re-erzeugbar), `twine check dist/*` **PASSED** (sdist + wheel). Classifier `3.14` ergänzt (CI testet es, Server läuft darauf). Anleitung: `docs/pypi-release.md`. README-Umstellung auf `pipx install eigenlag` liegt als **nicht angewandter** Patch `launch/readme-pypi-install.patch` (`git apply --check` grün).
+- **Launch-Texte** unter `launch/`, alle als "DRAFT — David redigiert" markiert: `reddit-post.md` (führt mit dem Sweep-Befund 30/29, Sauerteig in zwei Sätzen, 48-min-Konstanz samt Rückkopplungs-Caveat, Offenlegung + Link am Ende), `wikimedia-mail.md` (< 200 Wörter, Kanal-Alternativen Mailing-Liste/Phabricator mit Verifikations-Hinweis), `airflow-slack.md` (vier Sätze), `release-notes-v0.1.0.md` (analyze/check/demo, drei Limitations-Zeilen, Fallstudien-Link), `launch-checklist.md` (11 Schalter in Reihenfolge, je Zeile Wirkung + Risiko).
+- **Verifikations-Artefakte:** `scan/013_launch/demo_en.txt`, `demo_de.txt` (über den Entry-Point gefahren).
+
+```
+$ pytest -q                     → 377 passed   (370 + 7 demo_test)
+$ ruff check .                  → All checks passed!
+$ ruff format --check .         → 53 files already formatted
+$ mypy                          → Success: no issues found in 53 source files
+```
+
+**Was überrascht hat:** vhs läuft auf dem Server nur mit `VHS_NO_SANDBOX=true` (Host ohne nutzbare Chromium-Sandbox). Und die Terminal-Höhe des Tapes ist Rechenarbeit, kein Geschmack: 840 px ≈ 51 Zeilen sorgen dafür, dass nach dem Durchscrollen genau die Plan-Sektion als Endbild stehen bleibt (47 gewrappte Zeilen von Plan-Header bis Prompt bei 148 Spalten).

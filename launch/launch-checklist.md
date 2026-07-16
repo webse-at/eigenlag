@@ -1,0 +1,66 @@
+# DRAFT — Davids Schalter-Reihenfolge. Jeder Schritt ist Davids Klick, keiner passiert automatisch.
+
+Je Schritt: was er bewirkt, und was schiefgehen kann. Reihenfolge einhalten;
+insbesondere kein Posten, bevor Install-Weg und CI sichtbar funktionieren.
+
+- [ ] **1. Repo public stellen** (GitHub → Settings → Danger Zone → Change visibility).
+  Bewirkt: Links in Case-Study und Launch-Texten funktionieren, CI kann laufen.
+  Schiefgehen: vorher prüfen, dass keine Secrets/privaten Pfade in der Historie liegen
+  (Scan-Artefakte unter `scan/` und `wikimedia/` sind bewusst öffentlich gedachte Belege).
+
+- [ ] **2. Ersten CI-Lauf prüfen** (Actions-Tab; ein Push oder manueller Re-Run triggert ihn).
+  Bewirkt: der Badge im README wird grün und belegt die Suite auf 3.12 und 3.14.
+  Schiefgehen: der Lauf ist auf einem nackten Runner nie zuvor gelaufen — die
+  Frisch-Clone-Probe (wiki/log.md, Session 013) bildet ihn nach, aber erst dieser
+  Lauf beweist ihn. Das 3.12-Bein war lokal nicht prüfbar (Server hat nur 3.14).
+  Wenn rot: Log lesen, Fix committen, nicht am YAML raten.
+
+- [ ] **3. PyPI-Upload** (Anleitung: `docs/pypi-release.md`).
+  Bewirkt: `pipx install eigenlag` funktioniert weltweit.
+  Schiefgehen: eine hochgeladene Version ist unveränderlich; bei Fehlern 0.1.1 statt
+  Überschreiben. Token nie ins Repo.
+
+- [ ] **4. README-Install-Zeile umstellen** (`git apply launch/readme-pypi-install.patch`, committen, pushen).
+  Bewirkt: der Quickstart zeigt den PyPI-Weg statt `git+https`.
+  Schiefgehen: der Patch vor Schritt 3 angewandt wäre eine Lüge im README.
+
+- [ ] **5. Release v0.1.0 taggen** (`git tag v0.1.0 && git push --tags`, dann GitHub-Release
+  mit dem redigierten Text aus `launch/release-notes-v0.1.0.md`).
+  Bewirkt: zitierbarer Stand; das Release ist der Anker für den Reddit-Post.
+  Schiefgehen: Tag auf den Commit NACH der README-Umstellung setzen, sonst zeigt
+  das Release den git+https-Quickstart.
+
+- [ ] **6. About und Topics setzen** (GitHub → About-Zahnrad).
+  Beschreibung: "Computes the sustainable minimum cycle time (max-plus eigenvalue λ)
+  of Airflow pipelines: the hard lower bound more workers cannot beat."
+  Topics: `airflow`, `data-engineering`, `scheduling`, `pipeline`, `max-plus`.
+  Bewirkt: Auffindbarkeit über GitHub-Suche und Topic-Seiten.
+  Schiefgehen: wenig; Tippfehler in Topics kosten nur Sichtbarkeit.
+
+- [ ] **7. Ein paar Tage Ruhe.** Bewirkt: Zeit, um Issues aus Schritt 1–6 zu fangen
+  (kaputter Badge, PyPI-Rendering, GIF-Link), bevor Publikum draufschaut.
+  Schiefgehen: nichts; der einzige Fehler wäre, diesen Schritt zu überspringen.
+
+- [ ] **8. Wikimedia-Mail senden** (redigiert aus `launch/wikimedia-mail.md`; Kanal
+  vorher verifizieren: Mailing-Liste oder Phabricator).
+  Bewirkt: Heads-up vor der Veröffentlichung, Chance auf Korrekturen und die eine
+  "echtes Team"-Rückmeldung.
+  Schiefgehen: keine Antwort ist ein legitimes Ergebnis; 3–4 Tage warten, dann Schritt 9
+  auch ohne Antwort.
+
+- [ ] **9. Reddit-Post** (redigiert aus `launch/reddit-post.md`, r/dataengineering).
+  Bewirkt: der eigentliche Markttest; die Kommentare zeigen, welcher Trigger-Moment
+  zieht (wiki/positioning.md).
+  Schiefgehen: Self-Promotion-Regeln des Subreddits vorher prüfen; auf Kritik nüchtern
+  und schnell antworten, Korrekturen offen zugeben.
+
+- [ ] **10. Airflow-Slack** (redigiert aus `launch/airflow-slack.md`, passenden Kanal wählen).
+  Bewirkt: Reichweite in der Kern-Community.
+  Schiefgehen: falscher Kanal wirkt wie Spam; im Zweifel erst die Kanal-Beschreibung lesen.
+
+- [ ] **11. Woche 1: Issues und Kommentare schnell beantworten.** David leitet weiter,
+  der Orchestrator bereitet Antworten vor.
+  Bewirkt: die Kommentar-Auswertung ist der eigentliche Ertrag des Experiments,
+  wichtiger als Stars oder Installs.
+  Schiefgehen: zieht keiner der vier Trigger-Momente, gilt das Abbruchkriterium
+  aus wiki/positioning.md — parken, nicht schönreden.

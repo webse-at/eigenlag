@@ -1,0 +1,62 @@
+Built-in example: an 8-task ML pipeline with a retraining loop and prototype durations. No files were read and no network was used.
+
+eigenlag analyze
+================
+
+Period T:   10800 s (3 h), source: built-in example (T = 3 h)
+Durations:  built-in example: prototype durations in hours, scaled to seconds; spread for Monte Carlo assumed as p95 = 1.5 x p50
+Statistic:  mean. For the asymptotic drift the mean is the theoretically correct quantity; it is sensitive to outliers, and a single hanging run can shift it noticeably.
+Sample:     runs per task, minimum 40, median 40.
+
+Verdict
+-------
+Unstable: λ = 15840 s (4.4 h) lies above the period T = 10800 s (3 h). The delay grows by 5040 s (84 min) per run, without bound and regardless of the number of workers. One hour of backlog is reached after 0.71 runs (about 11314.29 s (3.14 h) of wall-clock time). More compute changes nothing, because the bottleneck is the dependency structure, not the capacity.
+
+Critical cycle
+--------------
+Condensed (the cycle in the cross-run matrix; its cycle mean is λ):
+  monitor -> monitor: weight 15840 s (4.4 h), 1 period back
+    as task path: core -> features -> retrain -> score -> monitor
+Resolved across all segments: core -> features -> retrain -> score -> monitor
+The path to a smaller λ runs through this cycle; a shortening anywhere else changes λ by exactly zero. Whether a single shortening carries through or a second cycle with the same cycle mean takes over is what the acceleration plan below computes.
+
+Acceleration plan
+-----------------
+Base: λ = 15840 s (4.4 h). Each action is unclaimed reserve, sorted by the new λ.
+  1. cross-run edge monitor -> core removed: λ 9000 s (2.5 h), -6840 s (-43.18 %)
+     makes your current schedule sustainable and removes the 5040 s (84 min) of drift per run.
+  2. task retrain halved (to 2880 s): λ 12960 s (3.6 h), -2880 s (-18.18 %)
+     lowers λ but does not make the period T = 10800 s (3 h) sustainable on its own.
+     commonly resolved by: split the task, shrink the increment, or warm-start; the plan shows the arithmetic, whether and how to split is yours to judge.
+  3. task core halved (to 1980 s): λ 13860 s (3.85 h), -1980 s (-12.5 %)
+     lowers λ but does not make the period T = 10800 s (3 h) sustainable on its own.
+     commonly resolved by: split the task, shrink the increment, or warm-start; the plan shows the arithmetic, whether and how to split is yours to judge.
+  4. task features halved (to 1620 s): λ 14220 s (3.95 h), -1620 s (-10.23 %)
+     lowers λ but does not make the period T = 10800 s (3 h) sustainable on its own.
+     commonly resolved by: split the task, shrink the increment, or warm-start; the plan shows the arithmetic, whether and how to split is yours to judge.
+  5. task score halved (to 900 s): λ 14940 s (4.15 h), -900 s (-5.68 %)
+     lowers λ but does not make the period T = 10800 s (3 h) sustainable on its own.
+     commonly resolved by: split the task, shrink the increment, or warm-start; the plan shows the arithmetic, whether and how to split is yours to judge.
+  6. task monitor halved (to 540 s): λ 15300 s (4.25 h), -540 s (-3.41 %)
+     lowers λ but does not make the period T = 10800 s (3 h) sustainable on its own.
+     commonly resolved by: split the task, shrink the increment, or warm-start; the plan shows the arithmetic, whether and how to split is yours to judge.
+  3 more scenarios leave λ unchanged: 3 edges off the critical cycle.
+A change that does not lie on the critical cycle changes λ by exactly zero. The plan therefore computes the cycle tasks and all cross-run edges; what does not change λ is irrelevant to the cycle limit, however useful it may be for the latency of a single run.
+
+Monte Carlo
+-----------
+λ p50 = 16229.99 s (4.51 h), λ p95 = 20033.82 s (5.56 h) (1000 samples, lognormal fit from p50/p95 per task, seed 20260715: the same call yields the same numbers).
+p95 answers whether the period also holds in a bad week, not just on average.
+Share of samples with λ above the period: 100 %.
+
+Warnings
+--------
+None.
+
+Model limits
+------------
+  - Unbounded parallelism assumed: λ is a lower bound of the real cycle time. The tool says 'no faster than λ', not 'λ is achievable'.
+  - Retries, sensor poking and pool limits are not modeled. They can only raise the real cycle time, never lower it; the lower bound stays valid.
+  - Latency figures are makespan: the duration of one run from its start to the end of its longest path, not the delay against the plan.
+
+Next step: point it at your own DAGs with eigenlag analyze your/dags --assume-duration 300

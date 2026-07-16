@@ -1,0 +1,13 @@
+diff --git a/README.md b/README.md
+index c4a6b6f..5256c96 100644
+--- a/README.md
++++ b/README.md
+@@ -47,7 +47,7 @@ other without piling up.
+ Requires Python 3.12+.
+ 
+ ```
+-pipx install git+https://github.com/webse-at/eigenlag
++pipx install eigenlag
+ ```
+ 
+ Point it at a DAG file or a directory. Durations come from the Airflow metadata DB

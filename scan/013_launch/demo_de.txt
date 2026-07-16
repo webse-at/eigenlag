@@ -1,0 +1,62 @@
+Eingebautes Beispiel: eine ML-Pipeline mit 8 Tasks, Retraining-Schleife und Prototyp-Dauern. Es wurden keine Dateien gelesen und kein Netz benutzt.
+
+eigenlag analyze
+================
+
+Takt T:     10800 s (3 h), Quelle: built-in example (T = 3 h)
+Dauern:     built-in example: prototype durations in hours, scaled to seconds; spread for Monte Carlo assumed as p95 = 1.5 x p50
+Statistik:  mean. Fuer den asymptotischen Drift ist der Mittelwert die theoretisch richtige Groesse; er ist ausreisserempfindlich, ein einzelner haengender Lauf kann ihn deutlich verschieben.
+Stichprobe: Laeufe je Task minimal 40, im Median 40.
+
+Urteil
+------
+Instabil: Lambda = 15840 s (4,4 h) liegt ueber dem Takt T = 10800 s (3 h). Die Verspaetung waechst um 5040 s (84 min) pro Lauf, unbegrenzt und unabhaengig von der Worker-Anzahl. Eine Stunde Rueckstand ist nach 0,71 Laeufen erreicht (etwa 11314,29 s (3,14 h) Wanduhr-Zeit). Mehr Rechenleistung aendert daran nichts, weil der Engpass die Abhaengigkeitsstruktur ist, nicht die Kapazitaet.
+
+Kritischer Kreis
+----------------
+Kondensiert (der Kreis in der Cross-Run-Matrix, sein Zyklusmittel ist Lambda):
+  monitor -> monitor: Gewicht 15840 s (4,4 h), 1 Periode zurueck
+    als Task-Pfad: core -> features -> retrain -> score -> monitor
+Aufgeloest ueber alle Segmente: core -> features -> retrain -> score -> monitor
+Der Weg zu einem kleineren Lambda fuehrt ueber diesen Kreis; eine Verkuerzung daneben aendert Lambda um exakt null. Ob eine einzelne Verkuerzung durchschlaegt oder ein zweiter Kreis mit gleichem Zyklusmittel uebernimmt, rechnet der Beschleunigungsplan unten nach.
+
+Beschleunigungsplan
+-------------------
+Basis: Lambda = 15840 s (4,4 h). Jede Aktion ist unbeanspruchte Reserve, sortiert nach neuem Lambda.
+  1. Cross-Kante monitor -> core entfernt: Lambda 9000 s (2,5 h), -6840 s (-43,18 %)
+     macht den laufenden Takt tragfaehig und raeumt die Drift von 5040 s (84 min) pro Lauf weg.
+  2. Task retrain halbiert (auf 2880 s): Lambda 12960 s (3,6 h), -2880 s (-18,18 %)
+     senkt Lambda, macht den Takt T = 10800 s (3 h) fuer sich allein aber nicht tragfaehig.
+     ueblicher Weg: Task teilen, Inkrement verkleinern oder Warm-Start; der Plan zeigt die Rechnung, ob und wie geteilt wird, laesst sich nur am konkreten Task entscheiden.
+  3. Task core halbiert (auf 1980 s): Lambda 13860 s (3,85 h), -1980 s (-12,5 %)
+     senkt Lambda, macht den Takt T = 10800 s (3 h) fuer sich allein aber nicht tragfaehig.
+     ueblicher Weg: Task teilen, Inkrement verkleinern oder Warm-Start; der Plan zeigt die Rechnung, ob und wie geteilt wird, laesst sich nur am konkreten Task entscheiden.
+  4. Task features halbiert (auf 1620 s): Lambda 14220 s (3,95 h), -1620 s (-10,23 %)
+     senkt Lambda, macht den Takt T = 10800 s (3 h) fuer sich allein aber nicht tragfaehig.
+     ueblicher Weg: Task teilen, Inkrement verkleinern oder Warm-Start; der Plan zeigt die Rechnung, ob und wie geteilt wird, laesst sich nur am konkreten Task entscheiden.
+  5. Task score halbiert (auf 900 s): Lambda 14940 s (4,15 h), -900 s (-5,68 %)
+     senkt Lambda, macht den Takt T = 10800 s (3 h) fuer sich allein aber nicht tragfaehig.
+     ueblicher Weg: Task teilen, Inkrement verkleinern oder Warm-Start; der Plan zeigt die Rechnung, ob und wie geteilt wird, laesst sich nur am konkreten Task entscheiden.
+  6. Task monitor halbiert (auf 540 s): Lambda 15300 s (4,25 h), -540 s (-3,41 %)
+     senkt Lambda, macht den Takt T = 10800 s (3 h) fuer sich allein aber nicht tragfaehig.
+     ueblicher Weg: Task teilen, Inkrement verkleinern oder Warm-Start; der Plan zeigt die Rechnung, ob und wie geteilt wird, laesst sich nur am konkreten Task entscheiden.
+  3 weitere Szenarien aendern Lambda nicht: 3 Kanten ausserhalb des kritischen Kreises.
+Eine Aenderung, die nicht auf dem kritischen Kreis liegt, aendert Lambda um exakt null. Der Plan rechnet deshalb die Kreis-Tasks und alle Cross-Kanten durch; was Lambda nicht aendert, ist fuer die Taktgrenze wirkungslos, so nuetzlich es fuer die Latenz eines Einzellaufs sein mag.
+
+Monte Carlo
+-----------
+Lambda p50 = 16229,99 s (4,51 h), Lambda p95 = 20033,82 s (5,56 h) (1000 Stichproben, Lognormal-Fit aus p50/p95 je Task, Seed 20260715: derselbe Aufruf liefert dieselben Zahlen).
+p95 beantwortet, ob der Takt auch in einer schlechten Woche haelt, nicht nur im Durchschnitt.
+Anteil der Stichproben mit Lambda ueber dem Takt: 100 %.
+
+Warnungen
+---------
+Keine.
+
+Modellgrenzen
+-------------
+  - Unbegrenzte Parallelitaet angenommen: Lambda ist eine Untergrenze der realen Taktzeit. Das Tool sagt 'nicht schneller als Lambda', nicht 'Lambda ist erreichbar'.
+  - Retries, Sensor-Poking und Pool-Limits sind nicht modelliert. Sie koennen die reale Taktzeit nur erhoehen, nie senken; die Untergrenze bleibt gueltig.
+  - Latenz-Angaben sind Makespan: die Dauer eines Laufs von seinem Start bis zum Ende seines laengsten Pfads, nicht die Verspaetung gegenueber dem Plan.
+
+Naechster Schritt: die eigenen DAGs pruefen mit eigenlag analyze your/dags --assume-duration 300

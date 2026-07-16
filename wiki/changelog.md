@@ -90,3 +90,13 @@ Feature-Historie. Ein Eintrag pro abgeschlossenem Feature, nicht pro Commit.
 - `report._plan_text` ersetzt `_what_if_text`; Report-Reihenfolge Urteil → Kreis → **Beschleunigungsplan** → Monte Carlo → Warnungen; `--json` `plan`-Key **additiv**, `what_if` eingefroren, EN/DE byte-identisch (ADR-024)
 - Zwei Gewinn-Formen: instabil „makes your current schedule sustainable" ⇔ λ_neu < T plus weggeräumte Drift; stabil Headroom (Läufe/Tag mehr, „bis zu" T − λ frischer) ohne erfundene Marge
 - Demo als Marketing-Artefakt (Quality-Gate-Kante rettet den Takt, GPU-Upgrade nicht), Flaggschiff EN+DE, synthetischer Paar-Fall, README-Quickstart auf echten Lauf umgestellt; 370 Tests grün, Pflicht-Dependencies weiterhin null
+
+### Session 013 — Launch-Kit (2026-07-16)
+
+- `eigenlag demo` neu: eingebauter Beispiel-Report der Prototyp-Pipeline (EN/DE, < 1 s, kein Netz, keine Dateien), Kopfzeile deklariert das Beispiel, Fußzeile den nächsten Schritt; Fixture DUR/INTRA/CROSS zog als Single Source nach `eigenlag/demo.py`
+- `plan_fix_task_halved` umformuliert (EN/DE): der "foreign task"-Deutschismus ist raus, die Schnitt-Entscheidung bleibt beim Leser (012a-Feinschliff)
+- `launch/demo.tape` + `assets/demo.gif` (vhs, 356 KB, 16,6 s, reproduzierbar), im README oben eingebettet
+- `.github/workflows/ci.yml`: Matrix Python 3.12/3.14, pytest/ruff/mypy, identisch zur dokumentierten Frisch-Clone-Probe; CI-Badge im README
+- PyPI vorbereitet: `twine check` PASSED, Classifier 3.14, `docs/pypi-release.md`, README-Install-Umstellung als nicht angewandter Patch `launch/readme-pypi-install.patch`
+- Launch-Texte als DRAFTs unter `launch/`: Reddit-Post, Wikimedia-Mail, Airflow-Slack, Release-Notes v0.1.0, Schalter-Checkliste
+- 377 Tests grün (Pflicht-Dependencies weiterhin null); veröffentlicht hat die Session nichts

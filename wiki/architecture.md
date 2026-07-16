@@ -56,8 +56,11 @@ eigenlag/
     │                            Punkt-λ gegen Punkt-λ (ADR-022), PR-Kommentar (Session 010)
     ├── report.py                compose(): stabile JSON-Keys fürs Gate; render(): deutscher Text;
     │                            What-if-Szenarien und Ranking (Session 009)
-    ├── cli.py                   argparse, `eigenlag analyze` und `eigenlag check`,
-    │                            Exit-Codes 0/1/2 (analyze) und 0/1/3 (check) (Sessions 009/010)
+    ├── cli.py                   argparse, `eigenlag analyze`, `eigenlag check` und `eigenlag demo`,
+    │                            Exit-Codes 0/1/2 (analyze) und 0/1/3 (check) (Sessions 009/010/013)
+    ├── demo.py                  `eigenlag demo`: die Prototyp-Pipeline (DUR/INTRA/CROSS, Single
+    │                            Source, maxplus_test importiert sie) als voller Report über
+    │                            compose()/render(), ohne Dateien und Netz (Session 013)
     └── *_test.py
 ```
 

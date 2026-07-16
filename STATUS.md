@@ -2,59 +2,53 @@
 
 > Wird am Ende jeder Session überschrieben. Schnelle Orientierung für die nächste Session.
 
-## Stand: Session 012 — Beschleunigungsplan: aus der Diagnose wird das Produkt (2026-07-16)
+## Stand: Session 013 — Launch-Kit (2026-07-16)
 
-**Der Report handelt jetzt.** Bis 011 sagte er „hier ist deine Grenze und wer schuld ist".
-Ab 012 sagt der **Beschleunigungsplan**: „deine Pipeline könnte alle X laufen statt alle Y;
-hier ist die Änderung, die den Unterschied kauft, und was sie bringt." Jeder Befund ist
-unbeanspruchte Reserve, nicht Mangel. Details in `wiki/decisions.md` **ADR-024**.
+**Alles für Davids Schalter liegt bereit; veröffentlicht hat die Session nichts.**
+Der Sofort-Einstieg (`eigenlag demo`), das Demo-GIF, der CI-Workflow, die PyPI-fertigen
+Artefakte und die fünf Launch-Texte als redigierbare Entwürfe. Reihenfolge der Schalter:
+`launch/launch-checklist.md`.
 
-### Kern-Ergebnisse (Belege in `wiki/log.md`, Session 012; Artefakte in `scan/012_plan/`)
+### Kern-Ergebnisse (Belege in `wiki/log.md`, Session 013; Artefakte in `scan/013_launch/`)
 
 | Was | Ergebnis |
 |---|---|
-| Plan-Modul | `eigenlag/plan.py::build_plan` reichert die What-if-Zeilen an: Kanten-Art (A–G, dbt-E), Katalog-Schlüssel, λ_neu, Delta absolut und Prozent, verdict-abhängige Gewinn-Felder. Reine Funktion, sprachneutral |
-| Zwei Gewinn-Formen | **Instabil**: „makes your current schedule sustainable" gilt genau bei λ_neu < T, beziffert die weggeräumte Drift (λ − T); rettet keine Einzel-Aktion, folgt die Paar-Rechnung der drei wirksamsten. **Stabil**: Headroom — Läufe/Tag mehr (86400/λ − 86400/T) und „bis zu" (T − λ) frischer, plus Fußzeile „Untergrenze ohne Betriebsreserve" |
-| Behebungs-Katalog | `messages.py` `plan_fix_*` je Kanten-Art in EN und DE, „üblicher Weg"/„commonly resolved by", nie Garantie. Vollständigkeit per Test erzwungen (jede Kanten-Art × beide Sprachen) |
-| Report | Reihenfolge Urteil → Kreis → **Beschleunigungsplan** (ersetzt What-if) → Monte Carlo → Warnungen. `report._plan_text` rendert d["plan"] |
-| `--json` | `plan`-Key **additiv**, `what_if` bleibt eingefroren daneben (Gate liest ihn), EN/DE byte-identisch (`diff -q` belegt) |
+| `eigenlag demo` | Eingebauter Subcommand, voller Report der Prototyp-Pipeline (λ = 4.4 h, T = 3 h) über `compose()`/`render()`, EN/DE, 0,113 s über den pipx-Entry-Point. Fixture zog als Single Source nach `eigenlag/demo.py` |
+| 012a-Feinschliff | `plan_fix_task_halved` EN/DE neu, "foreign task" ist raus, README-Sweep erledigt |
+| GIF | `assets/demo.gif` aus `launch/demo.tape` (vhs): 356 KB, 16,6 s, Endframe = Plan-Sektion mit −43,18 %; im README oben eingebettet |
+| CI | `.github/workflows/ci.yml` (Matrix 3.12/3.14) = exakt die Frisch-Clone-Probe: `pip install -e ".[db,scanner]" pytest ruff mypy`, dann pytest/ruff/format/mypy. Probe grün (377 passed, frische venv, Temp-Clone) |
+| PyPI | `python -m build` + `twine check` PASSED, Name frei (404 geprüft 2026-07-16), Anleitung `docs/pypi-release.md`, README-Umstellung als **nicht angewandter** Patch `launch/readme-pypi-install.patch` |
+| Launch-Texte | 5 DRAFTs unter `launch/`: reddit-post, wikimedia-mail, airflow-slack, release-notes-v0.1.0, launch-checklist |
 
-### Verifiziert (Belege gepastet in `wiki/log.md`, Artefakte in `scan/012_plan/`)
+### Verifiziert
 
-- `pytest`: **370 passed** (neu: `plan_test.py`, 16 Pins). Nur die 2 `durations`-Tests
-  brauchen `sqlalchemy` (im Basis-Python nicht installiert, im `.venv` grün). `ruff check`,
-  `ruff format --check`, `mypy eigenlag/` (27 Files) grün.
-- **Demo** (Prototyp, λ = 4.40 h, T = 3.0 h, instabil): voller EN-Report,
-  `scan/012_plan/lauf1_demo_plan_en.txt`. Das Marketing-Artefakt: die kostenlose
-  Architektur-Änderung (`monitor → core` entfernt → 2.50 h) macht den Takt tragfähig
-  (−43,18 %, räumt 84 min/Lauf Drift weg), das GPU-Upgrade (`retrain` halbiert → 3.60 h) nicht.
-- **Flaggschiff** `load_data_wikiviews` (`--assume 300`, stabil, λ = 600 s, T = 3600 s):
-  EN + DE (`lauf2_wikiviews_en.txt`/`_de.txt`), Headroom 120 Läufe/Tag mehr, bis zu 50 min frischer.
-- **Synthetischer Zwei-Loop-Fall** (`lauf3_pair_en.txt`): keine Einzel-Aktion rettet T,
-  Paar-Rechnung sichtbar (beide Selbst-Kanten zusammen → kein Kreis).
-- `pipx install --force .`, Läufe über den Entry-Point; `--json` EN vs. DE byte-identisch.
-- README-Quickstart zeigt einen echten, aktualisierten Lauf mit dem Plan-Abschnitt
-  (`lauf4_readme_feature_pipeline.txt`, Fixture in `scan/012_plan/readme_demo/`).
+- `pytest`: **377 passed** (+7 `demo_test.py`, tests-zuerst). `ruff check`, `ruff format
+  --check`, `mypy` (53 Files) grün — lokal UND in der Frisch-Clone-Probe.
+- Demo über den Entry-Point in beiden Sprachen gefahren (`scan/013_launch/demo_en.txt`/`_de.txt`).
+- GIF-Endframe per ffmpeg extrahiert und gesichtet.
 
 ## Hinweise für nächste Session
 
-- **Für den Orchestrator zu prüfen (012):** der Header-Rename „What-if" → „Acceleration
-  plan"/„Beschleunigungsplan". Die sammelzeilen-rendernden Report-Tests (009a) lasen früher
-  `d["what_if"]`; sie zeigen jetzt auf `d["plan"]` (`plan_mit`/`paktion`-Helfer). Die
-  JSON-`what_if`-Struktur-Tests blieben unverändert, der `plan`-Key ist rein additiv.
-- **Bewusster Schnitt:** Die Kanten-Art eines `cross_entfernt` kommt aus der Signal-Herkunft
-  der geparsten DAGs. Die Demo ist ein direkt gebautes Pipeline-Objekt ohne `ParsedDag` und
-  trägt darum keinen Katalog-Text (kein erfundenes Detailwissen). Das ist gewollt.
-- Der Katalog ist für D (`include_prior_dates`) und E (dbt `is_incremental`) vollständig,
-  obwohl der Airflow-Parser für sie heute keine Kante erzeugt — Muster-Wissen, das greift,
-  sobald die Kante existiert.
+- **Abnahme 013 durch den Orchestrator steht aus.** Prüfschwerpunkte: die Launch-Texte
+  gegen die Schreibregeln (das ist der heikelste Teil), die Demo-Annahmen (MC-Streuung
+  p95 = 1,5 × p50 und n = 40 sind deklarierte Beispiel-Annahmen aus dem 012-Artefakt),
+  und die CI-Abweichung von der Spec: installiert wird `.[db,scanner]` statt `.[db]`,
+  weil die Scanner-Tests pyyaml brauchen — Skip-Marker waren nirgends nötig, kein Test
+  braucht Netz/Docker/`data/`.
+- **Kein 014-Spec abgelegt:** Die nächsten Schritte sind Davids Schalter
+  (`launch/launch-checklist.md`), danach entscheidet das Feedback (positioning.md,
+  Trigger-Momente) über die Produktrichtung. Erst dann lohnt ein neuer Spec.
+- **Erster echter CI-Lauf** passiert erst nach dem Public-Schalter (Checklisten-Schritt 2);
+  das 3.12-Bein war lokal nicht prüfbar (Server hat nur Python 3.14.4).
+- GIF-Reproduktion braucht `VHS_NO_SANDBOX=true` (Chromium-Sandbox am Server), vhs/ttyd
+  liegen in `~/.local/bin`.
 - **Offen aus 006a (unverändert):** Import-genauer DAG-Check im Scanner, DAG-Generatoren
-  mit Literal-Argumenten. **dbt-Parser** bleibt bis nach dem Feedback-Meilenstein vertagt;
-  erst dann erzeugt E echte Kanten und der Katalog-Eintrag `plan_fix_is_incremental` wird sichtbar.
+  mit Literal-Argumenten. **dbt-Parser** bleibt bis nach dem Feedback-Meilenstein vertagt.
 
 ## Was David entscheiden muss
 
-1. Nichts Blockierendes im Code. Die eigentliche Entscheidung bleibt: wann das Repo public
-   geht und in welcher Reihenfolge Reddit-Post / Airflow-Slack / Wikimedia-Kontakt. Die
-   Launch-Texte sind Session 013 (Solo-Founder-Voicing, `wiki/roadmap.md`); dort wird die
-   Euro-Übersetzung in Prosa gemacht, nicht im Tool (ADR-024, Punkt 3).
+1. **Die Schalter**: Repo public → CI prüfen → PyPI → README-Patch → Tag v0.1.0 →
+   About/Topics → Pause → Wikimedia-Mail → Reddit → Slack. Jeder Schritt mit Wirkung
+   und Risiko in `launch/launch-checklist.md`; nichts davon löst eine Session aus.
+2. Die fünf Launch-Texte redigieren — sie sind bewusst "fertig zum Redigieren",
+   nicht "fertig zum Posten".

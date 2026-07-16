@@ -240,7 +240,7 @@ DE: dict[str, str] = {
         " Prototyp-Dauern. Es wurden keine Dateien gelesen und kein Netz benutzt."
     ),
     "demo_fuss": (
-        "Naechster Schritt: der Lauf auf den eigenen DAGs —"
+        "Naechster Schritt: die eigenen DAGs pruefen mit"
         " eigenlag analyze your/dags --assume-duration 300"
     ),
     # --- Report: Warnungen ---
@@ -538,7 +538,7 @@ EN: dict[str, str] = {
         " durations. No files were read and no network was used."
     ),
     "demo_fuss": (
-        "Next step: run it on your own DAGs — eigenlag analyze your/dags --assume-duration 300"
+        "Next step: point it at your own DAGs with eigenlag analyze your/dags --assume-duration 300"
     ),
     # --- Report: warnings ---
     "warn_header": "Warnings",
