@@ -8,7 +8,7 @@ First release. eigenlag computes the sustainable minimum cycle time of an Airflo
 
 **What it does:**
 
-- `eigenlag analyze PATH` reads DAG files (Python `ast`, never regex), joins task durations from the Airflow metadata DB, the REST API or a flat assumption, and reports: the verdict (stable, unstable, at the limit), the critical cycle down to file and line, an acceleration plan that prices every possible change, and a Monte Carlo range for λ. English by default, German with `--lang de`, machine-readable with `--json`.
+- `eigenlag analyze PATH` reads DAG files (Python `ast`, never regex), joins task durations from the Airflow metadata DB, the REST API or a flat assumption, and reports: the verdict (stable, unstable, at the limit), the critical cycle down to file and line, an acceleration plan that quantifies the impact of each structural change, and a Monte Carlo range for λ. English by default, German with `--lang de`, machine-readable with `--json`.
 - `eigenlag check PATH --against REF` is a CI gate: it compares λ and the cross-run edge set of a pull request against a git reference and fails before a change pushes the pipeline over its cycle limit.
 - `eigenlag demo` renders the full report of a built-in example pipeline, in under a second, without reading any files. Start there.
 

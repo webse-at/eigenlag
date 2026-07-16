@@ -65,41 +65,41 @@ report leads with the verdict and backs every claim with its source:
 eigenlag analyze
 ================
 
-DAG:        feature_pipeline (dags/feature_pipeline.py:6, schedule '@hourly')
+DAG:        feature_pipeline (feature_pipeline.py:6, schedule '@hourly')
 Period T:   3600 s (60 min), source: schedule '@hourly'
 Durations:  assumed: 2000 s per task without a measurement
+Statistic:  mean. For the asymptotic drift the mean is the theoretically correct quantity; it is sensitive to outliers, and a single hanging run can shift it noticeably.
+Sample:     runs per task, minimum 0, median 0.
 
 Verdict
 -------
-Unstable: λ = 4000 s (66.67 min) lies above the period T = 3600 s (60 min). The
-delay grows by 400 s (6.67 min) per run, without bound and regardless of the number
-of workers. One hour of backlog is reached after 9 runs. More compute changes
-nothing, because the bottleneck is the dependency structure, not the capacity.
+Unstable: λ = 4000 s (66.67 min) lies above the period T = 3600 s (60 min). The delay grows by 400 s (6.67 min) per run, without bound and regardless of the number of workers. One hour of backlog is reached after 9 runs (about 36000 s (10 h) of wall-clock time). More compute changes nothing, because the bottleneck is the dependency structure, not the capacity.
 
 Critical cycle
 --------------
 Condensed (the cycle in the cross-run matrix; its cycle mean is λ):
-  feature_pipeline.train_model -> feature_pipeline.train_model: weight 4000 s, 1 period back [wait_for_downstream, dags/feature_pipeline.py:4]
+  feature_pipeline.train_model -> feature_pipeline.train_model: weight 4000 s (66.67 min), 1 period back [wait_for_downstream, feature_pipeline.py:4]
     as task path: feature_pipeline.build_features -> feature_pipeline.train_model
 Resolved across all segments: feature_pipeline.build_features -> feature_pipeline.train_model
+The path to a smaller λ runs through this cycle; a shortening anywhere else changes λ by exactly zero. Whether a single shortening carries through or a second cycle with the same cycle mean takes over is what the acceleration plan below computes.
 
 Acceleration plan
 -----------------
-Base: λ = 4000 s (66.67 min). Each action is unclaimed reserve, sorted by the new λ.
+Base: λ = 4000 s (66.67 min). Each action is untapped headroom, sorted by the new λ.
   1. cross-run edge feature_pipeline.train_model -> feature_pipeline.build_features removed: λ 2000 s (33.33 min), -2000 s (-50 %)
      makes your current schedule sustainable and removes the 400 s (6.67 min) of drift per run.
      commonly resolved by: usually guards against overlapping writes; with partition isolation (each run writes its own partition) overlap is safe.
   2. task feature_pipeline.build_features halved (to 1000 s): λ 3000 s (50 min), -1000 s (-25 %)
      makes your current schedule sustainable and removes the 400 s (6.67 min) of drift per run.
-     commonly resolved by: split the task, shrink the increment, or warm-start; the plan shows the arithmetic, whether and how to split is yours to judge.
+     commonly resolved by: split the task, shrink the increment, or warm-start; the plan shows the arithmetic; whether and how to split it is up to you.
   3. task feature_pipeline.train_model halved (to 1000 s): λ 3000 s (50 min), -1000 s (-25 %)
      makes your current schedule sustainable and removes the 400 s (6.67 min) of drift per run.
-     commonly resolved by: split the task, shrink the increment, or warm-start; the plan shows the arithmetic, whether and how to split is yours to judge.
+     commonly resolved by: split the task, shrink the increment, or warm-start; the plan shows the arithmetic; whether and how to split it is up to you.
   2 more scenarios leave λ unchanged: 2 edges off the critical cycle.
 ```
 
-The acceleration plan turns the diagnosis into action: it states every finding as
-unclaimed reserve. Removing the `wait_for_downstream` edge, which costs nothing, makes
+The acceleration plan turns the diagnosis into action: it frames every finding as
+available headroom. Removing the `wait_for_downstream` edge, which costs nothing, makes
 the current schedule sustainable and clears the 400 s of drift per run; each entry
 names the usual way that kind of edge is resolved, without claiming to know the task.
 When the pipeline is already stable, the same section reads the other way and puts a
@@ -149,8 +149,8 @@ The full reference is in [docs/ci-gate.md](docs/ci-gate.md).
 
 ## What it will tell you
 
-The point is less the single λ value than the distinction it draws. A tool that only
-holds runtime against the schedule cannot tell a structural problem from a capacity
+The single λ value matters less than the distinction it draws. A tool that only
+compares runtime against the schedule cannot distinguish a structural problem from a capacity
 one, and it produces false alarms.
 
 We measured this on Wikimedia's production Airflow, which is public. Of the DAGs that

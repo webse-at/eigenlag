@@ -23,7 +23,7 @@ https://github.com/webse-at/eigenlag/blob/main/wikimedia/case.md
 
 Two findings might interest you:
 
-1. `wdqs_streaming_updater_reconcile_hourly` sits in a stable equilibrium at its cycle limit: over 398 runs, mean duration 3598.4 s against the 3600 s interval, with a constant median schedule delay of 48 minutes. Nothing looks broken; it is the steady state of a run-to-run feedback loop, and the 48 minutes are its price. Whether that price matters for reconciliation is your call.
+1. `wdqs_streaming_updater_reconcile_hourly` sits in a stable equilibrium at its cycle limit: over 398 runs, with a mean duration of 3598.4 s against a 3600 s interval, with a constant median schedule delay of 48 minutes. Nothing looks broken; it is the steady state of a run-to-run feedback loop, and the 48 minutes are its price. Whether that price matters for reconciliation is your call.
 
 2. Of 30 DAGs whose median runtime exceeds their schedule interval, 29 do not fall behind, because their runs may overlap. Runtime versus schedule alone would be a poor alert.
 

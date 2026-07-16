@@ -465,7 +465,7 @@ EN: dict[str, str] = {
     "whatif_requested_suffix": " (requested)",
     # --- Report: acceleration plan (Spec 012, ADR-024) ---
     "plan_header": "Acceleration plan",
-    "plan_basis": ("Base: λ = {dauer}. Each action is unclaimed reserve, sorted by the new λ."),
+    "plan_basis": ("Base: λ = {dauer}. Each action is untapped headroom, sorted by the new λ."),
     "plan_zeile": "  {i}. {szenario}: {wirkung}",
     "plan_wirkung": "λ {dauer}",
     "plan_wirkung_kein_kreis": "no cycle left, cycle limit removed",
@@ -529,8 +529,8 @@ EN: dict[str, str] = {
         " be rebuilt from source."
     ),
     "plan_fix_task_halved": (
-        "split the task, shrink the increment, or warm-start; the plan shows the arithmetic,"
-        " whether and how to split is yours to judge."
+        "split the task, shrink the increment, or warm-start; the plan shows the arithmetic;"
+        " whether and how to split it is up to you."
     ),
     # --- Demo (Spec 013): header and footer around the built-in example report ---
     "demo_kopf": (

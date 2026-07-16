@@ -65,4 +65,4 @@ def test_kein_foreign_task_mehr_im_katalogtext(capsys: pytest.CaptureFixture[str
     # ueber den Schnitt bleibt beim Leser.
     out = demo_output(capsys)
     assert "foreign task" not in out
-    assert "yours to judge" in out
+    assert "up to you" in out

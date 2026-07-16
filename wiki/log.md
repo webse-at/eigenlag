@@ -1126,3 +1126,17 @@ $ mypy                          → Success: no issues found in 53 source files
 **Ehrlich offen bleibt, was nur der Public-Schalter beweisen kann:** der erste echte CI-Lauf und das Python-3.12-Bein (Server hat nur 3.14; die Frisch-Clone-Probe bildet den Runner nach, beweist ihn aber nicht). Steht in der Checkliste als Schritt 2 mit Anweisung für den Rot-Fall.
 
 **Damit ist die Roadmap bis 013 komplett und der Feedback-Meilenstein wartet nur noch auf Davids Schalter.** Reihenfolge: Repo public → CI prüfen → PyPI → README-Patch → Release → Ruhe → Wikimedia → Reddit → Slack → Woche-1-Reaktionsdienst.
+
+---
+
+## 013b — Externes Text-Review eingearbeitet (Gemini via David, 2026-07-16)
+
+David hat die fünf Außentexte extern korrekturlesen lassen. Triage durch den Orchestrator, Einarbeitung direkt (von David für diese Runde autorisiert):
+
+**Übernommen (9 von 10):** die Deutschismen "holds runtime against" → "compares" (Reddit + README), "pays 48 minutes" → "pays a 48-minute penalty" bzw. "incurs a constant 48-minute delay" (Reddit/Slack), "assembled at call time" → "generated dynamically", "both halves" → "both parts" (abgewandelt), der Mail-Lesefluss ("with a mean duration of … against a"), "prices every possible change" → "quantifies the impact of each structural change" (mit der 013a-Korrektur der Überbehauptung zusammengeführt), "unclaimed reserve" → Headroom-Vokabular, "yours to judge" → "up to you".
+
+**Abgelehnt (1 von 10), mit Begründung:** der Vorschlag "The core value isn't just the specific λ number, but the distinction it makes" — "core value" ist Marketing-Vokabular und die "isn't just X, but Y"-Antithese ist genau das Muster, das die Schreibregeln verbieten. Stattdessen eigene, leisere Umstellung: "The single λ value matters less than the distinction it draws."
+
+**Kaskade, weil zwei Fundstellen im Produkt-Code lagen:** "yours to judge" und "unclaimed reserve" standen nicht nur in der Doku, sondern in `messages.py` (EN-Katalog) — also Report-Strings geändert, Test-Pin angepasst (377 passed), der README-Quickstart-Block aus einem frischen echten Lauf neu erzeugt und auf die kuratierte Länge zurückgeschnitten, und das GIF aus der `.tape` neu gerendert (654 KB, Endframe gesichtet: neue Formulierungen, Umbruch jetzt an der Wortgrenze). Genau für diese Reproduzierbarkeit war das tape-Skript gebaut.
+
+Das Review-Paket (`launch/review-fuer-gemini.md`) ist wieder entfernt, sein Zweck ist erfüllt.
