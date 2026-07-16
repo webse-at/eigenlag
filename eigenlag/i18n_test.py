@@ -144,7 +144,7 @@ def test_englischer_report_ist_englisch() -> None:
     en = render(d, "en")
     assert "Verdict" in en
     assert "Model limits" in en
-    assert "What-if" in en
+    assert "Acceleration plan" in en
     assert "Stable" in en
     assert "λ" in en
     # keine deutschen Marker mehr im englischen Report.

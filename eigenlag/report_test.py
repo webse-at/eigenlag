@@ -246,15 +246,60 @@ def zeile(
     }
 
 
-def test_null_delta_zeilen_werden_zur_sammelzeile_kompaktiert() -> None:
+def paktion(
+    lam: float | None, delta: float | None, *, katalog: str | None = None, **kw: Any
+) -> dict[str, Any]:
+    """Eine Plan-Aktion: eine What-if-Zeile plus die Anreicherungen aus build_plan.
+    gewinn = {} haelt die Gewinn-Zeilen aus diesen reinen Sammelzeilen-Tests draussen."""
+    row = zeile(lam, delta, **kw)
+    return {
+        **row,
+        "lambda_neu_s": lam,
+        "delta_prozent": None if delta is None else delta,
+        "signal": None,
+        "kanten_art": None,
+        "katalog_schluessel": katalog,
+        "macht_tragfaehig": lam is None,
+        "gewinn": {},
+    }
+
+
+def plan_mit(
+    aktionen: list[dict[str, Any]],
+    null_delta: list[dict[str, Any]],
+    *,
+    urteil: str = "stabil",
+) -> dict[str, Any]:
     d = bericht()
-    d["what_if"] = [
-        zeile(900.0, -900.0, art="task_halbiert", task="takt.lade", wert_s=900.0, auf_kreis=True),
-        zeile(1800.0, 0.0, src="a", dst="a", auf_kreis=True),
-        zeile(1800.0, 0.0, src="b", dst="b"),
-        zeile(1800.0, 0.0, src="c", dst="c"),
-        zeile(1800.0, 0.0, art="task_gesetzt", task="takt.rechne", wert_s=10.0, angefragt=True),
-    ]
+    d["plan"] = {
+        "urteil": urteil,
+        "basis_lambda_s": 1800.0,
+        "takt_s": 3600.0,
+        "aktionen": aktionen,
+        "null_delta": null_delta,
+        "headroom": None,
+        "kein_einzel_ausreichend": False,
+        "paar_rechnung": None,
+    }
+    return d
+
+
+def test_null_delta_zeilen_werden_zur_sammelzeile_kompaktiert() -> None:
+    d = plan_mit(
+        aktionen=[
+            paktion(
+                900.0, -900.0, art="task_halbiert", task="takt.lade", wert_s=900.0, auf_kreis=True
+            ),
+            paktion(
+                1800.0, 0.0, art="task_gesetzt", task="takt.rechne", wert_s=10.0, angefragt=True
+            ),
+        ],
+        null_delta=[
+            paktion(1800.0, 0.0, src="a", dst="a", auf_kreis=True),
+            paktion(1800.0, 0.0, src="b", dst="b"),
+            paktion(1800.0, 0.0, src="c", dst="c"),
+        ],
+    )
     text = render(d, "de")
     assert "1. Task takt.lade halbiert" in text
     assert "2. Task takt.rechne = 10 s (angefragt)" in text
@@ -266,25 +311,30 @@ def test_null_delta_zeilen_werden_zur_sammelzeile_kompaktiert() -> None:
 
 
 def test_sammelzeile_singular_und_nur_eine_kategorie() -> None:
-    d = bericht()
-    d["what_if"] = [
-        zeile(900.0, -900.0, art="task_halbiert", task="takt.lade", wert_s=900.0, auf_kreis=True),
-        zeile(1800.0, 0.0, src="a", dst="a", auf_kreis=True),
-    ]
+    d = plan_mit(
+        aktionen=[
+            paktion(
+                900.0, -900.0, art="task_halbiert", task="takt.lade", wert_s=900.0, auf_kreis=True
+            ),
+        ],
+        null_delta=[paktion(1800.0, 0.0, src="a", dst="a", auf_kreis=True)],
+    )
     text = render(d, "de")
     assert "1 weiteres Szenario aendert Lambda nicht: 1 Kreis-Gleichstand." in text
 
 
 def test_lauter_null_deltas_ergeben_nur_die_sammelzeile() -> None:
-    # Der 009a-Flaggschiff-Fall: uniforme Assume-Dauern, alle 15 Zeilen +0 s.
-    d = bericht()
-    d["what_if"] = [
-        zeile(600.0, 0.0, art="task_halbiert", task="t1", wert_s=150.0, auf_kreis=True),
-        zeile(600.0, 0.0, art="task_halbiert", task="t2", wert_s=150.0, auf_kreis=True),
-        zeile(600.0, 0.0, src="x", dst="y", auf_kreis=True),
-        zeile(600.0, 0.0, src="u", dst="v"),
-        zeile(600.0, 0.0, src="w", dst="w"),
-    ]
+    # Der 009a-Flaggschiff-Fall: uniforme Assume-Dauern, alle Zeilen +0 s.
+    d = plan_mit(
+        aktionen=[],
+        null_delta=[
+            paktion(600.0, 0.0, art="task_halbiert", task="t1", wert_s=150.0, auf_kreis=True),
+            paktion(600.0, 0.0, art="task_halbiert", task="t2", wert_s=150.0, auf_kreis=True),
+            paktion(600.0, 0.0, src="x", dst="y", auf_kreis=True),
+            paktion(600.0, 0.0, src="u", dst="v"),
+            paktion(600.0, 0.0, src="w", dst="w"),
+        ],
+    )
     text = render(d, "de")
     assert (
         "5 weitere Szenarien aendern Lambda nicht: 3 Kreis-Gleichstaende,"
@@ -294,11 +344,10 @@ def test_lauter_null_deltas_ergeben_nur_die_sammelzeile() -> None:
 
 
 def test_kein_kreis_mehr_zeile_wird_nie_kompaktiert() -> None:
-    d = bericht()
-    d["what_if"] = [
-        zeile(None, None, src="takt.lade", dst="takt.lade", auf_kreis=True),
-        zeile(1800.0, 0.0, src="b", dst="b"),
-    ]
+    d = plan_mit(
+        aktionen=[paktion(None, None, src="takt.lade", dst="takt.lade", auf_kreis=True)],
+        null_delta=[paktion(1800.0, 0.0, src="b", dst="b")],
+    )
     text = render(d, "de")
     assert "kein Kreis mehr" in text
 
@@ -379,3 +428,11 @@ def test_json_ist_serialisierbar_und_schema_stabil() -> None:
         "modellgrenzen",
     }
     assert zurueck["monte_carlo"]["konstant_gesampelt"] == ["takt.rechne"]
+    # Spec 012, ADR-024: der Plan ist additiv, what_if bleibt eingefroren daneben.
+    plan = zurueck["plan"]
+    assert plan["urteil"] == "stabil"
+    assert plan["basis_lambda_s"] == 1800.0
+    assert all(
+        {"lambda_neu_s", "delta_prozent", "kanten_art", "katalog_schluessel", "gewinn"} <= set(a)
+        for a in plan["aktionen"]
+    )

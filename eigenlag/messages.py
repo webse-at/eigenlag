@@ -124,7 +124,7 @@ DE: dict[str, str] = {
         "Der Weg zu einem kleineren Lambda fuehrt ueber diesen Kreis; eine Verkuerzung"
         " daneben aendert Lambda um exakt null. Ob eine einzelne Verkuerzung"
         " durchschlaegt oder ein zweiter Kreis mit gleichem Zyklusmittel uebernimmt,"
-        " rechnet das What-if-Ranking unten nach."
+        " rechnet der Beschleunigungsplan unten nach."
     ),
     "perioden_1": "1 Periode zurueck",
     "perioden_n": "{n} Perioden zurueck",
@@ -153,17 +153,45 @@ DE: dict[str, str] = {
         "Konstant gesampelt (keine belastbare Streuung, angenommene oder duenne"
         " Dauern): {tasks}. Die p95-Aussage unterschaetzt die Streuung dieser Tasks."
     ),
-    # --- Report: What-if ---
-    "whatif_header": "What-if",
-    "whatif_basis": "Basis: Lambda = {dauer}. Sortiert nach neuem Lambda.",
+    # --- What-if-Szenario-Labels (scenario_label, geteilt von Plan und Gate) ---
     "whatif_task_halved": "Task {task} halbiert (auf {sek} s)",
     "whatif_task_set": "Task {task} = {sek} s (angefragt)",
     "whatif_edge_removed": "Cross-Kante {src} -> {dst} entfernt",
     "whatif_requested_suffix": " (angefragt)",
-    "whatif_zeile": "  {i}. {szenario}: {wirkung}",
-    "whatif_kein_kreis": "kein Kreis mehr, Taktgrenze nicht anwendbar",
-    "whatif_wirkung": "Lambda {dauer}",
-    "whatif_veraenderung": ", Veraenderung {vz}{n} s",
+    # --- Report: Beschleunigungsplan (Spec 012, ADR-024) ---
+    "plan_header": "Beschleunigungsplan",
+    "plan_basis": (
+        "Basis: Lambda = {dauer}. Jede Aktion ist unbeanspruchte Reserve, sortiert nach"
+        " neuem Lambda."
+    ),
+    "plan_zeile": "  {i}. {szenario}: {wirkung}",
+    "plan_wirkung": "Lambda {dauer}",
+    "plan_wirkung_kein_kreis": "kein Kreis mehr, Taktgrenze aufgeloest",
+    "plan_delta": ", {vz}{n} s ({vzp}{p} %)",
+    "plan_fix_zeile": "     ueblicher Weg: {text}",
+    "plan_gewinn_tragfaehig": (
+        "     macht den laufenden Takt tragfaehig und raeumt die Drift von {drift} pro Lauf weg."
+    ),
+    "plan_gewinn_nicht_tragfaehig": (
+        "     senkt Lambda, macht den Takt T = {takt} fuer sich allein aber nicht tragfaehig."
+    ),
+    "plan_gewinn_headroom": (
+        "     Untergrenze faellt von Lambda auf {lam}; ein Takt von {lam} statt T = {takt}"
+        " liefe {mehr} mal pro Tag oefter und hielte die Daten jederzeit bis zu {frische} frischer."
+    ),
+    "plan_headroom_intro": (
+        "Lambda = {lam} ist die nachhaltige Untergrenze. Ein Takt von {lam} statt T = {takt}"
+        " liefe {mehr} mal pro Tag oefter und hielte die Daten jederzeit bis zu {frische} frischer."
+    ),
+    "plan_headroom_fuss": (
+        "Lambda ist eine Untergrenze ohne Betriebsreserve; der Plan beziffert die Reserve,"
+        " er empfiehlt keinen konkreten neuen Takt."
+    ),
+    "plan_paar_intro": (
+        "Keine einzelne Standard-Aenderung macht T = {takt} tragfaehig. Die zwei"
+        " guenstigsten zusammen:"
+    ),
+    "plan_paar_zeile": "  {a} + {b}: {wirkung}.",
     "sammel_kopf_1": "1 weiteres Szenario aendert Lambda nicht",
     "sammel_kopf_n": "{n} weitere Szenarien aendern Lambda nicht",
     "sammel_kreis_1": "1 Kreis-Gleichstand",
@@ -171,11 +199,40 @@ DE: dict[str, str] = {
     "sammel_extern_1": "1 Kante ausserhalb des kritischen Kreises",
     "sammel_extern_n": "{n} Kanten ausserhalb des kritischen Kreises",
     "sammel_zeile": "  {kopf}: {teile}.",
-    "whatif_schluss": (
-        "Eine Optimierung, die nicht auf dem kritischen Kreis liegt, aendert Lambda um"
-        " exakt null. Das Ranking rechnet deshalb die Kreis-Tasks und alle Cross-Kanten"
+    "plan_schluss": (
+        "Eine Aenderung, die nicht auf dem kritischen Kreis liegt, aendert Lambda um"
+        " exakt null. Der Plan rechnet deshalb die Kreis-Tasks und alle Cross-Kanten"
         " durch; was Lambda nicht aendert, ist fuer die Taktgrenze wirkungslos, so"
         " nuetzlich es fuer die Latenz eines Einzellaufs sein mag."
+    ),
+    # --- Behebungs-Katalog: Muster-Wissen je Kanten-Art (ADR-024), nie eine Garantie ---
+    "plan_fix_depends_on_past": (
+        "pruefen, ob der Task den Vorlauf-Output braucht oder nur dessen Reihenfolge;"
+        " idempotente, partitionierte Inkremente brauchen ihn oft nicht."
+    ),
+    "plan_fix_wait_for_downstream": (
+        "schuetzt meist vor ueberlappenden Writes; mit Partitions-Isolation (jeder Lauf"
+        " schreibt seine eigene Partition) ist Ueberlappung sicher."
+    ),
+    "plan_fix_external_task_sensor": (
+        "Polling durch einen Dataset-/Asset-Trigger ersetzen oder pruefen, ob der Versatz"
+        " kleiner sein kann."
+    ),
+    "plan_fix_include_prior_dates": (
+        "meist eine Vorsichts-Einstellung; pruefen, ob der konkrete Vorlauf wirklich"
+        " gebraucht wird."
+    ),
+    "plan_fix_max_active_runs": (
+        "oft eine Pauschal-Sicherung; schreiben die Laeufe partitions-isoliert, ist"
+        " Ueberlappung sicher."
+    ),
+    "plan_fix_is_incremental": (
+        "pruefen, ob das Model wirklich aus seiner eigenen Zieltabelle lesen muss oder das"
+        " Inkrement aus der Quelle rekonstruierbar ist."
+    ),
+    "plan_fix_task_halved": (
+        "Task teilen, Inkrement verkleinern oder Warm-Start; der Plan nennt hier die"
+        " Rechnung, kein Detailwissen ueber den fremden Task."
     ),
     # --- Report: Warnungen ---
     "warn_header": "Warnungen",
@@ -364,7 +421,7 @@ EN: dict[str, str] = {
     "kreis_hinweis": (
         "The path to a smaller λ runs through this cycle; a shortening anywhere else"
         " changes λ by exactly zero. Whether a single shortening carries through or a"
-        " second cycle with the same cycle mean takes over is what the what-if ranking"
+        " second cycle with the same cycle mean takes over is what the acceleration plan"
         " below computes."
     ),
     "perioden_1": "1 period back",
@@ -392,17 +449,41 @@ EN: dict[str, str] = {
         "Sampled as constant (no reliable spread, assumed or thin durations): {tasks}."
         " The p95 statement understates the spread of these tasks."
     ),
-    # --- Report: what-if ---
-    "whatif_header": "What-if",
-    "whatif_basis": "Base: λ = {dauer}. Sorted by new λ.",
+    # --- what-if scenario labels (scenario_label, shared by plan and gate) ---
     "whatif_task_halved": "task {task} halved (to {sek} s)",
     "whatif_task_set": "task {task} = {sek} s (requested)",
     "whatif_edge_removed": "cross-run edge {src} -> {dst} removed",
     "whatif_requested_suffix": " (requested)",
-    "whatif_zeile": "  {i}. {szenario}: {wirkung}",
-    "whatif_kein_kreis": "no cycle left, cycle limit not applicable",
-    "whatif_wirkung": "λ {dauer}",
-    "whatif_veraenderung": ", change {vz}{n} s",
+    # --- Report: acceleration plan (Spec 012, ADR-024) ---
+    "plan_header": "Acceleration plan",
+    "plan_basis": ("Base: λ = {dauer}. Each action is unclaimed reserve, sorted by the new λ."),
+    "plan_zeile": "  {i}. {szenario}: {wirkung}",
+    "plan_wirkung": "λ {dauer}",
+    "plan_wirkung_kein_kreis": "no cycle left, cycle limit removed",
+    "plan_delta": ", {vz}{n} s ({vzp}{p} %)",
+    "plan_fix_zeile": "     commonly resolved by: {text}",
+    "plan_gewinn_tragfaehig": (
+        "     makes your current schedule sustainable and removes the {drift} of drift per run."
+    ),
+    "plan_gewinn_nicht_tragfaehig": (
+        "     lowers λ but does not make the period T = {takt} sustainable on its own."
+    ),
+    "plan_gewinn_headroom": (
+        "     floor drops from λ to {lam}; a schedule of {lam} instead of T = {takt} would"
+        " run {mehr} more times per day and keep data up to {frische} fresher at any moment."
+    ),
+    "plan_headroom_intro": (
+        "λ = {lam} is the sustainable floor. A schedule of {lam} instead of T = {takt} would"
+        " run {mehr} more times per day and keep data up to {frische} fresher at any moment."
+    ),
+    "plan_headroom_fuss": (
+        "λ is a floor without operating reserve; the plan quantifies the reserve, it does"
+        " not recommend a concrete new schedule."
+    ),
+    "plan_paar_intro": (
+        "No single standard change makes T = {takt} sustainable. The two cheapest in combination:"
+    ),
+    "plan_paar_zeile": "  {a} + {b}: {wirkung}.",
     "sammel_kopf_1": "1 more scenario leaves λ unchanged",
     "sammel_kopf_n": "{n} more scenarios leave λ unchanged",
     "sammel_kreis_1": "1 cycle tie",
@@ -410,11 +491,37 @@ EN: dict[str, str] = {
     "sammel_extern_1": "1 edge off the critical cycle",
     "sammel_extern_n": "{n} edges off the critical cycle",
     "sammel_zeile": "  {kopf}: {teile}.",
-    "whatif_schluss": (
-        "An optimization that does not lie on the critical cycle changes λ by exactly"
-        " zero. The ranking therefore computes the cycle tasks and all cross-run edges;"
-        " what does not change λ is irrelevant to the cycle limit, however useful it may"
-        " be for the latency of a single run."
+    "plan_schluss": (
+        "A change that does not lie on the critical cycle changes λ by exactly zero. The"
+        " plan therefore computes the cycle tasks and all cross-run edges; what does not"
+        " change λ is irrelevant to the cycle limit, however useful it may be for the"
+        " latency of a single run."
+    ),
+    # --- Fix catalog: pattern knowledge per edge type (ADR-024), never a guarantee ---
+    "plan_fix_depends_on_past": (
+        "check whether the task needs the predecessor's output or only its ordering;"
+        " idempotent, partitioned increments often do not."
+    ),
+    "plan_fix_wait_for_downstream": (
+        "usually guards against overlapping writes; with partition isolation (each run"
+        " writes its own partition) overlap is safe."
+    ),
+    "plan_fix_external_task_sensor": (
+        "replace polling with a dataset/asset trigger, or check whether the offset can be smaller."
+    ),
+    "plan_fix_include_prior_dates": (
+        "usually a precaution; check whether the concrete prior run is really needed."
+    ),
+    "plan_fix_max_active_runs": (
+        "often a blanket safeguard; if runs write partition-isolated, overlap is safe."
+    ),
+    "plan_fix_is_incremental": (
+        "check whether the model must read from its own target table or the increment can"
+        " be rebuilt from source."
+    ),
+    "plan_fix_task_halved": (
+        "split the task, shrink the increment, or warm-start; the plan gives the arithmetic"
+        " here, not detail about the foreign task."
     ),
     # --- Report: warnings ---
     "warn_header": "Warnings",

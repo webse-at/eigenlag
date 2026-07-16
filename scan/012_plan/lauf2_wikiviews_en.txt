@@ -1,0 +1,57 @@
+eigenlag analyze
+================
+
+DAG:        load_data_wikiviews (load_data.py:55, schedule '@hourly')
+Period T:   3600 s (60 min), source: schedule '@hourly'
+Durations:  assumed: 300 s per task without a measurement
+Statistic:  mean. For the asymptotic drift the mean is the theoretically correct quantity; it is sensitive to outliers, and a single hanging run can shift it noticeably.
+Sample:     runs per task, minimum 0, median 0.
+
+Verdict
+-------
+Stable: λ = 600 s (10 min) lies below the period T = 3600 s (60 min). Headroom: 83.33 %. Delays from a single run fade out instead of building up.
+
+Critical cycle
+--------------
+Condensed (the cycle in the cross-run matrix; its cycle mean is λ):
+  load_data_wikiviews.load_data -> load_data_wikiviews.load_data: weight 600 s (10 min), 1 period back [wait_for_downstream, load_data.py:49]
+    as task path: load_data_wikiviews.сheck_data -> load_data_wikiviews.load_data
+Resolved across all segments: load_data_wikiviews.сheck_data -> load_data_wikiviews.load_data
+The path to a smaller λ runs through this cycle; a shortening anywhere else changes λ by exactly zero. Whether a single shortening carries through or a second cycle with the same cycle mean takes over is what the what-if ranking below computes.
+
+Acceleration plan
+-----------------
+Base: λ = 600 s (10 min). Each action is unclaimed reserve, sorted by the new λ.
+λ = 600 s (10 min) is the sustainable floor. A schedule of 600 s (10 min) instead of T = 3600 s (60 min) would run 120 more times per day and keep data up to 3000 s (50 min) fresher at any moment.
+  15 more scenarios leave λ unchanged: 3 cycle ties, 12 edges off the critical cycle.
+λ is a floor without operating reserve; the plan quantifies the reserve, it does not recommend a concrete new schedule.
+A change that does not lie on the critical cycle changes λ by exactly zero. The plan therefore computes the cycle tasks and all cross-run edges; what does not change λ is irrelevant to the cycle limit, however useful it may be for the latency of a single run.
+
+Monte Carlo
+-----------
+λ p50 = 600 s (10 min), λ p95 = 600 s (10 min) (1000 samples, lognormal fit from p50/p95 per task, seed 20260715: the same call yields the same numbers).
+p95 answers whether the period also holds in a bad week, not just on average.
+Share of samples with λ above the period: 0 %.
+Sampled as constant (no reliable spread, assumed or thin durations): load_data_wikiviews.create_success_file, load_data_wikiviews.load_data, load_data_wikiviews.load_to_postgres_trigger_clickhouse.clean_table, load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day, load_data_wikiviews.load_to_postgres_trigger_clickhouse.success, load_data_wikiviews.load_to_postgres_trigger_clickhouse.time_check, load_data_wikiviews.send_message_telegram, load_data_wikiviews.сheck_data. The p95 statement understates the spread of these tasks.
+
+Warnings
+--------
+  - Duration assumed: load_data_wikiviews.сheck_data (no measurement, 300.0 s)
+  - Duration assumed: load_data_wikiviews.load_data (no measurement, 300.0 s)
+  - Duration assumed: load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day (no measurement, 300.0 s)
+  - Duration assumed: load_data_wikiviews.load_to_postgres_trigger_clickhouse.time_check (no measurement, 300.0 s)
+  - Duration assumed: load_data_wikiviews.load_to_postgres_trigger_clickhouse.clean_table (no measurement, 300.0 s)
+  - Duration assumed: load_data_wikiviews.load_to_postgres_trigger_clickhouse.success (no measurement, 300.0 s)
+  - Duration assumed: load_data_wikiviews.create_success_file (no measurement, 300.0 s)
+  - Duration assumed: load_data_wikiviews.send_message_telegram (no measurement, 300.0 s)
+  - edge_dropped: load_data.py:165 (edge endpoint not statically resolvable)
+  - edge_dropped: load_data.py:166 (edge endpoint not statically resolvable)
+  - task_dag_inferred: load_data.py:171 (create_success_file)
+  - edge_dropped: load_data.py:187 (edge endpoint not statically resolvable)
+
+Model limits
+------------
+  - Unbounded parallelism assumed: λ is a lower bound of the real cycle time. The tool says 'no faster than λ', not 'λ is achievable'.
+  - Retries, sensor poking and pool limits are not modeled. They can only raise the real cycle time, never lower it; the lower bound stays valid.
+  - Latency figures are makespan: the duration of one run from its start to the end of its longest path, not the delay against the plan.
+

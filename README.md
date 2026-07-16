@@ -79,17 +79,30 @@ Condensed (the cycle in the cross-run matrix; its cycle mean is λ):
     as task path: feature_pipeline.build_features -> feature_pipeline.train_model
 Resolved across all segments: feature_pipeline.build_features -> feature_pipeline.train_model
 
-What-if
--------
-Base: λ = 4000 s (66.67 min). Sorted by new λ.
-  1. task feature_pipeline.build_features halved (to 1000 s): λ 3000 s (50 min), change -1000 s
-  6 more scenarios leave λ unchanged: 2 cycle ties, 4 edges off the critical cycle.
+Acceleration plan
+-----------------
+Base: λ = 4000 s (66.67 min). Each action is unclaimed reserve, sorted by the new λ.
+  1. cross-run edge feature_pipeline.train_model -> feature_pipeline.build_features removed: λ 2000 s (33.33 min), -2000 s (-50 %)
+     makes your current schedule sustainable and removes the 400 s (6.67 min) of drift per run.
+     commonly resolved by: usually guards against overlapping writes; with partition isolation (each run writes its own partition) overlap is safe.
+  2. task feature_pipeline.build_features halved (to 1000 s): λ 3000 s (50 min), -1000 s (-25 %)
+     makes your current schedule sustainable and removes the 400 s (6.67 min) of drift per run.
+     commonly resolved by: split the task, shrink the increment, or warm-start; the plan gives the arithmetic here, not detail about the foreign task.
+  3. task feature_pipeline.train_model halved (to 1000 s): λ 3000 s (50 min), -1000 s (-25 %)
+     makes your current schedule sustainable and removes the 400 s (6.67 min) of drift per run.
+     commonly resolved by: split the task, shrink the increment, or warm-start; the plan gives the arithmetic here, not detail about the foreign task.
+  2 more scenarios leave λ unchanged: 2 edges off the critical cycle.
 ```
 
-The what-if ranking is the part that saves money: it separates the change that
-lowers λ from the change that does not. Halving a task off the cycle moves λ by
-exactly zero, however much it helps the latency of a single run. Every number in the
-report carries its own source, down to the file and line that produced the edge.
+The acceleration plan turns the diagnosis into action: it states every finding as
+unclaimed reserve. Removing the `wait_for_downstream` edge, which costs nothing, makes
+the current schedule sustainable and clears the 400 s of drift per run; each entry
+names the usual way that kind of edge is resolved, without claiming to know the task.
+When the pipeline is already stable, the same section reads the other way and puts a
+number on the headroom: how many more times a day it could run and how much fresher
+the data would stay. A change off the critical cycle moves λ by exactly zero, however
+much it helps a single run's latency, and every number carries its own source, down to
+the file and line that produced the edge.
 
 ## CI gate
 

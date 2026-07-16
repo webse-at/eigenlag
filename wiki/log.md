@@ -1037,3 +1037,32 @@ Pflicht-Dependencies unveraendert null (`dependencies = []`); das Gate braucht n
 **Beide geflaggten Entscheidungen bestätigt:** (1) Der `compose()`-Schnitt (bestehende Keys und deutsche Werte unverändert, additive sprachneutrale Struktur-Felder für den Renderer) ist die richtige Auflösung des Spec-Widerspruchs — meine Spec verlangte gleichzeitig "compose() nicht anfassen" und einen korrekten englischen Report, was nicht beides ging, weil deutsche Prosa in generierten Feldern steckte. Der Byte-Identitäts-Test belegt, dass die Gate-Schnittstelle stabil blieb. (2) Einsprachig englische Diagnose-Details im DE-Report sind als kleines Folge-Ticket notiert, kein Blocker.
 
 **Damit ist die Roadmap bis 011 komplett.** Das Repo ist veröffentlichungsreif, veröffentlicht ist nichts. Vor dem Schalter kommen noch: Session 012 (Beschleunigungsplan — die Produkt-Ebene aus positioning.md), Launch-Kit (Demo-Einstieg, CI-Workflow als Vertrauenssignal, Launch-Texte), dann Davids Go.
+
+---
+
+## Session 012 — Beschleunigungsplan: aus der Diagnose wird das Produkt (2026-07-16)
+
+**Aus „hier ist deine Grenze" wird „hier ist die Änderung, die den Unterschied kauft".** Der Report handelt jetzt: der Beschleunigungsplan ersetzt die What-if-Sektion und formuliert jeden Befund als unbeanspruchte Reserve statt als Mangel. Grundlage ADR-024.
+
+- **`eigenlag/plan.py::build_plan`** (neu): reine, sprachneutrale Funktion. Reichert die What-if-Zeilen an — Kanten-Art (A `depends_on_past`, B `wait_for_downstream`, C `external_task_sensor`, D `include_prior_dates`, G `max_active_runs`, dbt-E `is_incremental`), Katalog-Schlüssel, λ_neu, Delta absolut und Prozent, `macht_tragfaehig`, verdict-abhängige `gewinn`-Felder. Instabil: Paar-Rechnung der drei wirksamsten Aktionen (`itertools.combinations`, drei Paare, keine Explosion). Signal-Herkunft aus den geparsten DAGs; ein direkt gebautes Pipeline-Objekt (die Demo) trägt kein Signal und bekommt keinen Katalog-Text.
+- **`eigenlag/messages.py`**: Behebungs-Katalog `plan_fix_*` je Kanten-Art in EN und DE, plus `plan_fix_task_halved`; die Plan-Render-Keys (`plan_header`, `plan_basis`, `plan_gewinn_*`, `plan_headroom_*`, `plan_paar_*`, `plan_schluss`). Die sieben reinen What-if-Render-Keys entfielen, die Szenario-Label- und Sammelzeilen-Keys blieben (von Plan und Gate geteilt). Der bestehende `messages_test`-Parity-Test erzwingt EN/DE-Vollständigkeit automatisch; ein neuer Test in `plan_test.py` erzwingt zusätzlich, dass jede Kanten-Art einen Katalog-Eintrag hat.
+- **`eigenlag/report.py`**: `_what_if_text` ersetzt durch `_plan_text` (liest `d["plan"]`), Render-Reihenfolge Urteil → Kreis → **Plan** → Monte Carlo → Warnungen. `compose()` rechnet die What-if-Zeilen einmal, legt sie unter `what_if` (eingefroren, Gate liest sie) und baut daraus additiv `plan`.
+- **Zwei Gewinn-Formen, exakt (ADR-024, Punkt 2):** instabil „makes your current schedule sustainable" ⇔ λ_neu < T, plus weggeräumte Drift (λ − T); stabil Headroom (86400/λ − 86400/T Läufe/Tag mehr, **bis zu** T − λ frischer) mit Fußzeile „Untergrenze ohne Betriebsreserve", keine Schedule-Empfehlung.
+
+**Verifiziert (Belege in `scan/012_plan/`):**
+
+```
+$ pytest -q            # im .venv (mit sqlalchemy)
+370 passed
+$ ruff check eigenlag/         → All checks passed!
+$ ruff format --check eigenlag/ → 27 files already formatted
+$ mypy eigenlag/               → Success: no issues found in 27 source files
+```
+
+- **Demo** (`lauf1_demo_plan_en.txt`), Prototyp-Ground-Truth λ = 4.40 h, T = 3.0 h, instabil, Dauern ×3600 skaliert damit `dur()` Stunden ausgibt: der Plan markiert die Quality-Gate-Kante `monitor → core` entfernen (λ_neu = 2.50 h) als „makes your current schedule sustainable" (−43,18 %, räumt 84 min/Lauf Drift weg), `retrain` halbiert (→ 3.60 h) und `core` halbiert (→ 3.85 h) senken λ, retten den Takt aber nicht. Genau die Verkaufsgeschichte: das GPU-Upgrade rettet den Takt nicht, die kostenlose Architektur-Änderung schon.
+- **Flaggschiff** `load_data_wikiviews` (`--assume 300`, stabil, λ = 600 s, T = 3600 s), EN + DE (`lauf2_wikiviews_en.txt`/`_de.txt`): Headroom 120 Läufe/Tag mehr (144 − 24), bis zu 3000 s (50 min) frischer — von Hand nachgerechnet, exakt getroffen.
+- **Synthetischer Zwei-Loop-Fall** (`lauf3_pair_en.txt`): zwei gleich schwere Selbst-Loops (je 5 h) über T = 4 h. Keine Einzel-Aktion rettet T; die Paar-Rechnung zeigt „beide Selbst-Kanten zusammen entfernt → kein Kreis mehr".
+- `pipx install --force .`, Läufe über den Entry-Point `eigenlag`; `--json` EN vs. DE per `diff -q` byte-identisch, `plan`-Key additiv präsent.
+- README-Quickstart auf einen echten, aktualisierten Lauf umgestellt (`lauf4_readme_feature_pipeline.txt`, Fixture `scan/012_plan/readme_demo/`): dasselbe instabile `feature_pipeline` wie in 011, jetzt mit dem Plan-Abschnitt statt der What-if-Liste.
+
+**Was überrascht hat:** Der Header-Rename „What-if" → „Beschleunigungsplan" brach vier Report-/i18n-Tests, die den gerenderten What-if-Text prüften — drei davon injizierten früher `d["what_if"]` und rendern; da `render()` jetzt `d["plan"]` liest, mussten sie auf die Plan-Struktur (`plan_mit`/`paktion`) umgestellt werden. Spec-getriebene Änderung, keine an die Ausgabe angepasste Erwartung: die JSON-`what_if`-Struktur-Tests blieben unverändert grün, der `plan`-Key ist rein additiv. Zweite Überraschung: „keine Einzel-Aktion rettet T" tritt sauber nur bei ko-bindenden Mehrfach-Kreisen auf — bei einem einzelnen Kreis löst das Entfernen der bindenden Kante ihn immer ganz auf und ist damit schon eine rettende Einzel-Aktion. Die Paar-Fixture musste darum zwei gleich schwere, disjunkte Loops nehmen.

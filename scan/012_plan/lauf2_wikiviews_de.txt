@@ -1,0 +1,57 @@
+eigenlag analyze
+================
+
+DAG:        load_data_wikiviews (load_data.py:55, Schedule '@hourly')
+Takt T:     3600 s (60 min), Quelle: schedule '@hourly'
+Dauern:     assumed: 300 s per task without a measurement
+Statistik:  mean. Fuer den asymptotischen Drift ist der Mittelwert die theoretisch richtige Groesse; er ist ausreisserempfindlich, ein einzelner haengender Lauf kann ihn deutlich verschieben.
+Stichprobe: Laeufe je Task minimal 0, im Median 0.
+
+Urteil
+------
+Stabil: Lambda = 600 s (10 min) liegt unter dem Takt T = 3600 s (60 min). Reserve: 83,33 %. Verspaetungen aus einem einzelnen Lauf klingen ab, statt sich aufzubauen.
+
+Kritischer Kreis
+----------------
+Kondensiert (der Kreis in der Cross-Run-Matrix, sein Zyklusmittel ist Lambda):
+  load_data_wikiviews.load_data -> load_data_wikiviews.load_data: Gewicht 600 s (10 min), 1 Periode zurueck [wait_for_downstream, load_data.py:49]
+    als Task-Pfad: load_data_wikiviews.сheck_data -> load_data_wikiviews.load_data
+Aufgeloest ueber alle Segmente: load_data_wikiviews.сheck_data -> load_data_wikiviews.load_data
+Der Weg zu einem kleineren Lambda fuehrt ueber diesen Kreis; eine Verkuerzung daneben aendert Lambda um exakt null. Ob eine einzelne Verkuerzung durchschlaegt oder ein zweiter Kreis mit gleichem Zyklusmittel uebernimmt, rechnet das What-if-Ranking unten nach.
+
+Beschleunigungsplan
+-------------------
+Basis: Lambda = 600 s (10 min). Jede Aktion ist unbeanspruchte Reserve, sortiert nach neuem Lambda.
+Lambda = 600 s (10 min) ist die nachhaltige Untergrenze. Ein Takt von 600 s (10 min) statt T = 3600 s (60 min) liefe 120 mal pro Tag oefter und hielte die Daten jederzeit bis zu 3000 s (50 min) frischer.
+  15 weitere Szenarien aendern Lambda nicht: 3 Kreis-Gleichstaende, 12 Kanten ausserhalb des kritischen Kreises.
+Lambda ist eine Untergrenze ohne Betriebsreserve; der Plan beziffert die Reserve, er empfiehlt keinen konkreten neuen Takt.
+Eine Aenderung, die nicht auf dem kritischen Kreis liegt, aendert Lambda um exakt null. Der Plan rechnet deshalb die Kreis-Tasks und alle Cross-Kanten durch; was Lambda nicht aendert, ist fuer die Taktgrenze wirkungslos, so nuetzlich es fuer die Latenz eines Einzellaufs sein mag.
+
+Monte Carlo
+-----------
+Lambda p50 = 600 s (10 min), Lambda p95 = 600 s (10 min) (1000 Stichproben, Lognormal-Fit aus p50/p95 je Task, Seed 20260715: derselbe Aufruf liefert dieselben Zahlen).
+p95 beantwortet, ob der Takt auch in einer schlechten Woche haelt, nicht nur im Durchschnitt.
+Anteil der Stichproben mit Lambda ueber dem Takt: 0 %.
+Konstant gesampelt (keine belastbare Streuung, angenommene oder duenne Dauern): load_data_wikiviews.create_success_file, load_data_wikiviews.load_data, load_data_wikiviews.load_to_postgres_trigger_clickhouse.clean_table, load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day, load_data_wikiviews.load_to_postgres_trigger_clickhouse.success, load_data_wikiviews.load_to_postgres_trigger_clickhouse.time_check, load_data_wikiviews.send_message_telegram, load_data_wikiviews.сheck_data. Die p95-Aussage unterschaetzt die Streuung dieser Tasks.
+
+Warnungen
+---------
+  - Dauer angenommen: load_data_wikiviews.сheck_data (no measurement, 300.0 s)
+  - Dauer angenommen: load_data_wikiviews.load_data (no measurement, 300.0 s)
+  - Dauer angenommen: load_data_wikiviews.load_to_postgres_trigger_clickhouse.not_end_day (no measurement, 300.0 s)
+  - Dauer angenommen: load_data_wikiviews.load_to_postgres_trigger_clickhouse.time_check (no measurement, 300.0 s)
+  - Dauer angenommen: load_data_wikiviews.load_to_postgres_trigger_clickhouse.clean_table (no measurement, 300.0 s)
+  - Dauer angenommen: load_data_wikiviews.load_to_postgres_trigger_clickhouse.success (no measurement, 300.0 s)
+  - Dauer angenommen: load_data_wikiviews.create_success_file (no measurement, 300.0 s)
+  - Dauer angenommen: load_data_wikiviews.send_message_telegram (no measurement, 300.0 s)
+  - edge_dropped: load_data.py:165 (edge endpoint not statically resolvable)
+  - edge_dropped: load_data.py:166 (edge endpoint not statically resolvable)
+  - task_dag_inferred: load_data.py:171 (create_success_file)
+  - edge_dropped: load_data.py:187 (edge endpoint not statically resolvable)
+
+Modellgrenzen
+-------------
+  - Unbegrenzte Parallelitaet angenommen: Lambda ist eine Untergrenze der realen Taktzeit. Das Tool sagt 'nicht schneller als Lambda', nicht 'Lambda ist erreichbar'.
+  - Retries, Sensor-Poking und Pool-Limits sind nicht modelliert. Sie koennen die reale Taktzeit nur erhoehen, nie senken; die Untergrenze bleibt gueltig.
+  - Latenz-Angaben sind Makespan: die Dauer eines Laufs von seinem Start bis zum Ende seines laengsten Pfads, nicht die Verspaetung gegenueber dem Plan.
+

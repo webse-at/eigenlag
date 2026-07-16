@@ -20,11 +20,12 @@ from typing import Any
 
 from eigenlag.analyze import Analysis
 from eigenlag.durations import Statistic, TaskStats
-from eigenlag.maxplus import TOL, condense, howard
+from eigenlag.maxplus import condense, howard
 from eigenlag.messages import CATALOG, Lang, dur, fmt, perioden, scenario_label, t
 from eigenlag.model import Pipeline
 from eigenlag.montecarlo import MonteCarloResult
 from eigenlag.parse_airflow import ParsedDag, node_name
+from eigenlag.plan import build_plan
 
 GRENZBAND = 0.10  # |Lambda - T| < 10 % von T heisst "an der Grenze"
 
@@ -245,6 +246,7 @@ def compose(
     pipeline = analysis.pipeline
     ns = [stats[task].n if task in stats else 0 for task in pipeline.tasks]
     kreis = cycle_report(dags, analysis)
+    what_if = _what_if(analysis, requested)
 
     mc: dict[str, Any] | None = None
     if monte_carlo is not None:
@@ -295,7 +297,8 @@ def compose(
         **_urteil(analysis.lam, takt_s),
         "kritischer_kreis": kreis,
         "monte_carlo": mc,
-        "what_if": _what_if(analysis, requested),
+        "what_if": what_if,
+        "plan": build_plan(rows=what_if, analysis=analysis, dags=dags, takt_s=takt_s),
         "warnungen": warnungen,
         "modellgrenzen": MODELLGRENZEN,
     }
@@ -457,35 +460,100 @@ def _sammelzeile(kompakt: list[dict[str, Any]], lang: Lang) -> str:
     return t(lang, "sammel_zeile", kopf=kopf, teile=", ".join(teile))
 
 
-def _what_if_text(d: dict[str, Any], lang: Lang) -> list[str]:
-    if not d["what_if"]:
-        return []
-    zeilen = _header(lang, "whatif_header")
-    if d["lambda_s"] is not None:
-        zeilen.append(t(lang, "whatif_basis", dauer=dur(d["lambda_s"], lang)))
-    # Null-Delta-Kompaktierung (Abnahme 009a): Standard-Szenarien ohne Wirkung werden
-    # zu einer Sammelzeile. Angefragte Szenarien bleiben immer sichtbar — wer explizit
-    # fragt, bekommt die Zeile. In --json stehen weiterhin alle Zeilen.
-    gezeigt = [
-        r for r in d["what_if"] if r["angefragt"] or r["delta_s"] is None or abs(r["delta_s"]) > TOL
-    ]
-    kompakt = [r for r in d["what_if"] if r not in gezeigt]
-    for i, zeile in enumerate(gezeigt, start=1):
-        if zeile["lambda_s"] is None:
-            wirkung = t(lang, "whatif_kein_kreis")
-        else:
-            wirkung = t(lang, "whatif_wirkung", dauer=dur(zeile["lambda_s"], lang))
-            if zeile["delta_s"] is not None:
-                vorzeichen = "-" if zeile["delta_s"] < 0 else "+"
-                wirkung += t(
-                    lang, "whatif_veraenderung", vz=vorzeichen, n=fmt(abs(zeile["delta_s"]), lang)
-                )
-        zeilen.append(
-            t(lang, "whatif_zeile", i=i, szenario=scenario_label(lang, zeile), wirkung=wirkung)
+def _plan_wirkung(zeile: dict[str, Any], lang: Lang) -> str:
+    """Die Wirkungs-Klausel einer Aktionszeile: neues Lambda mit Delta absolut und
+    Prozent, oder der Kreis ist ganz weg."""
+    if zeile["lambda_neu_s"] is None:
+        return t(lang, "plan_wirkung_kein_kreis")
+    wirkung = t(lang, "plan_wirkung", dauer=dur(zeile["lambda_neu_s"], lang))
+    if zeile.get("delta_s") is not None:
+        p = zeile.get("delta_prozent")
+        wirkung += t(
+            lang,
+            "plan_delta",
+            vz="-" if zeile["delta_s"] < 0 else "+",
+            n=fmt(abs(zeile["delta_s"]), lang),
+            vzp="-" if (p is not None and p < 0) else "+",
+            p=fmt(abs(p), lang) if p is not None else "0",
         )
-    if kompakt:
-        zeilen.append(_sammelzeile(kompakt, lang))
-    zeilen.append(t(lang, "whatif_schluss"))
+    return wirkung
+
+
+def _plan_gewinn_zeilen(zeile: dict[str, Any], plan: dict[str, Any], lang: Lang) -> list[str]:
+    urteil, takt = plan["urteil"], plan["takt_s"]
+    g = zeile["gewinn"]
+    zeilen: list[str] = []
+    if urteil == "instabil" and takt is not None:
+        if zeile["macht_tragfaehig"] and "weggeraeumte_drift_s" in g:
+            zeilen.append(
+                t(lang, "plan_gewinn_tragfaehig", drift=dur(g["weggeraeumte_drift_s"], lang))
+            )
+        elif zeile["lambda_neu_s"] is not None:
+            zeilen.append(t(lang, "plan_gewinn_nicht_tragfaehig", takt=dur(takt, lang)))
+    elif urteil == "stabil" and "frische_delta_s" in g:
+        zeilen.append(
+            t(
+                lang,
+                "plan_gewinn_headroom",
+                lam=dur(zeile["lambda_neu_s"], lang),
+                takt=dur(takt, lang),
+                mehr=fmt(g["laeufe_pro_tag_mehr"], lang),
+                frische=dur(g["frische_delta_s"], lang),
+            )
+        )
+    if zeile.get("katalog_schluessel"):
+        zeilen.append(t(lang, "plan_fix_zeile", text=t(lang, zeile["katalog_schluessel"])))
+    return zeilen
+
+
+def _plan_text(d: dict[str, Any], lang: Lang) -> list[str]:
+    """Der Beschleunigungsplan (Spec 012, ADR-024): jede Aktion als unbeanspruchte
+    Reserve, mit Gewinn-Zeile und Behebungs-Muster. Ersetzt die What-if-Sektion."""
+    plan = d["plan"]
+    if plan["basis_lambda_s"] is None:
+        return []
+    zeilen = _header(lang, "plan_header")
+    zeilen.append(t(lang, "plan_basis", dauer=dur(plan["basis_lambda_s"], lang)))
+    hr = plan["headroom"]
+    if hr is not None:
+        zeilen.append(
+            t(
+                lang,
+                "plan_headroom_intro",
+                lam=dur(plan["basis_lambda_s"], lang),
+                takt=dur(plan["takt_s"], lang),
+                mehr=fmt(hr["laeufe_pro_tag_mehr"], lang),
+                frische=dur(hr["frische_delta_s"], lang),
+            )
+        )
+    for i, zeile in enumerate(plan["aktionen"], start=1):
+        zeilen.append(
+            t(
+                lang,
+                "plan_zeile",
+                i=i,
+                szenario=scenario_label(lang, zeile),
+                wirkung=_plan_wirkung(zeile, lang),
+            )
+        )
+        zeilen.extend(_plan_gewinn_zeilen(zeile, plan, lang))
+    if plan["null_delta"]:
+        zeilen.append(_sammelzeile(plan["null_delta"], lang))
+    paar = plan["paar_rechnung"]
+    if plan["kein_einzel_ausreichend"] and paar is not None:
+        zeilen.append(t(lang, "plan_paar_intro", takt=dur(plan["takt_s"], lang)))
+        zeilen.append(
+            t(
+                lang,
+                "plan_paar_zeile",
+                a=scenario_label(lang, paar["a"]),
+                b=scenario_label(lang, paar["b"]),
+                wirkung=_plan_wirkung(paar, lang),
+            )
+        )
+    if hr is not None:
+        zeilen.append(t(lang, "plan_headroom_fuss"))
+    zeilen.append(t(lang, "plan_schluss"))
     return zeilen
 
 
@@ -518,8 +586,8 @@ def render(d: dict[str, Any], lang: Lang = "en") -> str:
         _kopf(d, lang)
         + _urteil_text(d, lang)
         + _kreis_text(d, lang)
+        + _plan_text(d, lang)
         + _mc_text(d, lang)
-        + _what_if_text(d, lang)
         + _warn_text(d, lang)
         + _header(lang, "modellgrenzen_header")
         + [t(lang, "modellgrenze_zeile", text=grenze) for grenze in grenzen]

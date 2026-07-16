@@ -82,3 +82,11 @@ Feature-Historie. Ein Eintrag pro abgeschlossenem Feature, nicht pro Commit.
 - README.md englisch neu (Quickstart aus echtem Lauf, CI-Gate, Wikimedia-Beleg, Limitations); `docs/ci-gate.md` englisch
 - Packaging: `pyproject.toml` (MIT/PEP 639, classifiers, keywords, urls), `LICENSE`, `dist/` gitignored; `python -m build` + Wheel in frischer venv verifiziert
 - 356 Tests grün (Pflicht-Dependencies weiterhin null)
+
+### Session 012 — Beschleunigungsplan: aus der Diagnose wird das Produkt (2026-07-16)
+
+- `eigenlag/plan.py` neu: `build_plan` reichert die What-if-Zeilen an (Kanten-Art A–G/dbt-E, Katalog-Schlüssel, λ_neu, Delta absolut und Prozent, `macht_tragfaehig`, verdict-abhängige Gewinn-Felder), Paar-Rechnung der drei wirksamsten Aktionen bei instabilem Takt ohne rettende Einzel-Aktion; reine, sprachneutrale Funktion (`plan_test.py`, 16 Pins)
+- `eigenlag/messages.py`: Behebungs-Katalog `plan_fix_*` je Kanten-Art in EN und DE (Muster-Wissen, nie Garantie) plus die Plan-Render-Keys; Vollständigkeit per Test erzwungen
+- `report._plan_text` ersetzt `_what_if_text`; Report-Reihenfolge Urteil → Kreis → **Beschleunigungsplan** → Monte Carlo → Warnungen; `--json` `plan`-Key **additiv**, `what_if` eingefroren, EN/DE byte-identisch (ADR-024)
+- Zwei Gewinn-Formen: instabil „makes your current schedule sustainable" ⇔ λ_neu < T plus weggeräumte Drift; stabil Headroom (Läufe/Tag mehr, „bis zu" T − λ frischer) ohne erfundene Marge
+- Demo als Marketing-Artefakt (Quality-Gate-Kante rettet den Takt, GPU-Upgrade nicht), Flaggschiff EN+DE, synthetischer Paar-Fall, README-Quickstart auf echten Lauf umgestellt; 370 Tests grün, Pflicht-Dependencies weiterhin null

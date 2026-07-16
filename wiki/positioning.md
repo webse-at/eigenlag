@@ -62,3 +62,5 @@ Der Schmerz ist nicht abwesend, er ist falsch etikettiert. Wikimedia zahlt jede 
 **Konsequenz für den Launch:** Der Post führt mit Trigger 4 (die interessante Geschichte), und die Kommentare zeigen, auf welchen der vier Momente die Leute anspringen. Diese Information ist der eigentliche Ertrag des Experiments — wichtiger als Stars oder Installs. Danach ist entscheidbar, ob das Produkt ein Takt-Wechsel-Werkzeug, ein Optimierungs-Ranking oder ein CI-Gate ist.
 
 **Abbruchkriterium, weil es Davids Bedingung von Anfang an war:** Zieht keiner der vier Momente (keine Nachfragen, keine Installs, Kommentare bleiben bei "nett"), hat der Use-Case den Markttest nicht bestanden. Dann wird geparkt, nicht schöngeredet.
+
+Wie der Report diese Verschiebung ab Session 012 umsetzt (Beschleunigungsplan, Gewinn-Formulierungen, Behebungs-Katalog): `decisions.md` ADR-024, Single Source.
