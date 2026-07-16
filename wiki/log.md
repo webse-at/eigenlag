@@ -1066,3 +1066,15 @@ $ mypy eigenlag/               → Success: no issues found in 27 source files
 - README-Quickstart auf einen echten, aktualisierten Lauf umgestellt (`lauf4_readme_feature_pipeline.txt`, Fixture `scan/012_plan/readme_demo/`): dasselbe instabile `feature_pipeline` wie in 011, jetzt mit dem Plan-Abschnitt statt der What-if-Liste.
 
 **Was überrascht hat:** Der Header-Rename „What-if" → „Beschleunigungsplan" brach vier Report-/i18n-Tests, die den gerenderten What-if-Text prüften — drei davon injizierten früher `d["what_if"]` und rendern; da `render()` jetzt `d["plan"]` liest, mussten sie auf die Plan-Struktur (`plan_mit`/`paktion`) umgestellt werden. Spec-getriebene Änderung, keine an die Ausgabe angepasste Erwartung: die JSON-`what_if`-Struktur-Tests blieben unverändert grün, der `plan`-Key ist rein additiv. Zweite Überraschung: „keine Einzel-Aktion rettet T" tritt sauber nur bei ko-bindenden Mehrfach-Kreisen auf — bei einem einzelnen Kreis löst das Entfernen der bindenden Kante ihn immer ganz auf und ist damit schon eine rettende Einzel-Aktion. Die Paar-Fixture musste darum zwei gleich schwere, disjunkte Loops nehmen.
+
+---
+
+## 012a — Abnahme Beschleunigungsplan durch den Orchestrator (2026-07-16)
+
+**Abgenommen.** Gates nachgefahren (370 Tests, ruff, mypy), Flaggschiff selbst über den Entry-Point gefahren und die Gewinn-Rechnung von Hand geprüft: 24 Läufe/Tag bei T = 3600 s gegen 144 bei λ = 600 s ergibt exakt die 120 aus dem Report, Frische-Delta 3000 s = 50 min, "up to" und die Keine-Marge-Fußzeile stehen da. Demo-Pins nachgerechnet: −43,18 % = 6840/15840, Drift 5040 s = 84 min/Lauf; nur die Kanten-Entfernung trägt die Tragfähigkeits-Markierung, die beiden Halbierungen sagen ehrlich "does not make T sustainable on its own".
+
+**Beide geflaggten Schnitte bestätigt.** Der Header-Rename mit Test-Umstellung ist spec-getrieben (die eingefrorene `what_if`-JSON-Struktur blieb unangetastet, `plan` ist additiv). Und "Katalog-Text nur bei geparster Signal-Herkunft" ist genau das richtige Ehrlichkeits-Prinzip: Die Demo trägt kein geparstes Signal, also bekommt sie kein Muster-Wissen angehängt, das wir nicht haben.
+
+**Der Demo-Report ist jetzt das Marketing-Artefakt, das er sein sollte.** Ein Screenshot dieser Plan-Sektion erzählt die ganze Produktgeschichte: die kostenlose Architektur-Änderung rettet den Takt, das GPU-Upgrade nicht.
+
+**Ein Formulierungs-Detail für 013 (kein Blocker):** Der generische Halbierungs-Katalogtext endet auf "not detail about the foreign task" — "foreign task" ist ein Deutschismus (fremde Task) und liest sich im Englischen schief. Da die Demo-Plan-Sektion künftig das meistgesehene Artefakt ist, gehört der Satz in 013 poliert (etwa "the plan shows the arithmetic; how to split *your* task is yours to judge").
