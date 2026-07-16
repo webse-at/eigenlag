@@ -231,8 +231,17 @@ DE: dict[str, str] = {
         " Inkrement aus der Quelle rekonstruierbar ist."
     ),
     "plan_fix_task_halved": (
-        "Task teilen, Inkrement verkleinern oder Warm-Start; der Plan nennt hier die"
-        " Rechnung, kein Detailwissen ueber den fremden Task."
+        "Task teilen, Inkrement verkleinern oder Warm-Start; der Plan zeigt die Rechnung,"
+        " ob und wie geteilt wird, laesst sich nur am konkreten Task entscheiden."
+    ),
+    # --- Demo (Spec 013): Kopf- und Fusszeile um den eingebauten Beispiel-Report ---
+    "demo_kopf": (
+        "Eingebautes Beispiel: eine ML-Pipeline mit 8 Tasks, Retraining-Schleife und"
+        " Prototyp-Dauern. Es wurden keine Dateien gelesen und kein Netz benutzt."
+    ),
+    "demo_fuss": (
+        "Naechster Schritt: der Lauf auf den eigenen DAGs —"
+        " eigenlag analyze your/dags --assume-duration 300"
     ),
     # --- Report: Warnungen ---
     "warn_header": "Warnungen",
@@ -520,8 +529,16 @@ EN: dict[str, str] = {
         " be rebuilt from source."
     ),
     "plan_fix_task_halved": (
-        "split the task, shrink the increment, or warm-start; the plan gives the arithmetic"
-        " here, not detail about the foreign task."
+        "split the task, shrink the increment, or warm-start; the plan shows the arithmetic,"
+        " whether and how to split is yours to judge."
+    ),
+    # --- Demo (Spec 013): header and footer around the built-in example report ---
+    "demo_kopf": (
+        "Built-in example: an 8-task ML pipeline with a retraining loop and prototype"
+        " durations. No files were read and no network was used."
+    ),
+    "demo_fuss": (
+        "Next step: run it on your own DAGs — eigenlag analyze your/dags --assume-duration 300"
     ),
     # --- Report: warnings ---
     "warn_header": "Warnings",

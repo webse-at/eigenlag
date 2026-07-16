@@ -1,0 +1,27 @@
+# CI (Spec 013): exakt die Schrittfolge der dokumentierten Frisch-Clone-Probe
+# (wiki/log.md, Session 013). Die Suite braucht kein Netz, kein Docker und keine
+# data/-Clones; die Extras db (sqlalchemy) und scanner (pyyaml) decken die
+# durations- und Scanner-Tests ab. mypy liest seine files-Liste aus pyproject.toml.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install -e ".[db,scanner]" pytest ruff mypy
+      - run: pytest -q
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy

@@ -1,10 +1,14 @@
 # eigenlag
 
+[![CI](https://github.com/webse-at/eigenlag/actions/workflows/ci.yml/badge.svg)](https://github.com/webse-at/eigenlag/actions/workflows/ci.yml)
+
 Computes the sustainable minimum cycle time of an Airflow pipeline: the hard lower
 bound no amount of workers can beat. When a run depends on an earlier run, the
 pipeline has a cycle across the time axis, and that cycle has a shortest period it
 can hold. That period is the max-plus eigenvalue λ. If you schedule faster than λ,
 the delay grows every run, forever, and no dashboard tells you why.
+
+![eigenlag demo: the built-in example report, ending on the acceleration plan](assets/demo.gif)
 
 Development docs are in German (`wiki/`), the tool speaks English by default and
 German with `--lang de`.
@@ -87,10 +91,10 @@ Base: λ = 4000 s (66.67 min). Each action is unclaimed reserve, sorted by the n
      commonly resolved by: usually guards against overlapping writes; with partition isolation (each run writes its own partition) overlap is safe.
   2. task feature_pipeline.build_features halved (to 1000 s): λ 3000 s (50 min), -1000 s (-25 %)
      makes your current schedule sustainable and removes the 400 s (6.67 min) of drift per run.
-     commonly resolved by: split the task, shrink the increment, or warm-start; the plan gives the arithmetic here, not detail about the foreign task.
+     commonly resolved by: split the task, shrink the increment, or warm-start; the plan shows the arithmetic, whether and how to split is yours to judge.
   3. task feature_pipeline.train_model halved (to 1000 s): λ 3000 s (50 min), -1000 s (-25 %)
      makes your current schedule sustainable and removes the 400 s (6.67 min) of drift per run.
-     commonly resolved by: split the task, shrink the increment, or warm-start; the plan gives the arithmetic here, not detail about the foreign task.
+     commonly resolved by: split the task, shrink the increment, or warm-start; the plan shows the arithmetic, whether and how to split is yours to judge.
   2 more scenarios leave λ unchanged: 2 edges off the critical cycle.
 ```
 

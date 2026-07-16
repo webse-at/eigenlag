@@ -95,6 +95,17 @@ def _parser() -> argparse.ArgumentParser:
         help="report language (default en; --json stays language-independent)",
     )
 
+    demo = sub.add_parser(
+        "demo",
+        help="render the report of a built-in example pipeline (no files, no network)",
+    )
+    demo.add_argument(
+        "--lang",
+        choices=["en", "de"],
+        default="en",
+        help="report language (default en)",
+    )
+
     check = sub.add_parser(
         "check",
         help="CI gate: compare λ and cross-run edges against a git state",
@@ -380,6 +391,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.befehl == "check":
             return _run_check(args)
+        if args.befehl == "demo":
+            from eigenlag.demo import demo_text
+
+            print(demo_text(cast(Lang, args.lang)))
+            return OK
         return _run_analyze(args)
     except (Bedienfehler, ValueError, gate.GitFehler) as err:
         # ValueError: Systemgrenze User-Input (unbekannter What-if-Task, kaputte Kante).

@@ -19,9 +19,9 @@ from typing import Any, cast
 import pytest
 
 from eigenlag.analyze import Analysis, analyze_result
+from eigenlag.demo import demo
 from eigenlag.durations import TaskStats
 from eigenlag.maxplus import condense, howard
-from eigenlag.maxplus_test import demo
 from eigenlag.messages import CATALOG
 from eigenlag.model import CrossEdge, Pipeline
 from eigenlag.parse_airflow import parse_source

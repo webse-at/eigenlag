@@ -1,14 +1,17 @@
 """Tests des Mathe-Kerns.
 
-Die Referenz-Fixture repliziert DUR, INTRA, CROSS aus `wiki/maxplus_pipeline.py`.
-Der Prototyp wird nicht importiert, er ist ein Skript mit Seiteneffekten beim Import.
-Alle gepinnten Werte stammen aus seinem Lauf vom 2026-07-13 (ADR-001).
+Die Referenz-Fixture (DUR, INTRA, CROSS aus `wiki/maxplus_pipeline.py`) lebt seit
+Spec 013 in `eigenlag/demo.py`, weil `eigenlag demo` sie ausliefert; sie steht nur
+dort (Single Source), die Pins bleiben hier. Der Prototyp wird nicht importiert,
+er ist ein Skript mit Seiteneffekten beim Import. Alle gepinnten Werte stammen
+aus seinem Lauf vom 2026-07-13 (ADR-001).
 """
 
 from __future__ import annotations
 
 import pytest
 
+from eigenlag.demo import CROSS, DUR, INTRA, demo
 from eigenlag.maxplus import (
     condense,
     critical_path,
@@ -18,41 +21,6 @@ from eigenlag.maxplus import (
     simulate,
 )
 from eigenlag.model import CrossEdge, Pipeline
-
-DUR = {
-    "ingest": 0.7,
-    "dq": 0.3,
-    "core": 1.1,
-    "features": 0.9,
-    "retrain": 1.6,
-    "score": 0.5,
-    "monitor": 0.3,
-    "reports": 0.4,
-}
-INTRA = [
-    ("ingest", "dq"),
-    ("dq", "core"),
-    ("core", "features"),
-    ("features", "retrain"),
-    ("retrain", "score"),
-    ("score", "monitor"),
-    ("score", "reports"),
-]
-CROSS = [
-    CrossEdge("core", "core"),
-    CrossEdge("retrain", "retrain"),
-    CrossEdge("retrain", "features"),
-    CrossEdge("monitor", "core"),
-]
-
-
-def demo(
-    durations: dict[str, float] | None = None,
-    cross: list[CrossEdge] | None = None,
-) -> Pipeline:
-    merged = dict(DUR)
-    merged.update(durations or {})
-    return Pipeline(durations=merged, intra=list(INTRA), cross=list(cross or CROSS))
 
 
 def lam_of(pipeline: Pipeline) -> float | None:
