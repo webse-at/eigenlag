@@ -16,12 +16,11 @@ insbesondere kein Posten, bevor Install-Weg und CI sichtbar funktionieren.
     solange es nicht committet ist. Empfehlung: vor Public per `.gitignore`-Zeile
     (`.claude/`) gegen versehentliches `git add` absichern oder löschen.
 
-- [ ] **Offener Entscheidungspunkt (Davids Klartext-Entscheidung, vor Schritt 1):**
-  Bleibt `wiki/positioning.md` unverändert im Repo, inklusive aller historischen Fassungen
-  in der Git-Historie? Der Public-Schalter macht das Dokument samt Historie öffentlich;
-  Kürzen oder Verschieben im Arbeitsstand entfernt nichts. Die 3–5 zitierbaren Stellen,
-  die ein Reddit-Leser gegen David wenden könnte, samt Orchestrator-Empfehlung
-  (dazu stehen), liegen im Session-014-Report. Nur David entscheidet.
+- [x] **Entschieden (David, 2026-07-21): `wiki/positioning.md` bleibt unverändert im Repo,**
+  inklusive aller historischen Fassungen. Begründung: jede Glättung bliebe in der Historie
+  sichtbar und wäre die schlechtere Geschichte; offene Produktfindung mit Abbruchkriterium
+  passt zur Build-in-public-Identität. Falls jemand das Dokument in einem Thread zitiert,
+  liegt die vorbereitete Antwort unten in dieser Datei ("Prepared response: positioning.md").
 
 - [ ] **1. Repo public stellen** (GitHub → Settings → Danger Zone → Change visibility).
   Bewirkt: Links in Case-Study und Launch-Texten funktionieren, CI kann laufen.
@@ -89,3 +88,19 @@ insbesondere kein Posten, bevor Install-Weg und CI sichtbar funktionieren.
   wichtiger als Stars oder Installs.
   Schiefgehen: zieht keiner der vier Trigger-Momente, gilt das Abbruchkriterium
   aus wiki/positioning.md — parken, nicht schönreden.
+
+---
+
+## Prepared response: positioning.md
+
+Falls jemand in einem Thread aus `wiki/positioning.md` zitiert (die Planungsnotizen mit
+"Kauf-Stärke", "Haupt-Pitch", Kommentare-als-Messinstrument), ist das die vorbereitete
+Antwort — Davids Stimme, bei Bedarf anpassen, nicht eskalieren, nicht rechtfertigen:
+
+> Yes, those are my product-discovery notes, in the open like everything else in this
+> repo — including the criterion for when I'd shelve the project. I'd rather you read my
+> honest planning than a polished version of it. The numbers in the post stand on their
+> own either way; every one has a permalink.
+
+Ein Follow-up nur, wenn konkret nachgefragt wird. Nicht löschen, nicht umschreiben —
+das Dokument ist Teil des Build-in-public-Inhalts.

@@ -1192,3 +1192,9 @@ Implementer-Session zur Spec 014. Kein Checklisten-Schritt ausgeführt, keine Hi
 **Umgesetzt bei der Abnahme:** `.claude/` in `.gitignore` (Empfehlung der Session) — schützt gegen ein versehentliches `git add -A`, bevor das Repo öffentlich ist. Die Datei selbst war nie committet (von der Session per `git log --all -- .claude/` belegt).
 
 **Offen bleibt genau eine Entscheidung, und sie liegt bei David:** positioning.md — dazu stehen oder nicht. Die Zitate-Liste der Session ist präzise (der "Haupt-Pitch"-Fund und der Kommentare-als-Messinstrument-Satz sind die zwei wirklich angreifbaren Stellen), die Empfehlung des Orchestrators bleibt: dazu stehen, aus den in Spec 014 genannten Gründen. Danach nur noch die Schalter.
+
+---
+
+## 014b — positioning-Entscheidung: bleibt unverändert (David, 2026-07-21)
+
+David hat entschieden: `wiki/positioning.md` bleibt unverändert online, inklusive Historie. Damit ist der letzte offene Entscheidungspunkt vor den Schaltern geschlossen. Checkliste nachgezogen, die vorbereitete Thread-Antwort liegt am Ende der Checkliste. Es gibt nichts Offenes mehr außer Davids Schaltern (Schritte 1–11).
