@@ -1,39 +1,40 @@
-# Der erste echte Fall: Wikimedias Pipelines, gemessen gegen ihren Takt
+# The first real case: Wikimedia's pipelines, measured against their schedule
 
-Wikimedia betreibt Airflow in Produktion, und beides liegt offen: der DAG-Code auf GitLab, die
-gemessenen Laufzeiten in einem anonym abfragbaren Prometheus. Damit lässt sich die These des
-Projekts zum ersten Mal an echten Daten prüfen.
+Wikimedia runs Airflow in production, and both parts of it are public: the DAG code on
+GitLab, the measured run durations in an anonymously queryable Prometheus. That makes it
+possible to test the project's thesis against real data for the first time.
 
-**Der tragende Befund ist der Sweep über die Organisation: 30 DAGs laufen im Median länger als
-ihr Takt, und 29 davon driften nicht**, weil ihre Läufe überlappen dürfen. Diese 29 wären die
-Fehlalarme jedes Werkzeugs, das nur Laufzeit gegen Schedule hält. "Laufzeit über Takt" ist als
-Diagnose wertlos; entscheidend ist, ob eine Kante über die Zeitachse die Läufe serialisiert.
-Die Tabelle dazu steht in Abschnitt 6.
+**The load-bearing finding is the sweep across the organization: 30 DAGs run longer than
+their schedule interval in the median, and 29 of them do not drift**, because their runs are
+allowed to overlap. Those 29 would be the false alarms of any tool that merely holds runtime
+against the schedule. "Runtime over schedule" is worthless as a diagnosis; what matters is
+whether an edge across the time axis serializes the runs. The table for this is in section 6.
 
-Der Einzelfall dazu: `wdqs_streaming_updater_reconcile_hourly` läuft im Stundentakt
-(T = 3600 s) mit `depends_on_past=True` und `max_active_runs=1`, seine mittlere Laufzeit
-beträgt 3598,4 Sekunden. Dass die mittlere Dauer fast exakt auf dem Takt liegt, ist kein
-Balanceakt, sondern der eingeschwungene Zustand eines rückgekoppelten Systems (Abschnitt 4).
-Der Preis dieses Zustands ist eine Verspätung von 48 Minuten, die nicht mehr wächst und nicht
-mehr verschwindet.
+The single case behind it: `wdqs_streaming_updater_reconcile_hourly` runs on an hourly
+schedule (T = 3600 s) with `depends_on_past=True` and `max_active_runs=1`, and its mean run
+duration is 3598.4 seconds. That the mean duration lands almost exactly on the schedule
+interval is not a balancing act, it is the steady state of a feedback-coupled system
+(section 4). The price of that state is a delay of 48 minutes that no longer grows and no
+longer goes away.
 
-**Was dieser Fall belegt, und was nicht:** Er belegt die These. Eine Pipeline mit Kreis über
-die Zeitachse kann nicht schneller takten als ihr Kreis, und sie zahlt dafür mit konstanter
-Verspätung. Er validiert nicht die Eigenwert-Maschinerie: auf DAG-Ebene, ohne Task-Dauern, ist
-der Graph ein Knoten mit Selbst-Kante, und λ ist die Laufdauer selbst (ADR-019, Abschnitt 3).
+**What this case proves, and what it does not:** It proves the thesis. A pipeline with a
+cycle across the time axis cannot run its schedule faster than that cycle, and it pays for it
+with a constant delay. It does not validate the eigenvalue machinery: at the DAG level,
+without task durations, the graph is a single node with a self-edge, and λ is the run
+duration itself (ADR-019, section 3).
 
-Alle Zahlen unten stammen aus `data/wikimedia/case_numbers.json`, erzeugt von
-`python -m wikimedia.case`. Jede Rohantwort liegt in `data/wikimedia/cache/`.
+All figures below come from `data/wikimedia/case_numbers.json`, produced by
+`python -m wikimedia.case`. Every raw response is in `data/wikimedia/cache/`.
 
 ---
 
-## 1. Der Code
+## 1. The code
 
-Repo: `https://gitlab.wikimedia.org/repos/data-engineering/airflow-dags.git`, Stand
-`6d0cceb85e4a21d593638f6b9e5694e5f4dbc013` (14. Juli 2026). Die Permalinks unten zeigen auf
-genau diesen Commit.
+Repo: `https://gitlab.wikimedia.org/repos/data-engineering/airflow-dags.git`, at
+`6d0cceb85e4a21d593638f6b9e5694e5f4dbc013` (July 14, 2026). The permalinks below point at
+exactly this commit.
 
-Der DAG entsteht in [`search/dags/rdf_streaming_updater_reconcile.py`](https://gitlab.wikimedia.org/repos/data-engineering/airflow-dags/-/blob/6d0cceb85e4a21d593638f6b9e5694e5f4dbc013/search/dags/rdf_streaming_updater_reconcile.py#L112-121):
+The DAG is built in [`search/dags/rdf_streaming_updater_reconcile.py`](https://gitlab.wikimedia.org/repos/data-engineering/airflow-dags/-/blob/6d0cceb85e4a21d593638f6b9e5694e5f4dbc013/search/dags/rdf_streaming_updater_reconcile.py#L112-121):
 
 ```python
 112    with create_easy_dag(
@@ -48,214 +49,210 @@ Der DAG entsteht in [`search/dags/rdf_streaming_updater_reconcile.py`](https://g
 121            catchup=True,
 ```
 
-Die Funktion `build_dag` ([Zeile 106](https://gitlab.wikimedia.org/repos/data-engineering/airflow-dags/-/blob/6d0cceb85e4a21d593638f6b9e5694e5f4dbc013/search/dags/rdf_streaming_updater_reconcile.py#L106))
-wird zweimal aufgerufen und erzeugt zwei DAGs:
+The function `build_dag` ([line 106](https://gitlab.wikimedia.org/repos/data-engineering/airflow-dags/-/blob/6d0cceb85e4a21d593638f6b9e5694e5f4dbc013/search/dags/rdf_streaming_updater_reconcile.py#L106))
+is called twice and creates two DAGs:
 [`wdqs_…`](https://gitlab.wikimedia.org/repos/data-engineering/airflow-dags/-/blob/6d0cceb85e4a21d593638f6b9e5694e5f4dbc013/search/dags/rdf_streaming_updater_reconcile.py#L140)
-und [`wcqs_…`](https://gitlab.wikimedia.org/repos/data-engineering/airflow-dags/-/blob/6d0cceb85e4a21d593638f6b9e5694e5f4dbc013/search/dags/rdf_streaming_updater_reconcile.py#L147).
-Der Taskgraph eines Laufs ([Zeile 135](https://gitlab.wikimedia.org/repos/data-engineering/airflow-dags/-/blob/6d0cceb85e4a21d593638f6b9e5694e5f4dbc013/search/dags/rdf_streaming_updater_reconcile.py#L135)):
+and [`wcqs_…`](https://gitlab.wikimedia.org/repos/data-engineering/airflow-dags/-/blob/6d0cceb85e4a21d593638f6b9e5694e5f4dbc013/search/dags/rdf_streaming_updater_reconcile.py#L147).
+The task graph of a single run ([line 135](https://gitlab.wikimedia.org/repos/data-engineering/airflow-dags/-/blob/6d0cceb85e4a21d593638f6b9e5694e5f4dbc013/search/dags/rdf_streaming_updater_reconcile.py#L135)):
 
 ```python
 wait_for_data >> job >> complete
 ```
 
-Drei Hive-Partition-Sensoren warten auf die Daten der laufenden Stunde, ein Spark-Job schreibt
-die Reconciliation-Events, ein leerer Task schließt ab.
+Three Hive partition sensors wait on the current hour's data, a Spark job writes the
+reconciliation events, an empty task closes the run.
 
-**Zwei Kanten führen diesen DAG im Kreis über die Zeitachse:**
+**Two edges carry this DAG in a cycle across the time axis:**
 
-- `depends_on_past: True` (Zeile 116) hängt jeden Task an denselben Task des Vorlaufs.
-- `max_active_runs=1` (Zeile 120) hängt den ganzen Lauf an den vorigen: Lauf k kann nicht
-  beginnen, bevor Lauf k−1 fertig ist. Der Kommentar darüber sagt es selbst: *"We want hourly
-  runs to be scheduled one ofter the other."*
+- `depends_on_past: True` (line 116) ties each task to the same task of the previous run.
+- `max_active_runs=1` (line 120) ties the whole run to the previous one: run k cannot begin
+  before run k−1 is finished. The comment above it says so itself: *"We want hourly runs to
+  be scheduled one ofter the other."*
 
-Der Takt ist `@hourly`. `eigenlag` rechnet daraus **T = 3600 s** (kleinste Distanz zweier
-Feuerzeitpunkte von `0 * * * *`, siehe `scanner/schedule.py:period_seconds`), statt die Zahl
-einzutragen.
+The schedule is `@hourly`. `eigenlag` derives **T = 3600 s** from it (the smallest distance
+between two firing times of `0 * * * *`, see `scanner/schedule.py:period_seconds`), instead
+of entering the number by hand.
 
-## 2. Die Messung
+## 2. The measurement
 
-Datenquelle: `https://grafana.wikimedia.org/api/datasources/proxy/uid/000000026/api/v1`,
-anonym abfragbar. Fenster: 30 Tage, Ende 2026-07-15 00:00 UTC.
+Data source: `https://grafana.wikimedia.org/api/datasources/proxy/uid/000000026/api/v1`,
+anonymously queryable. Window: 30 days, ending 2026-07-15 00:00 UTC.
 
-### Die Gauge-Frage, und warum `avg_over_time` hier nicht taugt
+### The gauge problem, and why `avg_over_time` is no good here
 
-`airflow_dagrun_duration` ist eine Gauge: Airflow meldet am Ende eines Laufs dessen Dauer an
-StatsD, der Exporter hält den Wert, Prometheus scrapt ihn. Ein `avg_over_time` darüber mittelt
-**Scrapes, nicht Läufe**. Ob das dasselbe ist, hängt davon ab, wie lange jeder Wert stehen
-bleibt, und das ist eine Annahme, keine Zusicherung.
+`airflow_dagrun_duration` is a gauge: at the end of a run Airflow reports its duration to
+StatsD, the exporter holds the value, Prometheus scrapes it. An `avg_over_time` over it
+averages **scrapes, not runs**. Whether that is the same thing depends on how long each value
+stays put, and that is an assumption, not a guarantee.
 
-Deshalb rekonstruiert `wikimedia/runs.py` die Läufe selbst: **ein Wertwechsel der Gauge ist ein
-Lauf.** Die Dauern sind Fließkomma-Millisekunden mit Nachkommastellen, zwei Läufe mit exakt
-gleichem Wert sind praktisch ausgeschlossen. Der Wechsel wird je Serie gesucht, nicht auf der
-zusammengeführten Zeitachse, weil Wikimedia mehrere StatsD-Pods betreibt und jeder seinen
-eigenen letzten Wert hält.
+That is why `wikimedia/runs.py` reconstructs the runs itself: **a value change of the gauge is
+a run.** The durations are floating-point milliseconds with decimal places, two runs with
+exactly the same value are practically ruled out. The change is looked for per series, not on
+the merged timeline, because Wikimedia runs several StatsD pods and each holds its own last
+value.
 
-**Zwei unabhängige Prüfungen, dass die Lesart trägt:**
+**Two independent checks that the reading holds:**
 
-1. Serverseitig gerechnet ergibt `sum by (dag_id) (changes(airflow_dagrun_duration{state="success"}[30d]))`
-   für wdqs **397**, unsere Rekonstruktion aus den Rohsamples **398**. Zwei Verfahren, dieselbe
-   Zahl.
-2. Die mediane Laufzeit (3733,8 s) und der mediane Abstand zweier Laufenden (3720 s) liegen
-   13,8 Sekunden auseinander, also unter der Scrape-Auflösung von einer Minute. Das müssen sie,
-   wenn `max_active_runs=1` die Läufe wirklich hintereinander legt, und der Abstand stammt aus
-   den Zeitstempeln, nicht aus den Dauern: eine Größe, die die andere prüft.
+1. Computed server-side, `sum by (dag_id) (changes(airflow_dagrun_duration{state="success"}[30d]))`
+   gives **397** for wdqs, our reconstruction from the raw samples gives **398**. Two methods,
+   the same number.
+2. The median run duration (3733.8 s) and the median gap between two run endings (3720 s)
+   are 13.8 seconds apart, so below the scrape resolution of one minute. They have to be, if
+   `max_active_runs=1` really lays the runs end to end, and the gap comes from the timestamps,
+   not from the durations: one quantity checking the other.
 
-Die Einheit ist damit ebenfalls belegt: die Werte sind Millisekunden, nicht Sekunden, sonst
-könnten Dauer und Abstand nicht zusammenfallen.
+The unit is thereby settled too: the values are milliseconds, not seconds, otherwise duration
+and gap could not coincide.
 
 ### `wdqs_streaming_updater_reconcile_hourly`
 
 PromQL: `airflow_dagrun_duration{dag_id="wdqs_streaming_updater_reconcile_hourly",state="success"}[30d]`
 
-Lückenfreies Fenster: 2026-06-15 00:50 bis 2026-07-01 13:47 UTC, 16,5 Tage, **398 Läufe**.
+Gap-free window: 2026-06-15 00:50 to 2026-07-01 13:47 UTC, 16.5 days, **398 runs**.
 
-| Größe | Wert |
+| Quantity | Value |
 |---|---|
-| Takt T (aus `@hourly`) | 3600,0 s |
-| Laufzeit, Median | 3733,8 s (62,2 min) |
-| Laufzeit, Mittel | **3598,4 s (60,0 min)** |
-| Laufzeit, p95 | 3778,8 s (63,0 min) |
-| Laufzeit, min / max | 104,6 s / 7432,5 s |
-| Beobachteter Takt (Abstand der Laufenden) | 3599,5 s |
+| Schedule interval T (from `@hourly`) | 3600.0 s |
+| Run duration, median | 3733.8 s (62.2 min) |
+| Run duration, mean | **3598.4 s (60.0 min)** |
+| Run duration, p95 | 3778.8 s (63.0 min) |
+| Run duration, min / max | 104.6 s / 7432.5 s |
+| Observed interval (gap between run endings) | 3599.5 s |
 
 ### `wcqs_streaming_updater_reconcile_hourly`
 
-712 Läufe, verteilt auf drei Fenster (zwei Metrik-Ausfälle dazwischen), letzter Lauf
-2026-07-14 14:53 UTC. Median 3722,5 s, Mittel 3182,9 s, p95 3777,8 s. Der Mittelwert liegt
-niedriger, weil dieser DAG nach den Ausfällen einen Rückstand aufgeholt hat; sein längster Lauf
-dauerte 400.132 s, also 4,6 Tage.
+712 runs, spread over three windows (two metric outages in between), last run 2026-07-14
+14:53 UTC. Median 3722.5 s, mean 3182.9 s, p95 3777.8 s. The mean is lower because this DAG
+caught up after the outages; its longest run took 400,132 s, i.e. 4.6 days.
 
-Dieser eine Lauf zeigt, wie ausreißer-empfindlich der Mittelwert ist: er allein verschiebt den
-Mittelwert der 712 Läufe um rund 560 Sekunden. Für den asymptotischen Drift ist der Mittelwert
-trotzdem die richtige Statistik, weil jede Sekunde Laufzeit in die Verspätung eingeht, auch die
-eines Hängers. Nur darf man ihn nicht als typische Laufzeit lesen: ein einzelner hängender Lauf
-vergiftet ihn. Wer λ auf dem Mittelwert rechnet, muss solche Läufe sehen und benennen, statt
-sie zu glätten.
+That single run shows how outlier-sensitive the mean is: it alone shifts the mean of the 712
+runs by about 560 seconds. For the asymptotic drift the mean is nonetheless the correct
+statistic, because every second of runtime feeds into the delay, including that of a stall.
+It just must not be read as a typical run duration: a single stalling run poisons it. Whoever
+computes λ on the mean has to see and name such runs, rather than smoothing them away.
 
-**wdqs hat seit dem 1. Juli 2026 keinen erfolgreichen Lauf mehr gemeldet.** Der letzte Erfolg
-liegt am 01.07. um 13:47 UTC, kurz darauf steht ein Fehlschlag über 108,9 Minuten. Seit dem
-6. Juli hält seine `airflow_dagrun_schedule_delay`-Gauge einen einzigen eingefrorenen Wert. Ob
-der DAG steht, pausiert wurde oder nur seine Metrik fehlt, ist von außen nicht zu entscheiden,
-und wir behaupten es nicht. Die 398 Läufe davor sind davon unberührt.
+**wdqs has reported no successful run since July 1, 2026.** The last success is on July 1 at
+13:47 UTC, shortly after which there is a failure lasting 108.9 minutes. Since July 6 its
+`airflow_dagrun_schedule_delay` gauge has held a single frozen value. Whether the DAG is
+stalled, was paused, or is merely missing its metric cannot be decided from the outside, and
+we do not claim it. The 398 runs before that are untouched by it.
 
 ## 3. λ
 
-Modell (`wikimedia/case.py:lambda_of`): auf DAG-Ebene fallen beide Kreis-Kanten zusammen. Lauf k
-kann nicht beginnen, bevor Lauf k−1 fertig ist, und das Gewicht des Kreises ist die Laufzeit.
-Der Graph hat einen Knoten und eine Kante auf sich selbst, gerechnet wird er mit `eigenlag`
-(Howard, `eigenlag/maxplus.py`), nicht von Hand.
+Model (`wikimedia/case.py:lambda_of`): at the DAG level both cycle edges collapse into one.
+Run k cannot begin before run k−1 is finished, and the weight of the cycle is the run
+duration. The graph has one node and one edge onto itself, and it is computed with `eigenlag`
+(Howard, `eigenlag/maxplus.py`), not by hand.
 
-**Ehrlich benannt: was λ hier ist.** Auf diesem Graphen, ein Knoten mit Selbst-Kante, ist der
-Max-Plus-Eigenwert per Definition das Kantengewicht. Kondensation, Karp und Howard sind hier
-eine Identitätsfunktion: λ = 3598,4 s heißt, die mittlere Laufdauer beträgt 3598,4 s. Der Fall
-validiert deshalb nicht die Eigenwert-Maschinerie, er belegt die These (ADR-019). Das macht ihn
-nicht schwächer, es ordnet ihn ein: dass die Taktgrenze mit der Laufdauer zusammenfällt, ist
-eine Eigenschaft dieses Falltyps, dessen einzige bindende Kante den ganzen Lauf umspannt
-(Signal G). Der Analyzer verdient sein Geld erst dort, wo der Kreis ein Teilpfad ist und λ
-unter dem Makespan liegen kann.
+**Named honestly: what λ is here.** On this graph, a single node with a self-edge, the
+max-plus eigenvalue is by definition the edge weight. Condensation, Karp and Howard are an
+identity function here: λ = 3598.4 s means the mean run duration is 3598.4 s. The case
+therefore does not validate the eigenvalue machinery, it proves the thesis (ADR-019). That
+does not make it weaker, it places it: that the cycle limit coincides with the run duration is
+a property of this class of case, whose only binding edge spans the entire run (signal G). The
+analyzer earns its keep only where the cycle is a partial path and λ can lie below the
+makespan.
 
-Warum nur DAG-Ebene: die Task-Dauern gibt die Metrik nicht her. Für den Spark-Task und den
-Abschluss-Task existiert **keine** Dauer-Metrik, `airflow_task_duration` trägt weder `dag_id`
-noch `task_id`, und die drei Sensoren melden Dauern nahe null (Median 0,0 min, Maximum 0,1 min),
-weil sie im Reschedule-Modus laufen: ihr Warten steckt nicht in ihrer Task-Dauer. Eine
-Aufteilung der 62 Minuten auf die Tasks wäre geraten, und geraten wird nicht.
+Why only the DAG level: the metric does not yield the task durations. For the Spark task and
+the closing task **no** duration metric exists, `airflow_task_duration` carries neither
+`dag_id` nor `task_id`, and the three sensors report durations near zero (median 0.0 min,
+maximum 0.1 min), because they run in reschedule mode: their waiting is not part of their task
+duration. Splitting the 62 minutes across the tasks would be a guess, and we do not guess.
 
-| λ aus | λ | Drift je Lauf (λ − T) |
+| λ from | λ | Drift per run (λ − T) |
 |---|---|---|
-| Median-Laufzeit | 3733,8 s | **+133,8 s** |
-| mittlere Laufzeit | 3598,4 s | **−1,6 s** |
-| p95-Laufzeit | 3778,8 s | +178,8 s |
+| median run duration | 3733.8 s | **+133.8 s** |
+| mean run duration | 3598.4 s | **−1.6 s** |
+| p95 run duration | 3778.8 s | +178.8 s |
 
-Für die Frage, ob die Verspätung unbegrenzt wächst, zählt der **Mittelwert**: bei zufälligen
-Laufzeiten ist das mittlere Kreisgewicht die Rate, mit der die Verspätung pro Lauf zunimmt
-(`wiki/math.md`, Abschnitt 7). Dass er fast exakt auf dem Takt liegt, ist keine knappe Marge
-und kein Zufall, sondern der Fixpunkt eines rückgekoppelten Systems: je später ein Lauf
-startet, desto kürzer läuft er (Korrelation −0,504, Abschnitt 4), also pendelt sich das System
-genau dort ein, wo die mittlere Dauer ≈ T ist. Die gemessenen Dauern sind bereits das Ergebnis
-dieses eingeschwungenen Zustands.
+For the question of whether the delay grows without bound, the **mean** is what counts: with
+random run durations the mean cycle weight is the rate at which the delay increases per run
+(`wiki/math.md`, section 7). That it lands almost exactly on the schedule interval is not a
+narrow margin and not a coincidence, but the fixed point of a feedback-coupled system: the
+later a run starts, the shorter it runs (correlation −0.504, section 4), so the system settles
+exactly where the mean duration ≈ T. The measured durations are already the result of this
+steady state.
 
-Der beobachtete Takt bestätigt es unabhängig: die Läufe enden im Schnitt alle **3599,5 s**
-auseinander. Der DAG liefert exakt einen Lauf pro Stunde, mehr geht nicht, und mehr ist auch
-nicht nötig. Er sitzt auf seiner Taktgrenze.
+The observed interval confirms it independently: the runs end on average **3599.5 s** apart.
+The DAG delivers exactly one run per hour, more is impossible, and more is not needed either.
+It sits on its cycle limit.
 
-**Der Preis steht in derselben Metrik.** `airflow_dagrun_schedule_delay` misst, wie lange nach
-seinem logischen Zeitpunkt ein Lauf tatsächlich startet. Median: **2880 s, also 48 Minuten.**
-Diese Verspätung wächst nicht mehr, sie verschwindet aber auch nicht. Sie ist genau das, was
-eine Pipeline an ihrer Taktgrenze zeigt: sie hält den Takt, aber dauerhaft eine Dreiviertelstunde
-zu spät.
+**The price is in the same metric.** `airflow_dagrun_schedule_delay` measures how long after
+its logical time a run actually starts. Median: **2880 s, i.e. 48 minutes.** This delay no
+longer grows, but it also does not go away. It is exactly what a pipeline at its cycle limit
+shows: it holds the schedule, but permanently three quarters of an hour late.
 
-## 4. Warum die Pipeline trotz Median über dem Takt nicht wegdriftet
+## 4. Why the pipeline does not drift away despite a median above the schedule
 
-Die mediane Laufzeit liegt 134 Sekunden über dem Takt. Wären die Laufzeiten unabhängig vom
-Startzeitpunkt, müsste die Verspätung wachsen. Sie tut es nicht, und die Metrik zeigt, warum.
+The median run duration is 134 seconds above the schedule interval. Were the run durations
+independent of the start time, the delay would have to grow. It does not, and the metric shows
+why.
 
-**Korrelation zwischen Verspätung beim Start und Laufzeit: −0,504** (397 Paare, wdqs). Je später
-ein Lauf beginnt, desto kürzer läuft er. Der Grund steht im Code: die Sensoren warten auf die
-Hive-Partitionen **der laufenden Stunde**. Startet ein Lauf pünktlich, wartet er auf Daten, die
-es noch nicht gibt. Startet er 50 Minuten zu spät, liegen die Daten längst da, und er ist in
-Minuten durch (kürzester Lauf: 104,6 s).
+**Correlation between start delay and run duration: −0.504** (397 pairs, wdqs). The later a
+run begins, the shorter it runs. The reason is in the code: the sensors wait on the Hive
+partitions **of the current hour**. If a run starts on time, it waits for data that does not
+exist yet. If it starts 50 minutes late, the data has long been there, and it is through in
+minutes (shortest run: 104.6 s).
 
-Dieser Sensor ist damit **keine Bearbeitungszeit, sondern eine Synchronisation mit der Uhr.** Er
-wirkt als negative Rückkopplung und bricht den Kreis genau dann, wenn die Verspätung groß genug
-geworden ist. Das ist der Grund, warum die reine Max-Plus-Annahme (Dauern unabhängig vom
-Startzeitpunkt) hier an ihre Grenze kommt, und es ist eine Grenze, die man kennen muss, bevor
-man einer Pipeline Drift bescheinigt. Wir haben sie in `wiki/math.md`, Abschnitt 9,
-aufgeschrieben.
+This sensor is therefore **not processing time, but a synchronization with the clock.** It
+acts as negative feedback and breaks the cycle exactly when the delay has grown large enough.
+This is why the pure max-plus assumption (durations independent of the start time) reaches its
+limit here, and it is a limit one has to know before certifying drift for a pipeline. We wrote
+it down in `wiki/math.md`, section 9.
 
-Bei wcqs ist dieselbe Korrelation nur −0,103, weil dort zwei Metrik-Ausfälle und ein 4,6 Tage
-langer Lauf die Reihe dominieren.
+For wcqs the same correlation is only −0.103, because two metric outages and a 4.6-day run
+dominate the series there.
 
-## 5. Was der Scanner vorher nicht sah
+## 5. What the scanner did not see before
 
-Vor dieser Session fand `eigenlag` in Wikimedias Repo **71 von 325 produktiven DAGs und null
-Cross-Run-Signale**, obwohl `depends_on_past=True` dort mehrfach im Klartext steht. Grund:
-Wikimedia erzeugt DAGs nicht über `DAG(...)`, sondern über `create_easy_dag(...)`, eine Methode,
-die intern ein `DAG(...)` zurückgibt
+Before this session, `eigenlag` found **71 of 325 production DAGs and zero cross-run signals**
+in Wikimedia's repo, even though `depends_on_past=True` is there in plain text several times.
+Reason: Wikimedia does not create DAGs via `DAG(...)`, but via `create_easy_dag(...)`, a
+method that internally returns a `DAG(...)`
 ([`wmf_airflow_common/easy_dag.py:79`](https://gitlab.wikimedia.org/repos/data-engineering/airflow-dags/-/blob/6d0cceb85e4a21d593638f6b9e5694e5f4dbc013/wmf_airflow_common/easy_dag.py#L79)).
 
-| | vorher | nach ADR-015 | nach ADR-016 |
+| | before | after ADR-015 | after ADR-016 |
 |---|---|---|---|
-| DAGs gefunden | 71 | 345 | 345 |
-| davon mit `dag_id` | 58 | 255 | 255 |
-| mit Cross-Run-Signal | 0 | 13 | 68 |
-| Risiko-Kandidaten | 0 | 3 | 8 |
+| DAGs found | 71 | 345 | 345 |
+| of those with `dag_id` | 58 | 255 | 255 |
+| with cross-run signal | 0 | 13 | 68 |
+| risk candidates | 0 | 3 | 8 |
 
-- **ADR-015**: Eine Funktion, die ein `DAG(...)` zurückgibt, ist ein DAG-Konstruktor des Repos.
-  Gefundene Konstruktoren: `create_easy_dag`, `create_easy_cassandra_loading_dag`.
-- **ADR-016**: `max_active_runs=1` ist selbst eine Cross-Run-Kante. Vorher hat der Scanner die
-  Serialisierung, auf der dieser ganze Fall beruht, gar nicht gesehen.
+- **ADR-015**: A function that returns a `DAG(...)` is a DAG constructor of the repo. Found
+  constructors: `create_easy_dag`, `create_easy_cassandra_loading_dag`.
+- **ADR-016**: `max_active_runs=1` is itself a cross-run edge. Before, the scanner did not
+  see the serialization on which this whole case rests at all.
 
-Es bleibt eine Lücke: 90 der 345 DAGs haben keine `dag_id`, weil sie erst die aufrufende
-Funktion einsetzt (`build_dag(dag_id=...)`). Unser Fall-DAG ist einer davon. Wir raten sie nicht.
+A gap remains: 90 of the 345 DAGs have no `dag_id`, because only the calling function sets it
+(`build_dag(dag_id=...)`). Our case DAG is one of them. We do not guess them.
 
-## 6. Die ganze Organisation
+## 6. The whole organization
 
-`wikimedia/wikimedia_dags.csv`: 453 Zeilen, eine je (`dag_id`, Airflow-Instanz). 406 laufen
-messbar, 280 stehen im Code, 233 in beidem. Für 249 kennen wir den geplanten Takt.
+`wikimedia/wikimedia_dags.csv`: 453 rows, one per (`dag_id`, Airflow instance). 406 run
+measurably, 280 are in the code, 233 in both. For 249 we know the planned schedule interval.
 
-**30 DAGs haben eine mediane Laufzeit über ihrem geplanten Takt.** Bei 29 davon ist das kein
-Drift: ohne `max_active_runs=1` und ohne Cross-Run-Signal laufen zwei Läufe schlicht nebeneinander.
-Genau diese 29 wären die Fehlalarme eines Werkzeugs, das nur Laufzeit gegen Schedule hält. Übrig
-bleibt einer mit einer Kante über die Zeitachse:
+**30 DAGs have a median run duration above their planned schedule interval.** For 29 of them
+that is not drift: without `max_active_runs=1` and without a cross-run signal, two runs simply
+run side by side. Precisely these 29 would be the false alarms of a tool that merely holds
+runtime against the schedule. What remains is one with an edge across the time axis:
 
-| dag_id | Takt | Median | Signal | Beleg |
+| dag_id | Interval | Median | Signal | Source |
 |---|---|---|---|---|
 | `mediarequest_hourly` | 3600 s | 6371 s | `external_task_sensor` | `main/dags/mediarequest/mediarequest_hourly_dag.py:46` |
 
-Dazu die beiden Reconcile-DAGs, die in dieser Tabelle fehlen, weil ihre `dag_id` im Code nicht
-steht (siehe Abschnitt 5).
+Plus the two reconcile DAGs, which are missing from this table because their `dag_id` is not
+in the code (see section 5).
 
-## 7. Was dieser Fall nicht zeigt
+## 7. What this case does not show
 
-- **Eine Organisation ist keine Stichprobe.** Wikimedia beweist nichts über den Markt. Der Fall
-  zeigt, dass die Rechnung an echten Daten funktioniert und was sie findet, nicht wie häufig
-  das ist.
-- **Die Gauge hat Grenzen.** Zwei Läufe mit identischer Dauer auf die Millisekunde würden als
-  einer zählen. Bei zehn DAGs meldet die Gauge mehr Wertwechsel, als ihr Takt erlaubt
-  (`refine_api_requests_hourly`: 3360 in 30 Tagen bei stündlichem Takt). Warum, wissen wir
-  nicht, und für diese DAGs rechnen wir kein λ.
-- **Ob Wikimedia der Rückstand weh tut, wissen wir nicht.** 48 Minuten Verspätung bei stündlicher
-  Reconciliation kann völlig in Ordnung sein. Wir sagen nicht, dass hier etwas kaputt ist. Wir
-  sagen, dass niemand diese Zahl vorher ausgerechnet hat.
-- **Wir haben Wikimedia nicht kontaktiert.** Alles hier stammt aus öffentlichen Quellen,
-  read-only, jede Abfrage einmal und danach aus dem Cache.
+- **One organization is not a sample.** Wikimedia proves nothing about the market. The case
+  shows that the computation works on real data and what it finds, not how common that is.
+- **The gauge has limits.** Two runs with identical duration to the millisecond would count as
+  one. For ten DAGs the gauge reports more value changes than its schedule allows
+  (`refine_api_requests_hourly`: 3360 in 30 days on an hourly schedule). We do not know why,
+  and for these DAGs we compute no λ.
+- **Whether the backlog hurts Wikimedia, we do not know.** 48 minutes of delay on hourly
+  reconciliation may be perfectly fine. We do not say something is broken here. We say that
+  nobody computed this number before.
+- **We did not contact Wikimedia.** Everything here comes from public sources, read-only,
+  each query once and thereafter from the cache.
