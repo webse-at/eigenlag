@@ -22,13 +22,13 @@ insbesondere kein Posten, bevor Install-Weg und CI sichtbar funktionieren.
   passt zur Build-in-public-Identität. Falls jemand das Dokument in einem Thread zitiert,
   liegt die vorbereitete Antwort unten in dieser Datei ("Prepared response: positioning.md").
 
-- [ ] **1. Repo public stellen** (GitHub → Settings → Danger Zone → Change visibility).
+- [x] **1. Repo public stellen** (GitHub → Settings → Danger Zone → Change visibility).
   Bewirkt: Links in Case-Study und Launch-Texten funktionieren, CI kann laufen.
   Schiefgehen: der Secret- und Historien-Check aus Schritt 0 ist die Voraussetzung; er ist
   erledigt (no leaks). Scan-Artefakte unter `scan/` und `wikimedia/` sind bewusst
   öffentlich gedachte Belege.
 
-- [ ] **2. Ersten CI-Lauf prüfen** (Actions-Tab).
+- [x] **2. Ersten CI-Lauf prüfen** (Actions-Tab).
   Bewirkt: der Badge im README wird grün und belegt die Suite auf 3.12 und 3.14.
   Auslöser: die Übersetzungs-Commits dieser Session (`wikimedia/case.md`, `wiki/math.md`,
   `wiki/signals.md`, README/CLAUDE) sind der erste Push nach dem Public-Schalter und
@@ -39,22 +39,22 @@ insbesondere kein Posten, bevor Install-Weg und CI sichtbar funktionieren.
   Lauf beweist ihn. Das 3.12-Bein war lokal nicht prüfbar (Server hat nur 3.14).
   Wenn rot: Log lesen, Fix committen, nicht am YAML raten.
 
-- [ ] **3. PyPI-Upload** (Anleitung: `docs/pypi-release.md`).
+- [x] **3. PyPI-Upload** (Anleitung: `docs/pypi-release.md`).
   Bewirkt: `pipx install eigenlag` funktioniert weltweit.
   Schiefgehen: eine hochgeladene Version ist unveränderlich; bei Fehlern 0.1.1 statt
   Überschreiben. Token nie ins Repo.
 
-- [ ] **4. README-Install-Zeile umstellen** (`git apply launch/readme-pypi-install.patch`, committen, pushen).
+- [x] **4. README-Install-Zeile umstellen** (`git apply launch/readme-pypi-install.patch`, committen, pushen).
   Bewirkt: der Quickstart zeigt den PyPI-Weg statt `git+https`.
   Schiefgehen: der Patch vor Schritt 3 angewandt wäre eine Lüge im README.
 
-- [ ] **5. Release v0.1.0 taggen** (`git tag v0.1.0 && git push --tags`, dann GitHub-Release
+- [x] **5. Release v0.1.0 taggen** (`git tag v0.1.0 && git push --tags`, dann GitHub-Release
   mit dem redigierten Text aus `launch/release-notes-v0.1.0.md`).
   Bewirkt: zitierbarer Stand; das Release ist der Anker für den Reddit-Post.
   Schiefgehen: Tag auf den Commit NACH der README-Umstellung setzen, sonst zeigt
   das Release den git+https-Quickstart.
 
-- [ ] **6. About und Topics setzen** (GitHub → About-Zahnrad).
+- [x] **6. About und Topics setzen** (GitHub → About-Zahnrad).
   Beschreibung: "Computes the sustainable minimum cycle time (max-plus eigenvalue λ)
   of Airflow pipelines: the hard lower bound more workers cannot beat."
   Topics: `airflow`, `data-engineering`, `scheduling`, `pipeline`, `max-plus`.

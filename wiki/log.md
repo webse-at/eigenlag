@@ -1198,3 +1198,11 @@ Implementer-Session zur Spec 014. Kein Checklisten-Schritt ausgeführt, keine Hi
 ## 014b — positioning-Entscheidung: bleibt unverändert (David, 2026-07-21)
 
 David hat entschieden: `wiki/positioning.md` bleibt unverändert online, inklusive Historie. Damit ist der letzte offene Entscheidungspunkt vor den Schaltern geschlossen. Checkliste nachgezogen, die vorbereitete Thread-Antwort liegt am Ende der Checkliste. Es gibt nichts Offenes mehr außer Davids Schaltern (Schritte 1–11).
+
+---
+
+## Launch-Schritte 1–6 ausgeführt (David + Orchestrator, 2026-07-21)
+
+Schritt für Schritt, je mit Verifikation: (1) Repo public (David). (2) CI war schon auf dem privaten Repo grün gelaufen — beide Matrix-Beine bestätigt, auch das lokal nie geprüfte 3.12. (3) PyPI-Upload nach Frisch-Build, twine check PASSED und Inhalts-Sichtung der Artefakte (nur das Package, kein scan/, kein data/); Gegenprobe: pip install eigenlag aus frischer venv, demo läuft. (4) README-Patch angewandt, GIF auf absolute URL (PyPI-Rendering). (5) Tag v0.1.0 auf den Stand nach der README-Umstellung, GitHub-Release mit den von David freigegebenen Notes. (6) About-Beschreibung und Topics per gh gesetzt.
+
+Offen: Schritt 7 (Ruhetage), dann 8–10 (Mail, Reddit, Slack — Davids Versand nach Redigat) und 11 (Woche-1-Reaktionsdienst).
