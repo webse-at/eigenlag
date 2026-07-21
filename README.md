@@ -8,7 +8,7 @@ pipeline has a cycle across the time axis, and that cycle has a shortest period 
 can hold. That period is the max-plus eigenvalue λ. If you schedule faster than λ,
 the delay grows every run, forever, and no dashboard tells you why.
 
-![eigenlag demo: the built-in example report, ending on the acceleration plan](assets/demo.gif)
+![eigenlag demo: the built-in example report, ending on the acceleration plan](https://raw.githubusercontent.com/webse-at/eigenlag/main/assets/demo.gif)
 
 The case study, the math and the signal reference are in English; the rest of the
 development notes (`wiki/`) stay German. The tool speaks English by default, German
@@ -48,7 +48,7 @@ other without piling up.
 Requires Python 3.12+.
 
 ```
-pipx install git+https://github.com/webse-at/eigenlag
+pipx install eigenlag
 ```
 
 Point it at a DAG file or a directory. Durations come from the Airflow metadata DB
