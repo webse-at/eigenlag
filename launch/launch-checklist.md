@@ -13,8 +13,8 @@ insbesondere kein Posten, bevor Install-Weg und CI sichtbar funktionieren.
   - `.claude/`: nur `settings.json`, untracked und in keinem Commit der Historie
     (`git log --all -- .claude/` leer). Enthält lokale Pfade und einen Verweis auf ein
     anderes Projekt (jukeep.com). Über den Visibility-Schalter wird es nicht öffentlich,
-    solange es nicht committet ist. Empfehlung: vor Public per `.gitignore`-Zeile
-    (`.claude/`) gegen versehentliches `git add` absichern oder löschen.
+    solange es nicht committet ist. Erledigt: `.claude/` steht seit der Abnahme 014a
+    in `.gitignore` (Commit 00428cf), ein versehentliches `git add` zieht es nicht mehr rein.
 
 - [x] **Entschieden (David, 2026-07-21): `wiki/positioning.md` bleibt unverändert im Repo,**
   inklusive aller historischen Fassungen. Begründung: jede Glättung bliebe in der Historie
