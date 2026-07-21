@@ -1180,3 +1180,15 @@ Implementer-Session zur Spec 014. Kein Checklisten-Schritt ausgeführt, keine Hi
 **Aufgabe 4 — launch-checklist.md konsolidiert:** Schritt 0 (Sicherheits-/Historien-Review, erledigt) eingefügt, Schritt-1-Prüfhinweis auf Schritt 0 verwiesen, vor Schritt 2 der CI-Badge-Auslöser (die Übersetzungs-Commits) ergänzt, positioning-Entscheidung als expliziter offener Entscheidungspunkt vor Schritt 1, DRAFT-Markierung entfernt (offen bleiben nur Davids Schalter und die positioning-Frage).
 
 **Gates:** 377 passed, `ruff check` clean, `ruff format --check` 53 Files, `mypy` 29 Files ohne Befund (unverändert, da nur Markdown geändert).
+
+---
+
+## 014a — Abnahme Pre-Flight durch den Orchestrator (2026-07-21)
+
+**Abgenommen.** Gates nachgefahren (377 Tests, ruff, mypy — nur Markdown berührt, wie behauptet). Prüfschwerpunkt war die fachliche Treue der englischen `case.md`, stichprobenartig gegen das deutsche Original: die drei heikelsten Stellen stehen sinngleich — der Fixpunkt-Satz ("not a balancing act, it is the steady state of a feedback-coupled system"), die ADR-019-Einordnung ("It proves the thesis" mit der expliziten Identitätsfunktions-Ehrlichkeit "λ = 3598.4 s means the mean run duration is 3598.4 s"), und die Zahlen inklusive locale-korrekter Tausender-Trennung (400,132 s). PromQL-Blöcke unangetastet. Checkliste: Schritt 0 dokumentiert, positioning-Entscheidungspunkt eingetragen, DRAFT entfernt.
+
+**Die eigenmächtige README-Kopfzeilen-Korrektur der Session wird bestätigt** — die Zeile "Development docs are in German (wiki/)" wäre nach der Übersetzung falsch gewesen; das Geradeziehen einer durch die eigene Arbeit falsch gewordenen Aussage ist Pflicht (Regel: Doku folgt dem Stand), kein Übergriff auf Davids Stimme.
+
+**Umgesetzt bei der Abnahme:** `.claude/` in `.gitignore` (Empfehlung der Session) — schützt gegen ein versehentliches `git add -A`, bevor das Repo öffentlich ist. Die Datei selbst war nie committet (von der Session per `git log --all -- .claude/` belegt).
+
+**Offen bleibt genau eine Entscheidung, und sie liegt bei David:** positioning.md — dazu stehen oder nicht. Die Zitate-Liste der Session ist präzise (der "Haupt-Pitch"-Fund und der Kommentare-als-Messinstrument-Satz sind die zwei wirklich angreifbaren Stellen), die Empfehlung des Orchestrators bleibt: dazu stehen, aus den in Spec 014 genannten Gründen. Danach nur noch die Schalter.
