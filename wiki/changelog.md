@@ -100,3 +100,11 @@ Feature-Historie. Ein Eintrag pro abgeschlossenem Feature, nicht pro Commit.
 - PyPI vorbereitet: `twine check` PASSED, Classifier 3.14, `docs/pypi-release.md`, README-Install-Umstellung als nicht angewandter Patch `launch/readme-pypi-install.patch`
 - Launch-Texte als DRAFTs unter `launch/`: Reddit-Post, Wikimedia-Mail, Airflow-Slack, Release-Notes v0.1.0, Schalter-Checkliste
 - 377 Tests grün (Pflicht-Dependencies weiterhin null); veröffentlicht hat die Session nichts
+
+### Session 014 — Pre-Flight: öffentliche Referenz auf Englisch (2026-07-21)
+
+- `wikimedia/case.md`, `wiki/math.md`, `wiki/signals.md` DE→EN übersetzt (Werte, Permalinks, Code-Blöcke unverändert; Zahlen locale-korrekt umformatiert), verifiziert per Zahlen-/URL-/Code-Multimengen-Diff (case: 119 Zahlen-Tokens identisch; math: 34; signals: 38)
+- `wiki/index.md` englischer Sprach-Zweizeiler oben; `CLAUDE.md` Sprachregel präzisiert; README-Kopfzeile "development docs" wahrheitswahrend nachgezogen
+- `launch/launch-checklist.md` konsolidiert: Schritt 0 (Sicherheits-/Historien-Review, erledigt), positioning-Entscheidungspunkt vor Schritt 1, CI-Badge-Auslöser vor Schritt 2, DRAFT entfernt
+- Prüfungen (Report an David): Commit-Historie, `.claude/`, Checklisten-Artefakte, positioning-Zitate; nichts an Code, Historie oder Zahlen geändert
+- 377 Tests grün, ruff/mypy sauber (nur Markdown berührt)

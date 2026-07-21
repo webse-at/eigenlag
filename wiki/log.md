@@ -1150,3 +1150,33 @@ Das Review-Paket (`launch/review-fuer-gemini.md`) ist wieder entfernt, sein Zwec
 Zweiter Befund dabei: **vhs 0.11.0 ignoriert `Set Framerate` für GIF-Output** (Mini-Tape gemessen: 83 Frames / 3,32 s = 25 fps trotz `Framerate 10`). Bei 25 fps ist jeder Scroll-Frame ein Vollbild-Wechsel, das GIF lag bei 7,7 MB. Deshalb baut jetzt `launch/build-demo-gif.sh` in zwei Schritten: vhs, dann ffmpeg auf 10 fps mit neu gerechneter Palette (`dither=none`, Text bleibt scharf). Ergebnis: **2 156 895 Bytes (2,1 MB < 3 MB), 14,6 s, 146 Frames.** Mid-Scroll- und Endframe per ffmpeg extrahiert und gesichtet: Scrollen sichtbar, Endstand auf der Plan-Sektion mit −43,18 %.
 
 Hinweis: Das GIF zeigt bereits die redigierten EN-Formulierungen aus Davids Review-Runde ("untapped headroom", "up to you"), die zum Zeitpunkt des Renderns im Working Tree lagen.
+
+---
+
+## 014 — Pre-Flight: Übersetzungen und letzte Prüfungen vor dem Public-Schalter (2026-07-21)
+
+Implementer-Session zur Spec 014. Kein Checklisten-Schritt ausgeführt, keine Historie umgeschrieben, keine Zahl verändert. Vier Aufgaben.
+
+**Aufgabe 1 — Übersetzungen DE→EN (Dateien ersetzt, Pfade und Werte erhalten).** Vier Dokumente, in Prioritätsreihenfolge:
+
+- `wikimedia/case.md` — das tragende öffentliche Dokument. Alle acht Permalinks unverändert, beide Code-Blöcke (inkl. Wikimedias Original-Kommentar mit dem Tippfehler "one ofter the other") verbatim, alle 60 Inline-Code-Spans verbatim, jede Zahl nur ins englische Zahlformat gebracht (Dezimalpunkt statt Komma, Tausender-Komma statt Punkt: `400.132 s` → `400,132 s`).
+- `wiki/math.md` — Formeln und der Prototyp-Bezug erhalten. Die Pseudocode-Blöcke enthalten deutsche Prosa (also→so, über→over, Ende→End, Arbeit→Work), die mitübersetzt wurde; der einzige Zahlen-Token in Inline-Code, der z-Wert `1,6449`, wurde locale-korrekt zu `1.6449`.
+- `wiki/signals.md` — Semantik jeder Signal-Definition unverändert (C nur mit `execution_delta`/`execution_date_fn` als Cross-Run; die λ-Übersetzungstabelle aus ADR-020 vollständig).
+- `wiki/index.md` — englischer Zweizeiler oben ("development notes in German, public reference in English"), mit Links auf die drei englischen Dateien. Rest bleibt deutsch.
+- `CLAUDE.md` — Sprachregel-Zeile angepasst (die drei genannten Dateien englisch, Rest deutsch als Entwicklungsarchiv); Datei bleibt sonst deutsch.
+
+**Verifikation (Pflicht, nicht Kür):** ein locale-bewusstes Skript (`scratchpad/numcheck.py`) extrahiert je Datei die Zahlen-Tokens aus der Prosa, kanonisiert sie zum numerischen Wert nach Quell-Locale (DE: Komma=Dezimal, Punkt=Tausender; EN umgekehrt) und vergleicht als Multimengen; Datums-/Zeit-Tokens werden vorher entfernt, weil ihre Umformatierung (01.07. → July 1) kein Wert ist. Zusätzlich URL- und Code-Block-Multimengen. Ergebnis, jeweils DE (git HEAD) gegen EN (Working Tree):
+
+- `case.md`: URLs OK (8), Code-Blöcke OK (2), Inline-Spans OK (60), Prosa-Zahlen **OK (119 Tokens, 71 Werte, identische Multimenge)**.
+- `math.md`: Prosa-Zahlen **OK (34 Tokens, 19 Werte)**. Code-/Inline-Diffs ausschließlich beabsichtigte Prosa-in-Formel-Übersetzung plus `1,6449`→`1.6449`; kein Ziffernwert geändert.
+- `signals.md`: URLs OK (0), Code-Block OK (1), Prosa-Zahlen **OK (38 Tokens, 24 Werte)**. Zwei Inline-Diffs (Ende→end, ziel→target), reine Identifier-Übersetzung.
+
+**README-Präzisierung (Folge aus Aufgabe 1, im Report ausgewiesen):** Die Kopfzeile "Development docs are in German (`wiki/`)" wurde durch die Übersetzung teilweise falsch (case/math/signals sind jetzt englisch). Eine Zeile korrigiert, wahrheitswahrend, kein Redigat an Davids Stimme. Kein Anker-Link brach (keine Launch-Text- oder README-Verlinkung zielt auf `#abschnitt` in den drei Dateien — vorab geprüft).
+
+**Aufgabe 2 — Prüfungen (nur Report).** `gitleaks` war Davids Vorarbeit (52 Commits, no leaks). Commit-Messages durchgehend technisch/deutsch, keine Secrets, keine dritten Personen außer der öffentlich gedachten Wikimedia-Referenz; der im Log sichtbare Orchestrator/Implementer-Workflow geht bewusst öffentlich. `.claude/` enthält nur `settings.json`, untracked und in keinem Commit (`git log --all -- .claude/` leer), mit lokalen Pfaden und einem jukeep.com-Verweis — Empfehlung: per `.gitignore`-Zeile absichern. Alle in der Checkliste referenzierten Artefakte existieren und sind konsistent (`readme-pypi-install.patch` `git apply --check` sauber, Badge-URL = Workflow-Pfad, alle README-Relativlinks auflösbar).
+
+**Aufgabe 3 — positioning.md nicht angefasst;** die 3–5 gegen David verwendbaren Stellen samt Empfehlung (dazu stehen) gingen als Report an David.
+
+**Aufgabe 4 — launch-checklist.md konsolidiert:** Schritt 0 (Sicherheits-/Historien-Review, erledigt) eingefügt, Schritt-1-Prüfhinweis auf Schritt 0 verwiesen, vor Schritt 2 der CI-Badge-Auslöser (die Übersetzungs-Commits) ergänzt, positioning-Entscheidung als expliziter offener Entscheidungspunkt vor Schritt 1, DRAFT-Markierung entfernt (offen bleiben nur Davids Schalter und die positioning-Frage).
+
+**Gates:** 377 passed, `ruff check` clean, `ruff format --check` 53 Files, `mypy` 29 Files ohne Befund (unverändert, da nur Markdown geändert).

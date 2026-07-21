@@ -1,15 +1,40 @@
-# DRAFT — Davids Schalter-Reihenfolge. Jeder Schritt ist Davids Klick, keiner passiert automatisch.
+# Davids Schalter-Reihenfolge. Jeder Schritt ist Davids Klick, keiner passiert automatisch.
 
 Je Schritt: was er bewirkt, und was schiefgehen kann. Reihenfolge einhalten;
 insbesondere kein Posten, bevor Install-Weg und CI sichtbar funktionieren.
 
+- [x] **0. Sicherheits- und Historien-Review vor dem Schalter (erledigt, 2026-07-21).**
+  - Secret-Scan der vollen Historie: `gitleaks detect` (v8.30.1) über alle 52 Commits
+    (34 MB), no leaks found; `gitleaks dir` über den Arbeitsstand, no leaks found.
+  - Commit-Messages (`git log --all`): durchgehend technisch und deutsch, keine Secrets,
+    keine dritten Personen außer der öffentlich gedachten Wikimedia-Referenz. Deutsche
+    Messages und der im Log sichtbare Orchestrator/Implementer-Workflow gehen mit dem
+    Schalter öffentlich; das ist für ein Build-in-public-Repo bewusst und unbedenklich.
+  - `.claude/`: nur `settings.json`, untracked und in keinem Commit der Historie
+    (`git log --all -- .claude/` leer). Enthält lokale Pfade und einen Verweis auf ein
+    anderes Projekt (jukeep.com). Über den Visibility-Schalter wird es nicht öffentlich,
+    solange es nicht committet ist. Empfehlung: vor Public per `.gitignore`-Zeile
+    (`.claude/`) gegen versehentliches `git add` absichern oder löschen.
+
+- [ ] **Offener Entscheidungspunkt (Davids Klartext-Entscheidung, vor Schritt 1):**
+  Bleibt `wiki/positioning.md` unverändert im Repo, inklusive aller historischen Fassungen
+  in der Git-Historie? Der Public-Schalter macht das Dokument samt Historie öffentlich;
+  Kürzen oder Verschieben im Arbeitsstand entfernt nichts. Die 3–5 zitierbaren Stellen,
+  die ein Reddit-Leser gegen David wenden könnte, samt Orchestrator-Empfehlung
+  (dazu stehen), liegen im Session-014-Report. Nur David entscheidet.
+
 - [ ] **1. Repo public stellen** (GitHub → Settings → Danger Zone → Change visibility).
   Bewirkt: Links in Case-Study und Launch-Texten funktionieren, CI kann laufen.
-  Schiefgehen: vorher prüfen, dass keine Secrets/privaten Pfade in der Historie liegen
-  (Scan-Artefakte unter `scan/` und `wikimedia/` sind bewusst öffentlich gedachte Belege).
+  Schiefgehen: der Secret- und Historien-Check aus Schritt 0 ist die Voraussetzung; er ist
+  erledigt (no leaks). Scan-Artefakte unter `scan/` und `wikimedia/` sind bewusst
+  öffentlich gedachte Belege.
 
-- [ ] **2. Ersten CI-Lauf prüfen** (Actions-Tab; ein Push oder manueller Re-Run triggert ihn).
+- [ ] **2. Ersten CI-Lauf prüfen** (Actions-Tab).
   Bewirkt: der Badge im README wird grün und belegt die Suite auf 3.12 und 3.14.
+  Auslöser: die Übersetzungs-Commits dieser Session (`wikimedia/case.md`, `wiki/math.md`,
+  `wiki/signals.md`, README/CLAUDE) sind der erste Push nach dem Public-Schalter und
+  triggern den CI-Lauf — dieser Lauf ist der Badge-Beleg. Ein manueller Re-Run tut es
+  ebenso.
   Schiefgehen: der Lauf ist auf einem nackten Runner nie zuvor gelaufen — die
   Frisch-Clone-Probe (wiki/log.md, Session 013) bildet ihn nach, aber erst dieser
   Lauf beweist ihn. Das 3.12-Bein war lokal nicht prüfbar (Server hat nur 3.14).
