@@ -71,7 +71,7 @@ Python 3.12+ (Server: 3.14.4), `ast` aus der stdlib für Parsing, `numpy` für d
 
 - Typing überall, kein `Any` ohne Kommentar mit Begründung
 - Reine Funktionen im Mathe-Kern, keine IO-Seiteneffekte
-- Englisch im Code. Nutzer-Ausgabe der CLI: Englisch Default, Deutsch als `--lang de` (seit 011, ADR-023); argparse-Hilfe und Fehlermeldungen einsprachig englisch. Diese Doku und `wiki/` bleiben deutsch
+- Englisch im Code. Nutzer-Ausgabe der CLI: Englisch Default, Deutsch als `--lang de` (seit 011, ADR-023); argparse-Hilfe und Fehlermeldungen einsprachig englisch. `wikimedia/case.md`, `wiki/math.md`, `wiki/signals.md` englisch (öffentliche Referenz); übrige `wiki/`-Dateien, `cc-sessions/` und diese Datei deutsch als Entwicklungsarchiv
 - Tests neben dem Source-File (`karp.py` und `karp_test.py`), nicht in einer `tests/`-Sammelhalde
 - Keine defensiven Try-Except-Schichten zwischen eigenen Funktionen. Validierung nur an Systemgrenzen: GitHub-API, gefremdete DAG-Files, Metadaten-DB, User-Input
 - Fremde DAG-Files sind Systemgrenze: ein `SyntaxError` beim Parsen eines geklonten Repos ist erwartbar und wird geloggt, nicht geworfen

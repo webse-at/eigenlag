@@ -1,5 +1,7 @@
 # Wiki — eigenlag
 
+> **Language:** the development notes are in German (the working language); the public reference is in English — the case study [../wikimedia/case.md](../wikimedia/case.md), the math [math.md](math.md) and the signal definitions [signals.md](signals.md).
+
 Diese Sammlung ist die kanonische Wahrheit über das Projekt. Vor jeder Session lesen. Wenn der Code dem Wiki widerspricht, gewinnt der Code und das Wiki wird korrigiert.
 
 ## Seiten

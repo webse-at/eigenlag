@@ -1,70 +1,70 @@
-# Cross-Run-Signale A bis G
+# Cross-run signals A to G
 
-Diese Seite definiert exakt, was als Cross-Run-Kante zählt. Sie ist die gemeinsame Grundlage für den Scanner (Phase 1) und den Parser (Phase 2). Wenn Scanner und Parser unterschiedliche Definitionen benutzen, sind die Marktzahlen und die Produktzahlen nicht vergleichbar, und das Tool widerlegt seinen eigenen Launch-Content.
+This page defines exactly what counts as a cross-run edge. It is the shared basis for the scanner (phase 1) and the parser (phase 2). If scanner and parser use different definitions, the market figures and the product figures are not comparable, and the tool refutes its own launch content.
 
-**Hinweis zur Herkunft:** Der ursprüngliche Auftrag verweist auf "Signale A bis F wie im Prototyp". Der Prototyp `crossrun_scan.py` existiert nicht (siehe ADR-001). Die folgende Liste ist daher unsere eigene Definition, hergeleitet aus der Airflow- und dbt-Semantik. Sie ist damit begründungspflichtig, nicht ererbt.
+**Note on provenance:** The original brief refers to "signals A to F as in the prototype". The prototype `crossrun_scan.py` does not exist (see ADR-001). The following list is therefore our own definition, derived from Airflow and dbt semantics. It thus requires justification, it is not inherited.
 
-## Die Signale
+## The signals
 
 ### A — `depends_on_past=True`
 
-Task in Lauf k startet erst, wenn dieselbe Task in Lauf k-1 erfolgreich war.
+A task in run k starts only once the same task in run k-1 succeeded.
 
-**Graph-Wirkung:** Selbst-Kante `task(k-1) → task(k)` mit Gewicht gleich der Dauer der Task.
+**Graph effect:** self-edge `task(k-1) → task(k)` with weight equal to the duration of the task.
 
-**Fundstellen:** direkt am Operator, oder in `default_args`, dann gilt es für alle Tasks des DAG. Beide Ebenen müssen erkannt werden, und die Operator-Ebene überschreibt `default_args`.
+**Where found:** directly on the operator, or in `default_args`, in which case it applies to all tasks of the DAG. Both levels have to be detected, and the operator level overrides `default_args`.
 
-**Fallstrick:** `depends_on_past=False` explizit gesetzt ist ein Treffer im Regex-Sinn und **kein** Signal. Nur der AST unterscheidet das zuverlässig.
+**Pitfall:** an explicit `depends_on_past=False` is a hit in the regex sense and **not** a signal. Only the AST distinguishes that reliably.
 
 ### B — `wait_for_downstream=True`
 
-Task in Lauf k startet erst, wenn die Task **und alle ihre direkten Downstream-Tasks** in Lauf k-1 erfolgreich waren. Impliziert `depends_on_past`.
+A task in run k starts only once the task **and all of its direct downstream tasks** in run k-1 succeeded. Implies `depends_on_past`.
 
-**Graph-Wirkung:** Kante von jedem direkten Downstream-Nachfolger in Lauf k-1 auf die Task in Lauf k. Das ist strikt stärker als A und erzeugt in der Regel einen deutlich längeren Kreis, weil der Pfad durch die Downstream-Tasks mitzählt.
+**Graph effect:** edge from every direct downstream successor in run k-1 onto the task in run k. This is strictly stronger than A and usually produces a markedly longer cycle, because the path through the downstream tasks counts too.
 
-### C — `ExternalTaskSensor` mit Zeitversatz
+### C — `ExternalTaskSensor` with a time offset
 
-Sensor wartet auf eine Task in einem **anderen** DAG.
+A sensor waits on a task in a **different** DAG.
 
-**Nur dann Cross-Run, wenn** `execution_delta` oder `execution_date_fn` gesetzt ist. Ohne beides zeigt der Sensor auf denselben Logical Date, das ist eine Intra-Run-Kante zwischen zwei DAGs und **kein** Signal.
+**Cross-run only if** `execution_delta` or `execution_date_fn` is set. Without either, the sensor points at the same logical date, which is an intra-run edge between two DAGs and **not** a signal.
 
-**Ebenfalls kein Signal: ein Versatz von null.** `execution_delta=timedelta(hours=0)` ist gesetzt, zeigt aber auf denselben Logical Date und ist damit dieselbe Intra-Run-Kante wie ein fehlender Versatz. Ein `timedelta`-Literal wird deshalb ausgerechnet, statt nur auf Anwesenheit geprüft zu werden (ADR-014, gefunden in der Stichprobe zu Session 003). Ein Versatz, der statisch nicht auflösbar ist, zählt weiterhin.
+**Also not a signal: an offset of zero.** `execution_delta=timedelta(hours=0)` is set, but points at the same logical date and is thus the same intra-run edge as a missing offset. A `timedelta` literal is therefore evaluated, instead of merely being checked for presence (ADR-014, found in the sample for session 003). An offset that cannot be resolved statically still counts.
 
-**Graph-Wirkung:** Kante vom Ziel-Task des fremden DAG bei Logical Date `t - execution_delta` auf den Sensor bei `t`. Wenn `execution_delta` ein Vielfaches der Schedule-Periode ist, spannt das einen Kreis über mehrere Perioden. Ein `execution_delta` von zwei Perioden erzeugt einen Kreis mit zwei Kanten, was das Zyklusmittel halbiert. Genau dieser Fall gehört als Test-Fixture in Phase 2.
+**Graph effect:** edge from the target task of the foreign DAG at logical date `t - execution_delta` onto the sensor at `t`. If `execution_delta` is a multiple of the schedule period, this spans a cycle across several periods. An `execution_delta` of two periods produces a cycle with two edges, which halves the cycle mean. Exactly this case belongs as a test fixture in phase 2.
 
-**Grenze:** `execution_date_fn` ist eine beliebige Python-Funktion. Statisch ist ihr Rückgabewert im Allgemeinen nicht bestimmbar. Wir zählen sie als Cross-Run-Signal (der Zeitversatz ist ihr einziger Zweck), können aber das Gewicht nicht ableiten. Der Parser muss das als "Cross-Run erkannt, Versatz unbekannt" melden und darf nicht raten.
+**Limit:** `execution_date_fn` is an arbitrary Python function. Statically its return value is in general not determinable. We count it as a cross-run signal (the time offset is its only purpose), but cannot derive the weight. The parser has to report that as "cross-run detected, offset unknown" and must not guess.
 
 ### D — `include_prior_dates=True`
 
-Parameter am `ExternalTaskSensor`. Der Sensor akzeptiert auch Läufe mit früherem Logical Date.
+Parameter on the `ExternalTaskSensor`. The sensor accepts runs with an earlier logical date too.
 
-**Graph-Wirkung:** Cross-Run, weil die Abhängigkeit explizit in die Vergangenheit greift. Wird unabhängig von C gezählt, weil ein Sensor `include_prior_dates=True` ohne `execution_delta` haben kann.
+**Graph effect:** cross-run, because the dependency explicitly reaches into the past. Counted independently of C, because a sensor can have `include_prior_dates=True` without `execution_delta`.
 
 ### E — dbt `is_incremental()`
 
-Ein dbt-Model mit `materialized='incremental'`, dessen SQL `is_incremental()` aufruft, liest im inkrementellen Lauf aus seiner eigenen Zieltabelle, typischerweise über `select max(ts) from {{ this }}`.
+A dbt model with `materialized='incremental'` whose SQL calls `is_incremental()` reads, in the incremental run, from its own target table, typically via `select max(ts) from {{ this }}`.
 
-**Graph-Wirkung:** Selbst-Kante `model(k-1) → model(k)`. Das Model kann nicht starten, bevor sein eigener Vorgänger-Lauf geschrieben hat.
+**Graph effect:** self-edge `model(k-1) → model(k)`. The model cannot start before its own previous run has written.
 
-**Fallstrick:** `materialized='incremental'` ohne `is_incremental()` im Body ist ein Full-Refresh-Model in inkrementeller Verkleidung und keine echte Rekurrenz. Umgekehrt ist `is_incremental()` in einem nicht-inkrementellen Model toter Code. Beides zählt nicht. Nur die Kombination zählt.
+**Pitfall:** `materialized='incremental'` without `is_incremental()` in the body is a full-refresh model in incremental disguise and not a real recurrence. Conversely, `is_incremental()` in a non-incremental model is dead code. Neither counts. Only the combination counts.
 
-### F — Prior-Run-Templates
+### F — prior-run templates
 
-Jinja-Referenzen auf den vorigen Lauf in Templates, Operator-Argumenten oder SQL: `prev_ds`, `prev_execution_date`, `prev_start_date_success`, `prev_data_interval_start_success`, `prev_data_interval_end_success`.
+Jinja references to the previous run in templates, operator arguments or SQL: `prev_ds`, `prev_execution_date`, `prev_start_date_success`, `prev_data_interval_start_success`, `prev_data_interval_end_success`.
 
-**Drei Fundorte, dieselbe Semantik** (ADR-013, aus der Negativ-Suche in Session 003):
+**Three locations, the same semantics** (ADR-013, from the negative search in session 003):
 
-| Fundort | Beispiel | Herkunft |
+| Location | Example | Origin |
 |---|---|---|
-| String-Literal im Operator-Argument | `bash_command="load --since {{ prev_start_date_success }}"` | der Regelfall |
-| Parametername der Callable | `def load(prev_start_date_success, **kwargs)`, `lambda prev_start_date_success: ...` | Airflow injiziert den Kontext über den Parameternamen (`oxylabs/building-scraping-pipeline-apache-airflow`, `DAG/scrape.py:26`) |
-| Template in einer Modul-Variablen | `date_last_success = '{{ prev_start_date_success }}'` | später ins Operator-Argument interpoliert (`abdurahim-dag/portfolio`, `.../dags/init.py:42`) |
+| String literal in the operator argument | `bash_command="load --since {{ prev_start_date_success }}"` | the regular case |
+| Parameter name of the callable | `def load(prev_start_date_success, **kwargs)`, `lambda prev_start_date_success: ...` | Airflow injects the context via the parameter name (`oxylabs/building-scraping-pipeline-apache-airflow`, `DAG/scrape.py:26`) |
+| Template in a module variable | `date_last_success = '{{ prev_start_date_success }}'` | interpolated into the operator argument later (`abdurahim-dag/portfolio`, `.../dags/init.py:42`) |
 
-Wer nur den ersten Fundort erkennt, misst die Verbreitung einer Schreibweise, nicht die des Signals.
+Whoever detects only the first location measures the spread of a spelling, not that of the signal.
 
-**Graph-Wirkung:** Der Task liest Daten, die durch den vorigen Lauf definiert sind. Das ist eine echte Datenabhängigkeit über die Laufgrenze.
+**Graph effect:** the task reads data defined by the previous run. That is a genuine data dependency across the run boundary.
 
-**Abstufung:** Die `*_success`-Varianten sind harte Kanten, weil sie auf den **erfolgreichen** Vorlauf verweisen und damit auf dessen Abschluss warten. `prev_ds` und `prev_execution_date` sind reine Datums-Arithmetik ohne Wartesemantik: sie zeigen eine Datenabhängigkeit an, erzwingen aber keine Reihenfolge. Sie werden deshalb als **schwaches Signal** geführt, getrennt gezählt und **nicht** in die Risiko-Kandidaten-Quote eingerechnet. Wer sie mitzählt, bläst die Marktzahl auf und liefert dem ersten kritischen Leser die Munition, um sie zu kippen.
+**Gradation:** the `*_success` variants are hard edges, because they refer to the **successful** previous run and thereby wait on its completion. `prev_ds` and `prev_execution_date` are pure date arithmetic without wait semantics: they indicate a data dependency but do not enforce an order. They are therefore treated as a **weak signal**, counted separately and **not** included in the risk-candidate rate. Whoever counts them inflates the market figure and hands the first critical reader the ammunition to knock it over.
 
 ### G — `max_active_runs=1`
 
@@ -72,64 +72,64 @@ Wer nur den ersten Fundort erkennt, misst die Verbreitung einer Schreibweise, ni
 with DAG(dag_id="reconcile", schedule="@hourly", max_active_runs=1) as dag:
 ```
 
-**Graph-Wirkung:** Lauf k kann nicht beginnen, bevor Lauf k−1 fertig ist. `Ende(k−1) ≤ Start(k)` ist eine Kante über die Zeitachse, die den **ganzen** Lauf umspannt und deshalb oft die bindende ist.
+**Graph effect:** run k cannot begin before run k−1 is finished. `end(k−1) ≤ start(k)` is an edge across the time axis that spans the **entire** run and is therefore often the binding one.
 
-Dieses Signal stand bis Session 005 in der Tabelle darunter, also unter "kein Cross-Run-Signal", mit der Begründung, es begrenze die Nebenläufigkeit und nicht die Rekurrenz. Der Wikimedia-Fall hat das widerlegt: `wdqs_streaming_updater_reconcile_hourly` liefert seine Läufe im Abstand von 3599,5 Sekunden bei einer mittleren Laufzeit von 3598,4 Sekunden, die Läufe liegen also rückenan. Die Unterscheidung zwischen Daten- und Ressourcen-Abhängigkeit ist für den Eigenwert bedeutungslos, er sieht Kanten. Siehe ADR-016.
+This signal was in the table below until session 005, i.e. under "not a cross-run signal", on the grounds that it limits concurrency and not recurrence. The Wikimedia case refuted that: `wdqs_streaming_updater_reconcile_hourly` delivers its runs 3599.5 seconds apart at a mean run duration of 3598.4 seconds, so the runs lie back to back. The distinction between data and resource dependency is meaningless for the eigenvalue, it sees edges. See ADR-016.
 
-**Nur die explizite `1` zählt.** Airflows Default ist größer und lässt Läufe nebeneinander laufen. Ein Ausdruck, der statisch nicht auflösbar ist, zählt nicht.
+**Only the explicit `1` counts.** Airflow's default is larger and lets runs run side by side. An expression that cannot be resolved statically does not count.
 
-## Übersetzung in λ-Kanten (Parser, Phase 2)
+## Translation into λ edges (parser, phase 2)
 
-Seit Session 007 übersetzt `eigenlag/parse_airflow.py` die Signale in Kanten des Max-Plus-Graphen. Die Leitregel: der Parser darf weniger wissen, als im File steht, aber nie mehr. Was nicht statisch auflösbar ist, wird Warnung mit Datei und Zeile, nicht Kante — Weglassen ist die sichere Richtung, λ bleibt eine gültige Untergrenze (math.md, Abschnitt 8).
+Since session 007, `eigenlag/parse_airflow.py` translates the signals into edges of the max-plus graph. The guiding rule: the parser may know less than what is in the file, but never more. What cannot be resolved statically becomes a warning with file and line, not an edge — omission is the safe direction, λ remains a valid lower bound (math.md, section 8).
 
-| Signal | λ-Kante | Begründung |
+| Signal | λ edge | Justification |
 |---|---|---|
-| A an Task t | `CrossEdge(t, t, 1)` | Task wartet auf die eigene Vorgänger-Instanz |
-| A in `default_args` | Selbst-Kante für jede Task; Operator-Ebene überschreibt | Airflow-Vererbungssemantik |
-| B an Task t | zusätzlich zu A: `CrossEdge(d, t, 1)` für jeden **direkten** Downstream d | t(k) wartet auf t(k−1) und dessen direkte Nachfolger; nur direkte, so ist Airflow definiert |
-| C mit `execution_delta`, Ziel im Parse-Satz, gleiches T, `delta/T` ganzzahlig ≥ 1 | `CrossEdge(ziel, sensor, delta/T)`, Ziel namespaced `dag_id.task_id` | die einzige Kante mit `periods > 1` (ADR-006) |
-| C sonst (Ziel fehlt, T verschieden, Verhältnis nicht ganzzahlig, Versatz nicht auflösbar) | keine Kante, Warnung `sensor_not_modeled` mit konkretem Grund | verschiedene Takte sind im Ein-Perioden-Modell nicht darstellbar; lieber Untergrenze als erfundene Kante |
-| C mit `execution_date_fn` | keine Kante, Warnung `sensor_dynamic_offset` | Rückgabewert statisch nicht bestimmbar |
-| D | keine Kante, Warnung `include_prior_dates` | "irgendein früherer Lauf reicht" ist schwächer als "der vorige muss fertig sein"; eine Kante würde λ fälschlich heben |
-| E | Selbst-Kante `model(k-1) → model(k)` | dbt-Parser, Session 008 |
-| F | **keine Kante**, Befund `prev_run_success` / `prev_run_date` | das Template rendert und wartet nicht; Marktzahl und λ-Modell messen zwei verschiedene Dinge (ADR-020) |
-| G | `CrossEdge(s, q, 1)` für jede Senke s und jede Quelle q | Lauf k startet erst, wenn Lauf k−1 komplett fertig ist; λ = Makespan, konsistent mit ADR-019 |
+| A on task t | `CrossEdge(t, t, 1)` | task waits on its own previous instance |
+| A in `default_args` | self-edge for every task; operator level overrides | Airflow inheritance semantics |
+| B on task t | in addition to A: `CrossEdge(d, t, 1)` for every **direct** downstream d | t(k) waits on t(k−1) and its direct successors; only direct ones, that is how Airflow is defined |
+| C with `execution_delta`, target in the parse set, same T, `delta/T` integer ≥ 1 | `CrossEdge(target, sensor, delta/T)`, target namespaced `dag_id.task_id` | the only edge with `periods > 1` (ADR-006) |
+| C otherwise (target missing, T differs, ratio not integer, offset not resolvable) | no edge, warning `sensor_not_modeled` with the concrete reason | different periods are not representable in the one-period model; a lower bound is better than an invented edge |
+| C with `execution_date_fn` | no edge, warning `sensor_dynamic_offset` | return value not determinable statically |
+| D | no edge, warning `include_prior_dates` | "some earlier run is enough" is weaker than "the previous one has to be finished"; an edge would falsely raise λ |
+| E | self-edge `model(k-1) → model(k)` | dbt parser, session 008 |
+| F | **no edge**, finding `prev_run_success` / `prev_run_date` | the template renders and does not wait; market figure and λ model measure two different things (ADR-020) |
+| G | `CrossEdge(s, q, 1)` for every sink s and every source q | run k starts only once run k−1 is completely finished; λ = makespan, consistent with ADR-019 |
 
-## Was ausdrücklich kein Cross-Run-Signal ist
+## What is explicitly not a cross-run signal
 
-| Konstrukt | Warum nicht |
+| Construct | Why not |
 |---|---|
-| `ExternalTaskSensor` ohne Zeitversatz | Zeigt auf denselben Logical Date. Intra-Run. |
-| `depends_on_past=False` | Explizite Verneinung. |
-| `TriggerDagRunOperator` | Löst einen neuen Lauf aus, wartet aber nicht auf den vorigen. Kette, kein Kreis. |
-| `catchup=True` | Backfill-Verhalten, keine Abhängigkeit. |
-| Sensor auf externe Datenquelle | Wartet auf die Welt, nicht auf den eigenen Vorlauf. |
+| `ExternalTaskSensor` without a time offset | Points at the same logical date. Intra-run. |
+| `depends_on_past=False` | Explicit negation. |
+| `TriggerDagRunOperator` | Triggers a new run, but does not wait on the previous one. A chain, not a cycle. |
+| `catchup=True` | Backfill behavior, not a dependency. |
+| Sensor on an external data source | Waits on the world, not on its own previous run. |
 
-## Schedule-Klassifikation
+## Schedule classification
 
-Ein Signal allein ist harmlos. Gefährlich wird es erst, wenn der Schedule schneller taktet, als der Kreis erlaubt. Seit ADR-018 gibt es zwei getrennt ausgewiesene Risiko-Klassen:
+A signal alone is harmless. It becomes dangerous only when the schedule ticks faster than the cycle allows. Since ADR-018 there are two separately reported risk classes:
 
-- **Risiko-Kandidat (Kern):** mindestens ein starkes Signal aus A, B, C, D oder F (`*_success`-Varianten) **und** sub-täglicher Schedule **im selben DAG**. Hier ist der Kreis ein Teilpfad, λ < Makespan ist möglich, und kein heutiges Tool beantwortet das. Das ist die Launch-Zahl, definitionsgleich mit Session 003.
-- **Risiko-Kandidat (nur G):** G als einziges starkes Signal **und** sub-täglich. Die Kante ist real (ADR-016), aber λ = Makespan; Laufzeit-Monitoring gibt dort dieselbe Antwort (ADR-017). Eigene Zeile im Report, nie in die Kern-Quote gemischt.
+- **Risk candidate (core):** at least one strong signal from A, B, C, D or F (`*_success` variants) **and** a sub-daily schedule **in the same DAG**. Here the cycle is a partial path, λ < makespan is possible, and no tool today answers that. This is the launch figure, defined identically to session 003.
+- **Risk candidate (G only):** G as the only strong signal **and** sub-daily. The edge is real (ADR-016), but λ = makespan; runtime monitoring gives the same answer there (ADR-017). Its own row in the report, never mixed into the core rate.
 
-Ein DAG mit A–F-Signal und G zählt in die Kern-Klasse; G wird als Spalte trotzdem ausgewiesen. E (dbt) bleibt außerhalb beider Klassen, weil ein dbt-Model keinen Schedule hat (ADR-012). Schwach sind `prev_ds`, `prev_ds_nodash` und `prev_execution_date`; sie werden getrennt gezählt und begründen für sich genommen keinen Risiko-Kandidaten (ADR-005, ADR-011).
+A DAG with an A–F signal and G counts into the core class; G is reported as a column nonetheless. E (dbt) stays outside both classes, because a dbt model has no schedule (ADR-012). Weak are `prev_ds`, `prev_ds_nodash` and `prev_execution_date`; they are counted separately and on their own do not establish a risk candidate (ADR-005, ADR-011).
 
-Der Korpus-Scan aus Session 003 kannte weder Signal G noch die Konstruktoren aus ADR-015. Session 006 hat den Korpus unter der neuen Definition neu gescannt (`scan/v2/report.md`): die Kern-Quote blieb unverändert definiert, G steht als eigene Klasse daneben.
+The corpus scan from session 003 knew neither signal G nor the constructors from ADR-015. Session 006 rescanned the corpus under the new definition (`scan/v2/report.md`): the core rate stayed identically defined, G stands beside it as its own class.
 
-Sub-täglich heißt: Periode kürzer als 24 Stunden.
+Sub-daily means: period shorter than 24 hours.
 
-| Schedule-Form | Beispiel | Sub-täglich |
+| Schedule form | Example | Sub-daily |
 |---|---|---|
-| Preset | `@hourly` | ja |
-| Preset | `@daily`, `@weekly`, `@monthly` | nein |
-| Preset | `@once`, `None` | nein, kein Schedule |
-| Preset | `@continuous` | ja, die Periode liegt per Definition unter einem Tag |
-| Cron, Minuten-Feld mit Schritt | `*/15 * * * *` | ja |
-| Cron, Stunden-Feld mit Schritt | `0 */6 * * *` | ja |
-| Cron, Stunden-Feld als Liste | `0 6,18 * * *` | ja |
-| Cron, feste Stunde | `0 3 * * *` | nein |
-| `timedelta` | `timedelta(hours=4)` | ja |
-| `timedelta` | `timedelta(days=1)` | nein |
-| Dataset- oder Asset-getriggert | `schedule=[Dataset(...)]` | unbekannt, eigene Kategorie |
+| Preset | `@hourly` | yes |
+| Preset | `@daily`, `@weekly`, `@monthly` | no |
+| Preset | `@once`, `None` | no, no schedule |
+| Preset | `@continuous` | yes, the period is by definition below a day |
+| Cron, minute field with step | `*/15 * * * *` | yes |
+| Cron, hour field with step | `0 */6 * * *` | yes |
+| Cron, hour field as a list | `0 6,18 * * *` | yes |
+| Cron, fixed hour | `0 3 * * *` | no |
+| `timedelta` | `timedelta(hours=4)` | yes |
+| `timedelta` | `timedelta(days=1)` | no |
+| Dataset- or asset-triggered | `schedule=[Dataset(...)]` | unknown, its own category |
 
-Cron-Ausdrücke werden nicht per Heuristik am String klassifiziert, sondern über die berechnete kleinste Distanz zwischen zwei aufeinanderfolgenden Feuerzeitpunkten. Das ist die einzige Methode, die bei Listen, Schritten und Kombinationen zuverlässig bleibt, und sie ist mit einer Tabelle aus Beispielen testbar. Implementiert in `scanner/schedule.py`, gerechnet über ein Fenster von fünf Jahren, ohne Cron-Bibliothek (ADR-010). Ein Ausdruck, der in diesem Fenster nie feuert, ist `unknown` und wird nicht geraten.
+Cron expressions are not classified heuristically from the string, but via the computed smallest distance between two consecutive firing times. That is the only method that stays reliable with lists, steps and combinations, and it is testable with a table of examples. Implemented in `scanner/schedule.py`, computed over a window of five years, without a cron library (ADR-010). An expression that never fires in this window is `unknown` and is not guessed.

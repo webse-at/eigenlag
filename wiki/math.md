@@ -1,132 +1,132 @@
-# Mathe: Max-Plus-Eigenwert als Taktgrenze
+# Math: the max-plus eigenvalue as a cycle limit
 
-Diese Seite ist die Referenz für den Mathe-Kern. Sie steht bewusst vor dem Code, damit eine Implementierung gegen sie geprüft werden kann und nicht umgekehrt.
+This page is the reference for the math core. It deliberately stands before the code, so that an implementation can be checked against it and not the other way around.
 
-## 1. Warum überhaupt Max-Plus
+## 1. Why max-plus at all
 
-Eine Task startet, wenn **alle** ihre Vorgänger fertig sind. Das ist ein Maximum. Danach dauert sie ihre Laufzeit. Das ist eine Addition. Systeme, deren Dynamik nur aus Maximum und Addition besteht, sind in der Max-Plus-Algebra linear, obwohl sie in der normalen Algebra hochgradig nichtlinear sind.
+A task starts when **all** of its predecessors are finished. That is a maximum. Then it runs for its duration. That is an addition. Systems whose dynamics consist only of maximum and addition are linear in the max-plus algebra, even though they are highly nonlinear in ordinary algebra.
 
-Die Max-Plus-Algebra ersetzt die üblichen Operationen:
+The max-plus algebra replaces the usual operations:
 
-| Klassisch | Max-Plus | Bedeutung hier |
+| Classic | Max-plus | Meaning here |
 |---|---|---|
-| `a + b` | `a ⊕ b = max(a, b)` | Warten auf den langsamsten Vorgänger |
-| `a · b` | `a ⊗ b = a + b` | Laufzeit an die Startzeit anhängen |
-| `0` (neutral zu +) | `ε = -∞` | Kante existiert nicht |
-| `1` (neutral zu ·) | `e = 0` | Keine Verzögerung |
+| `a + b` | `a ⊕ b = max(a, b)` | Waiting on the slowest predecessor |
+| `a · b` | `a ⊗ b = a + b` | Appending a duration to a start time |
+| `0` (identity for +) | `ε = -∞` | Edge does not exist |
+| `1` (identity for ·) | `e = 0` | No delay |
 
-Startet Task i im Lauf k zur Zeit `x_i(k)`, gilt
-
-```
-x(k) = A ⊗ x(k-1)      also      x_i(k) = max_j ( A[i][j] + x_j(k-1) )
-```
-
-Das ist eine lineare Rekursion. Genau wie eine klassische lineare Rekursion einen Eigenwert hat, der das asymptotische Wachstum bestimmt, hat diese hier einen Max-Plus-Eigenwert λ, der die asymptotische **Taktzeit** bestimmt.
-
-## 2. Was λ bedeutet
-
-λ erfüllt `A ⊗ v = λ ⊗ v` für einen Eigenvektor v. Im Klartext: Nach einer Einschwingphase verschiebt sich jeder Lauf um exakt λ gegenüber dem vorigen. λ ist die Zykluszeit, die das System aus eigener Kraft halten kann.
-
-Der zentrale Satz (Cuninghame-Green): **λ ist gleich dem maximalen Zyklusmittel des Graphen.**
+If task i in run k starts at time `x_i(k)`, then
 
 ```
-λ = max über alle Kreise C in G:  ( Summe der Kantengewichte in C ) / ( Anzahl der Kanten in C )
+x(k) = A ⊗ x(k-1)      so      x_i(k) = max_j ( A[i][j] + x_j(k-1) )
 ```
 
-Der Kreis, der dieses Maximum realisiert, ist der **kritische Kreis**. Er ist der Engpass. Jede Verkürzung einer Task, die nicht auf dem kritischen Kreis liegt, ändert λ um exakt null.
+This is a linear recursion. Just as a classic linear recursion has an eigenvalue that governs the asymptotic growth, this one has a max-plus eigenvalue λ that governs the asymptotic **cycle time**.
 
-Die Formel oben gilt so, solange jede Cross-Run-Kante genau eine Periode zurückgreift. Eine Kante mit Versatz *n* (`execution_delta = n · Periode`) zählt als *n* Kanten, der Nenner ist also allgemein die Summe der Versätze:
+## 2. What λ means
 
-```
-λ = max über alle Kreise C:  ( Summe der Kantengewichte in C ) / ( Summe der periods in C )
-```
+λ satisfies `A ⊗ v = λ ⊗ v` for an eigenvector v. In plain terms: after a settling phase, each run shifts by exactly λ relative to the previous one. λ is the cycle time the system can hold under its own power.
 
-Herleitung und Konsequenz für die Implementierung in [decisions.md](decisions.md), ADR-006.
-
-## 3. Konsequenz für den Schedule
-
-Läuft die Pipeline mit Schedule-Periode T:
-
-- **T ≥ λ**: stabil. Verspätungen aus einem Lauf klingen ab.
-- **T < λ**: instabil. Jeder Lauf startet um `λ - T` später als der vorige. Die Verspätung wächst linear und unbegrenzt.
-
-Die Drift ist damit exakt `λ - T` pro Lauf. Kein Näherungswert, sondern der asymptotische Grenzwert. Mehr Worker ändern λ nicht, weil λ eine Eigenschaft der Abhängigkeitsstruktur ist und nicht der Kapazität. Das ist die ganze Pointe des Tools: es trennt Kapazitätsprobleme (durch Worker lösbar) von Strukturproblemen (nicht durch Worker lösbar).
-
-## 4. Kondensation: vom Task-Graph zur Cross-Run-Matrix
-
-Der volle DAG hat viele Tasks, aber nur wenige haben eine Kante in den nächsten Lauf. Die Matrix A wird deshalb nicht über alle Tasks aufgespannt, sondern nur über die **Cross-Run-Knoten**, also Tasks, die eine Kante nach k+1 besitzen.
-
-Für zwei Cross-Run-Knoten `quelle` und `ziel` gilt
+The central theorem (Cuninghame-Green): **λ equals the maximum cycle mean of the graph.**
 
 ```
-Abar[ziel][quelle] = längster Pfad im Intra-Run-DAG
-                     vom Eintrittspunkt, den die Cross-Run-Kante aus `quelle` speist,
-                     bis einschließlich `ziel`
+λ = max over all cycles C in G:  ( sum of edge weights in C ) / ( number of edges in C )
 ```
 
-Existiert kein solcher Pfad, ist der Eintrag `ε = -∞`. Der längste Pfad ist wohldefiniert, weil der Intra-Run-Graph azyklisch ist. Er wird per Topologie-Sortierung in linearer Zeit berechnet, nicht per Enumeration.
+The cycle that realizes this maximum is the **critical cycle**. It is the bottleneck. Any shortening of a task that does not lie on the critical cycle changes λ by exactly zero.
 
-Diese Kondensation ist der Grund, warum das Verfahren auch bei DAGs mit hunderten Tasks schnell bleibt: die Eigenwert-Rechnung läuft auf einer Matrix in der Größenordnung der Cross-Run-Knoten, typischerweise einstellig bis niedrig zweistellig.
+The formula above holds as long as every cross-run edge reaches back exactly one period. An edge with offset *n* (`execution_delta = n · period`) counts as *n* edges, so the denominator is in general the sum of the offsets:
+
+```
+λ = max over all cycles C:  ( sum of edge weights in C ) / ( sum of the periods in C )
+```
+
+Derivation and consequence for the implementation in [decisions.md](decisions.md), ADR-006.
+
+## 3. Consequence for the schedule
+
+If the pipeline runs with schedule period T:
+
+- **T ≥ λ**: stable. Delays from one run fade out.
+- **T < λ**: unstable. Each run starts `λ - T` later than the previous one. The delay grows linearly and without bound.
+
+The drift is thus exactly `λ - T` per run. Not an approximation, but the asymptotic limit. More workers do not change λ, because λ is a property of the dependency structure and not of the capacity. That is the whole point of the tool: it separates capacity problems (solvable by workers) from structural problems (not solvable by workers).
+
+## 4. Condensation: from the task graph to the cross-run matrix
+
+The full DAG has many tasks, but only a few have an edge into the next run. The matrix A is therefore not spanned over all tasks, but only over the **cross-run nodes**, i.e. tasks that have an edge into k+1.
+
+For two cross-run nodes `source` and `target`,
+
+```
+Abar[target][source] = longest path in the intra-run DAG
+                       from the entry point that the cross-run edge out of `source` feeds,
+                       up to and including `target`
+```
+
+If no such path exists, the entry is `ε = -∞`. The longest path is well-defined, because the intra-run graph is acyclic. It is computed via topological sort in linear time, not by enumeration.
+
+This condensation is why the method stays fast even for DAGs with hundreds of tasks: the eigenvalue computation runs on a matrix on the order of the cross-run nodes, typically single digit to low double digit.
 
 ## 5. Karp
 
-Karps Algorithmus berechnet das maximale Zyklusmittel exakt in `O(V · E)`:
+Karp's algorithm computes the maximum cycle mean exactly in `O(V · E)`:
 
 ```
-D[0][v] = 0 für einen Startknoten s, sonst -∞
-D[k][v] = max über Kanten (u → v):  D[k-1][u] + w(u, v)      für k = 1..n
+D[0][v] = 0 for a start node s, else -∞
+D[k][v] = max over edges (u → v):  D[k-1][u] + w(u, v)      for k = 1..n
 
-λ = max über v mit D[n][v] > -∞:
-      min über k = 0..n-1 mit D[k][v] > -∞:
+λ = max over v with D[n][v] > -∞:
+      min over k = 0..n-1 with D[k][v] > -∞:
         ( D[n][v] - D[k][v] ) / ( n - k )
 ```
 
-Karp liefert λ zuverlässig, aber **nicht** den kritischen Kreis. Den muss man separat rekonstruieren.
+Karp yields λ reliably, but **not** the critical cycle. That has to be reconstructed separately.
 
-## 6. Kritischer Kreis: Howard, nicht Enumeration
+## 6. Critical cycle: Howard, not enumeration
 
-Die naive Suche nach dem kritischen Kreis testet alle Kreise. Das ist bei mehr als etwa zwölf Knoten nicht mehr machbar, weil die Anzahl der Kreise faktoriell wächst.
+The naive search for the critical cycle tests all cycles. That is no longer feasible beyond about twelve nodes, because the number of cycles grows factorially.
 
-**Howard-Policy-Iteration** ist die richtige Antwort. Sie ist in der Praxis nahezu linear und liefert den kritischen Kreis direkt als Nebenprodukt:
+**Howard's policy iteration** is the right answer. It is nearly linear in practice and yields the critical cycle directly as a by-product:
 
-1. Wähle für jeden Knoten eine beliebige ausgehende Kante. Das ist die Policy π. Der Graph aus lauter Policy-Kanten hat pro Komponente genau einen Kreis, weil jeder Knoten Ausgrad eins hat.
-2. Berechne für die aktuelle Policy den Kreismittelwert η und die Bias-Werte v (Potenziale relativ zum Kreis).
-3. Suche eine Kante `(u → w)`, die sich lohnt: `w(u, w) + v[w] - η > v[u]`. Wenn es keine gibt, ist die Policy optimal und η = λ.
-4. Wechsle zu dieser Kante und gehe zu Schritt 2.
+1. Pick an arbitrary outgoing edge for each node. That is the policy π. The graph made of all policy edges has exactly one cycle per component, because each node has out-degree one.
+2. For the current policy, compute the cycle mean η and the bias values v (potentials relative to the cycle).
+3. Look for an edge `(u → w)` that pays off: `w(u, w) + v[w] - η > v[u]`. If there is none, the policy is optimal and η = λ.
+4. Switch to this edge and go to step 2.
 
-Bei Terminierung ist der Kreis in der finalen Policy der kritische Kreis. Howard ist damit sowohl schneller als auch informativer als Karp. Karp bleibt trotzdem im Code, als unabhängige Zweitmeinung: beide müssen dasselbe λ liefern, und ein Test pinnt das. Zwei unabhängige Verfahren, die übereinstimmen, sind der beste verfügbare Beleg für die Korrektheit, solange keine externe Referenz existiert.
+At termination, the cycle in the final policy is the critical cycle. Howard is thus both faster and more informative than Karp. Karp nonetheless stays in the code, as an independent second opinion: both have to yield the same λ, and a test pins that. Two independent methods that agree are the best available evidence of correctness, as long as no external reference exists.
 
-## 7. Stochastik
+## 7. Stochastics
 
-Task-Dauern sind keine Konstanten. Je Task wird ein Lognormal-Fit gerechnet (Lognormal, weil Laufzeiten positiv und rechtsschief sind), und zwar analytisch aus den vorhandenen Aggregaten: `mu = ln(p50)`, `sigma = (ln(p95) − ln(p50)) / 1,6449` (z-Wert der 95. Perzentile) — Rohdaten braucht es dafür nicht. Tasks ohne belastbare Streuung (n < 5, insbesondere `assume`-Werte) gehen als Konstante ins Sampling; eine erfundene Varianz wäre eine erfundene p95. Monte Carlo über diese Verteilungen liefert eine Verteilung von λ, aus der `λ_p50` und `λ_p95` abgelesen werden. Wichtig: die Kondensation läuft **pro Sample** neu, weil die Kantengewichte der kondensierten Matrix längste Pfade sind und bei anderen Dauern ein anderer Pfad der längste sein kann (Umsetzung `eigenlag/montecarlo.py`, Session 009).
+Task durations are not constants. For each task a lognormal fit is computed (lognormal, because run durations are positive and right-skewed), analytically from the available aggregates: `mu = ln(p50)`, `sigma = (ln(p95) − ln(p50)) / 1.6449` (z-value of the 95th percentile) — no raw data is needed for that. Tasks without reliable spread (n < 5, in particular `assume` values) enter the sampling as a constant; an invented variance would be an invented p95. Monte Carlo over these distributions yields a distribution of λ, from which `λ_p50` and `λ_p95` are read off. Important: the condensation runs anew **per sample**, because the edge weights of the condensed matrix are longest paths, and with different durations a different path can be the longest (implementation `eigenlag/montecarlo.py`, session 009).
 
-`λ_p95` ist die eigentlich interessante Zahl: sie beantwortet, ob der Schedule auch an einem schlechten Tag hält. Ein Schedule, der gegen `λ_p50` stabil ist und gegen `λ_p95` nicht, ist eine Pipeline, die einmal pro Monat aus dem Ruder läuft und die niemand erklären kann.
+`λ_p95` is the number that actually matters: it answers whether the schedule holds on a bad day too. A schedule that is stable against `λ_p50` and not against `λ_p95` is a pipeline that runs off the rails once a month and that nobody can explain.
 
-## 8. Grenzen des Modells
+## 8. Limits of the model
 
-Ehrlich benannt, damit niemand mehr hineinliest, als drinsteht:
+Named honestly, so that nobody reads more into it than is there:
 
-- **Unbeschränkte Parallelität angenommen.** λ ist eine Untergrenze. Bei zu wenigen Workern ist die reale Taktzeit größer. Das Tool sagt "nicht schneller als λ", nicht "λ ist erreichbar".
-- **Deterministische Dauern im Kern.** Die Stochastik sitzt außen herum als Monte Carlo, nicht in der Max-Plus-Rechnung selbst.
-- **Retries, Sensor-Poking und Pool-Limits** sind nicht modelliert. Sie können die reale Taktzeit nur erhöhen, nie senken, also bleibt λ eine gültige Untergrenze. `max_active_runs=1` stand bis Session 005 ebenfalls in dieser Liste; es ist inzwischen als Kante modelliert, weil es die Läufe serialisiert und damit oft die bindende Kante stellt (ADR-016). λ wird dadurch schärfer, die Untergrenzen-Eigenschaft bleibt.
-- **Kein Cross-Run-Kante heißt kein λ.** Ein DAG ohne Rekurrenz hat keinen Kreis über die Zeitachse. Das Ergebnis ist dann nicht "λ = 0", sondern "nicht anwendbar". Der Unterschied gehört sauber in den Output, sonst liest jemand eine Null als Entwarnung.
+- **Unbounded parallelism assumed.** λ is a lower bound. With too few workers the real cycle time is larger. The tool says "no faster than λ", not "λ is achievable".
+- **Deterministic durations in the core.** The stochastics sit around the outside as Monte Carlo, not inside the max-plus computation itself.
+- **Retries, sensor poking and pool limits** are not modeled. They can only raise the real cycle time, never lower it, so λ remains a valid lower bound. `max_active_runs=1` was in this list too until session 005; it is now modeled as an edge, because it serializes the runs and thereby often provides the binding edge (ADR-016). λ becomes sharper because of it, the lower-bound property remains.
+- **No cross-run edge means no λ.** A DAG without recurrence has no cycle across the time axis. The result is then not "λ = 0", but "not applicable". The difference belongs cleanly in the output, otherwise someone reads a zero as an all-clear.
 
-## 9. Die Grenze, die der Wikimedia-Fall gezeigt hat: Tasks, die auf die Uhr warten
+## 9. The limit the Wikimedia case revealed: tasks that wait on the clock
 
-Das Modell nimmt an, dass Task-Dauern **unabhängig vom Startzeitpunkt** sind. Ein Sensor, der auf die Daten der laufenden Stunde wartet, verletzt genau das.
+The model assumes that task durations are **independent of the start time**. A sensor that waits on the current hour's data violates exactly that.
 
-`wdqs_streaming_updater_reconcile_hourly` wartet auf Hive-Partitionen der Stunde, für die er läuft. Startet er pünktlich, wartet er auf Daten, die es noch nicht gibt. Startet er 50 Minuten zu spät, liegen die Daten längst da, und er ist in zwei Minuten durch. Gemessen: **Korrelation zwischen Verspätung beim Start und Laufzeit = −0,504** über 397 Läufe (`wikimedia/case.md`, Abschnitt 4).
+`wdqs_streaming_updater_reconcile_hourly` waits on the Hive partitions of the hour it is running for. If it starts on time, it waits for data that does not exist yet. If it starts 50 minutes late, the data has long been there, and it is through in two minutes. Measured: **correlation between start delay and run duration = −0.504** over 397 runs (`wikimedia/case.md`, section 4).
 
-Formal ist das keine Bearbeitungszeit, sondern eine **Freigabe-Bedingung**: der Task kann nicht vor `Datenzeit(k)` enden, und `Datenzeit(k)` wächst mit der Wanduhr, also um genau T pro Lauf. In der Rekurrenz
+Formally this is not processing time, but a **release condition**: the task cannot end before `dataTime(k)`, and `dataTime(k)` grows with the wall clock, so by exactly T per run. In the recursion
 
 ```
-Ende(k) ≥ max( Ende(k−1) + Arbeit ,  Datenzeit(k) + Arbeit )
+End(k) ≥ max( End(k−1) + Work ,  dataTime(k) + Work )
 ```
 
-setzt der zweite Term die Verspätung **zurück**, sobald sie groß genug geworden ist. Der Kreis wird gebrochen, und die Pipeline ist stabil, solange die reine **Arbeit** unter T bleibt, selbst wenn die gemessene Laufzeit über T liegt.
+the second term **resets** the delay as soon as it has grown large enough. The cycle is broken, and the pipeline is stable as long as the pure **Work** stays below T, even when the measured run duration lies above T.
 
-**Konsequenzen, die ins Produkt gehören:**
+**Consequences that belong in the product:**
 
-1. Eine Laufzeit über dem Takt ist **kein** Beweis für Drift. Wer nur Laufzeit gegen Schedule hält, produziert Fehlalarme. Bei Wikimedia wären das 29 von 30 DAGs (`wikimedia/case.md`, Abschnitt 6).
-2. Wo λ nahe an T liegt, entscheidet diese Rückkopplung über stabil oder driftend, und aus der Laufzeit-Metrik allein ist sie nicht aufzulösen: die gemessenen Dauern **sind bereits das Ergebnis** des eingeschwungenen Zustands. Das ist zirkulär, und man muss es wissen.
-3. Der sichtbare Preis einer Pipeline an ihrer Taktgrenze ist nicht wachsende, sondern **konstante** Verspätung. Bei wdqs sind es 48 Minuten, jede Stunde aufs Neue.
+1. A run duration above the schedule is **no** proof of drift. Whoever merely holds runtime against the schedule produces false alarms. At Wikimedia that would be 29 of 30 DAGs (`wikimedia/case.md`, section 6).
+2. Where λ is close to T, this feedback decides between stable and drifting, and it cannot be resolved from the runtime metric alone: the measured durations **are already the result** of the settled state. That is circular, and one has to know it.
+3. The visible price of a pipeline at its cycle limit is not a growing but a **constant** delay. For wdqs it is 48 minutes, every hour anew.

@@ -10,8 +10,9 @@ the delay grows every run, forever, and no dashboard tells you why.
 
 ![eigenlag demo: the built-in example report, ending on the acceleration plan](assets/demo.gif)
 
-Development docs are in German (`wiki/`), the tool speaks English by default and
-German with `--lang de`.
+The case study, the math and the signal reference are in English; the rest of the
+development notes (`wiki/`) stay German. The tool speaks English by default, German
+with `--lang de`.
 
 ## The sourdough
 
