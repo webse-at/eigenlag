@@ -1,12 +1,10 @@
 # DRAFT — David redigiert. Nicht senden.
 
-Empfänger-Kanal, zwei Wege (beide vor dem Senden verifizieren, die Liste zuerst):
-
-1. **Öffentliche Mailing-Liste** des Analytics/Data-Engineering-Umfelds
-   (historisch `analytics@lists.wikimedia.org`; aktuelle Liste unter
-   lists.wikimedia.org prüfen).
-2. **Phabricator-Task** unter dem Tag des Data-Platform-/Data-Engineering-Teams
-   (phabricator.wikimedia.org), gleicher Text als Task-Beschreibung.
+Empfänger (verifiziert 2026-07-21 gegen wikitech.wikimedia.org/wiki/Data_Engineering/Contact):
+**data-engineering@wikimedia.org** — die direkte Team-Adresse, ausdrücklich für externe
+Anfragen genannt. Keine Anmeldung, kein Account nötig, normale Mail von Davids Adresse.
+(Alternativen wären die analytics-Mailingliste — braucht Subscription — oder Phabricator
+— braucht Account; beides unnötig umständlich für ein Heads-up.)
 
 Unter 200 Wörter, kein Pitch. Der Repo-Link funktioniert erst, wenn das Repo
 public ist (Checkliste beachten).
